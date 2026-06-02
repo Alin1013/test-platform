@@ -44,18 +44,6 @@ media/api-testing/allure-reports/*
 media/api-testing/allure-static/*
 !media/api-testing/allure-static/.gitkeep
 
-# 忽略 APP 自动化运行时产生的文件，但保留.gitkeep文件
-media/app-automation/allure-results/*
-!media/app-automation/allure-results/.gitkeep
-media/app-automation/allure-reports/*
-!media/app-automation/allure-reports/.gitkeep
-media/app-automation/screenshots/*
-!media/app-automation/screenshots/.gitkeep
-
-# 忽略APP自动化模板文件
-apps/app_automation/Template/**
-!apps/app_automation/Template/
-
 # 忽略前端文件
 frontend/node_modules/
 frontend/.DS_Store

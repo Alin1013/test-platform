@@ -372,11 +372,6 @@ const routes = [
             component: () => import('@/views/configuration/UIEnvironmentConfig.vue')
           },
           {
-            path: 'app-env',
-            name: 'ConfigAppEnv',
-            component: () => import('@/views/app-automation/settings/AppSettings.vue')
-          },
-          {
             path: 'ai-mode',
             name: 'ConfigAIMode',
             component: () => import('@/views/configuration/AIIntelligentModeConfig.vue')
@@ -392,79 +387,6 @@ const routes = [
             component: () => import('@/views/configuration/DifyConfig.vue')
           }
         ]
-      }
-    ]
-  },
-  // APP自动化测试路由
-  {
-    path: '/app-automation',
-    component: Layout,
-    meta: { requiresAuth: true },
-    children: [
-      {
-        path: '',
-        redirect: 'dashboard'
-      },
-      {
-        path: 'dashboard',
-        name: 'AppAutomationDashboard',
-        component: () => import('@/views/app-automation/dashboard/Dashboard.vue')
-      },
-      {
-        path: 'projects',
-        name: 'AppProjectList',
-        component: () => import('@/views/app-automation/projects/ProjectList.vue')
-      },
-      {
-        path: 'devices',
-        name: 'AppDeviceList',
-        component: () => import('@/views/app-automation/devices/DeviceList.vue')
-      },
-      {
-        path: 'packages',
-        name: 'AppPackageList',
-        component: () => import('@/views/app-automation/packages/PackageList.vue')
-      },
-      {
-        path: 'elements',
-        name: 'AppElementList',
-        component: () => import('@/views/app-automation/elements/ElementList.vue')
-      },
-      {
-        path: 'scene-builder',
-        name: 'AppSceneBuilder',
-        component: () => import('@/views/app-automation/test-cases/SceneBuilder.vue'),
-        meta: { title: '用例编排' }
-      },
-      {
-        path: 'test-cases',
-        name: 'AppTestCaseList',
-        component: () => import('@/views/app-automation/test-cases/TestCaseList.vue')
-      },
-      {
-        path: 'test-suites',
-        name: 'AppTestSuiteList',
-        component: () => import('@/views/app-automation/suites/SuiteList.vue')
-      },
-      {
-        path: 'scheduled-tasks',
-        name: 'AppScheduledTasks',
-        component: () => import('@/views/app-automation/scheduled-tasks/ScheduledTasks.vue')
-      },
-      {
-        path: 'notification-logs',
-        name: 'AppNotificationLogs',
-        component: () => import('@/views/app-automation/notification/NotificationLogs.vue')
-      },
-      {
-        path: 'executions',
-        name: 'AppExecutionList',
-        component: () => import('@/views/app-automation/executions/ExecutionList.vue')
-      },
-      {
-        path: 'reports',
-        name: 'AppReportList',
-        component: () => import('@/views/app-automation/reports/ReportList.vue')
       }
     ]
   }

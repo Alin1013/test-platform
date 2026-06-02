@@ -83,7 +83,7 @@ The Django project uses a modular app structure under `apps/`:
 
 ### Key Configuration Files
 
-- `backend/settings.py`: Django settings (database, REST framework, CORS, Celery, email)
+- `backend/settings.py`: Django settings (database, REST framework, CORS, email)
 - `frontend/vite.config.js`: Vite build configuration
 - `.env`: Environment variables (DB credentials, API keys, email config)
 
@@ -126,7 +126,7 @@ Custom prompts for AI test case generation are defined in:
 
 ## Key Dependencies
 
-Backend: Django REST Framework, drf-spectacular, django-filter, celery, httpx, selenium, playwright, browser-use, langchain-openai
+Backend: Django REST Framework, drf-spectacular, django-filter, httpx, selenium, playwright, browser-use, langchain-openai
 
 Frontend: Vue 3, Element Plus, Pinia, Vue Router, Axios, ECharts, Monaco Editor, xlsx
 

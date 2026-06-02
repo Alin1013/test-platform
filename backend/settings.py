@@ -2,13 +2,40 @@
 
 from pathlib import Path
 from decouple import config
+from dotenv import dotenv_values
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = BASE_DIR / '.env'
+local_env_values = dotenv_values(ENV_FILE) if ENV_FILE.exists() else {}
+
+
+def cast_bool_value(value):
+    if isinstance(value, bool):
+        return value
+
+    normalized = str(value).strip().lower()
+    if normalized in {'1', 'true', 'yes', 'on', 'y', 't'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'off', 'n', 'f'}:
+        return False
+    raise ValueError(f"Invalid truth value: {value}")
+
+
+def get_debug_config():
+    if os.environ.get('DJANGO_DEBUG') is not None:
+        return config('DJANGO_DEBUG', cast=bool)
+
+    try:
+        return config('DEBUG', default=True, cast=bool)
+    except ValueError:
+        if 'DEBUG' in local_env_values:
+            return cast_bool_value(local_env_values['DEBUG'])
+        raise
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
 
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = get_debug_config()
 
 # 根据DEBUG模式设置ALLOWED_HOSTS，生产环境不应使用通配符
 if DEBUG:
@@ -35,7 +62,6 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'django_filters',
     'drf_spectacular',
-    'channels',
 ]
 
 LOCAL_APPS = [
@@ -51,7 +77,6 @@ LOCAL_APPS = [
     'apps.requirement_analysis',
     'apps.api_testing',
     'apps.ui_automation.apps.UiAutomationConfig',
-    'apps.app_automation.apps.AppAutomationConfig',  # APP自动化测试
     'apps.core',
     'apps.data_factory',
 ]
@@ -279,21 +304,6 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Test Case Management Platform API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-}
-
-# Celery Configuration
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://:1234@127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://:1234@127.0.0.1:6379/0')
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
-# Channels Configuration
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [config('REDIS_URL', default='redis://:1234@127.0.0.1:6379/0')],
-        },
-    },
 }
 
 # Cache Configuration
