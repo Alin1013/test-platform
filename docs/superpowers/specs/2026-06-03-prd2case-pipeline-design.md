@@ -63,6 +63,7 @@ Because of this, the MVP should upgrade the existing page and task flow instead 
 - Export Excel using the exact header fields from the uploaded image.
 - Keep `用例状态` blank in exported Excel. Users modify this column later after export.
 - Keep existing model and prompt configuration screens.
+- All AI generation must use the API key from the corresponding enabled `AIModelConfig`.
 - Keep existing task creation endpoint and response shape where possible.
 - Return staged artifacts from task progress and detail serializers.
 - Extend SSE to emit named pipeline stage and review-gate updates.
@@ -201,6 +202,33 @@ Excel export is allowed only when:
 - `test_cases_review_status = approved`
 - `test_cases_json` or `final_test_cases` is available
 
+## AI Model And API Key Usage
+
+AI generation must use the existing model configuration system. The user configures API keys in `AIModelConfig`; generation tasks must never accept raw API keys from the PRD submission form.
+
+Model selection and key usage rules:
+
+- Test point generation, structured requirement extraction, testability analysis, strategy/scenario generation, and test case generation use `task.writer_model_config`.
+- Coverage review, dedupe review, and quality critique use `task.reviewer_model_config` when reviewer review is enabled.
+- Every model call must go through `AIModelService.call_openai_compatible_api` or `AIModelService.call_openai_compatible_api_stream`.
+- The HTTP request must use the API key from the selected `AIModelConfig.api_key`, sent as `Authorization: Bearer <api_key>`.
+- The provider endpoint, model name, token limit, temperature, and top-p must also come from the same selected `AIModelConfig`.
+- The task should persist the selected `writer_model_config` and `reviewer_model_config` references so the generation record shows which model configuration was used.
+
+Validation rules:
+
+- If writer generation is enabled, task creation must require an enabled writer model config with a non-empty API key.
+- If reviewer generation is enabled, review stages must require an enabled reviewer model config with a non-empty API key.
+- If the configured API key is missing, disabled, or invalid, the task must return a clear configuration error instead of falling back to another key.
+- The pipeline must not use hard-coded API keys, environment fallback keys, or API keys supplied in frontend generation payloads.
+
+Security rules:
+
+- API keys must be write-only or masked in API responses.
+- API keys must not be stored in `pipeline_artifacts`, SSE events, progress responses, exported Excel files, or generation logs.
+- Logs may include provider name, model name, and endpoint, but must not include the full API key.
+- Connection-test screens may show only a masked key prefix/suffix, consistent with the existing `api_key_masked` serializer behavior.
+
 ## Pipeline Service
 
 Create a focused service, likely `apps/requirement_analysis/generation_pipeline.py`.
@@ -215,7 +243,7 @@ async def generate_test_cases_from_approved_points(task, callbacks=None) -> Pipe
     ...
 ```
 
-`AIModelService` continues to own low-level OpenAI-compatible API calls. The pipeline service owns stage orchestration, artifact normalization, JSON parsing, and Markdown/Excel-ready rendering.
+`AIModelService` continues to own low-level OpenAI-compatible API calls and must receive the selected `AIModelConfig` for every AI stage. The pipeline service owns stage orchestration, artifact normalization, JSON parsing, and Markdown/Excel-ready rendering.
 
 ## Pipeline Stages
 
@@ -618,6 +646,8 @@ Extend request fields:
 - `output_mode`
 - `project`
 
+The request must not include raw API keys. The backend resolves the corresponding enabled AI model configurations and uses their stored API keys.
+
 Extend progress response:
 
 ```json
@@ -767,9 +797,19 @@ Prompt principles:
 - If parsing fails, store a readable fallback artifact and continue when possible.
 - Final Excel rows should be deterministic in Python from approved preview JSON.
 
+AI call principles:
+
+- Stage prompts are sent through the selected writer or reviewer model config.
+- Writer-stage prompts must use `writer_model_config.api_key`.
+- Reviewer-stage prompts must use `reviewer_model_config.api_key`.
+- Prompt output must never echo or expose API keys.
+
 ## Error Handling
 
 - If required metadata is missing at task creation, return a validation error before creating the task.
+- If the required writer model config or writer API key is missing, return a configuration error before generation.
+- If reviewer review is enabled and reviewer model config or reviewer API key is missing, return a configuration error before review.
+- If an AI provider rejects the configured API key, keep the task failed with a clear provider/model error message.
 - If test point JSON parsing fails, save raw output and show a clear retry/edit path.
 - If the user has not approved test points, case generation must not start.
 - If case generation fails, keep approved test points available.
@@ -801,6 +841,9 @@ Frontend verification:
 - Confirm `需求ID`, `用例类型`, `创建人`, and `归属迭代` are filled from initial metadata.
 - Confirm `用例状态` is blank in exported Excel.
 - Confirm save-to-records still imports approved cases.
+- Confirm generation uses the configured writer model API key and does not ask the user to enter a key during PRD submission.
+- Confirm reviewer stages use the configured reviewer model API key when reviewer review is enabled.
+- Confirm API keys are never visible in task progress, SSE events, browser UI, Excel export, or logs.
 
 Manual sample PRD:
 
