@@ -341,9 +341,19 @@ class TestCaseGenerationTask(models.Model):
         ('complete', '完整输出'),
     ]
 
+    REVIEW_STATUS_CHOICES = [
+        ('pending', '待审核'),
+        ('approved', '已审核'),
+        ('revision_requested', '需修改'),
+    ]
+
     task_id = models.CharField(max_length=50, unique=True, verbose_name='任务ID')
     title = models.CharField(max_length=200, verbose_name='任务标题')
     requirement_text = models.TextField(verbose_name='需求描述')
+    requirement_ids = models.JSONField(default=list, verbose_name='需求ID列表')
+    case_type = models.CharField(max_length=100, blank=True, verbose_name='用例类型')
+    case_creator = models.CharField(max_length=100, blank=True, verbose_name='创建人')
+    iteration = models.CharField(max_length=100, blank=True, verbose_name='归属迭代')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
     progress = models.IntegerField(default=0, verbose_name='进度百分比')
 
@@ -392,6 +402,46 @@ class TestCaseGenerationTask(models.Model):
     )
 
     # 生成结果
+    structured_requirements = models.JSONField(default=list, blank=True, verbose_name='结构化需求')
+    testability_report = models.JSONField(default=dict, blank=True, verbose_name='可测试性报告')
+    clarifying_questions = models.JSONField(default=list, blank=True, verbose_name='澄清问题')
+    test_points = models.JSONField(default=list, blank=True, verbose_name='测试点')
+    test_points_review_status = models.CharField(
+        max_length=30,
+        choices=REVIEW_STATUS_CHOICES,
+        default='pending',
+        verbose_name='测试点审核状态'
+    )
+    test_points_reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='测试点审核时间')
+    test_points_reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_test_point_tasks',
+        verbose_name='测试点审核人'
+    )
+    strategy_matrix = models.JSONField(default=list, blank=True, verbose_name='测试策略矩阵')
+    scenario_matrix = models.JSONField(default=list, blank=True, verbose_name='场景矩阵')
+    test_cases_json = models.JSONField(default=list, blank=True, verbose_name='结构化测试用例')
+    test_cases_review_status = models.CharField(
+        max_length=30,
+        choices=REVIEW_STATUS_CHOICES,
+        default='pending',
+        verbose_name='测试用例审核状态'
+    )
+    test_cases_reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='测试用例审核时间')
+    test_cases_reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_test_case_tasks',
+        verbose_name='测试用例审核人'
+    )
+    coverage_report = models.JSONField(default=dict, blank=True, verbose_name='覆盖率报告')
+    dedupe_report = models.JSONField(default=dict, blank=True, verbose_name='去重报告')
+    pipeline_artifacts = models.JSONField(default=dict, blank=True, verbose_name='流水线产物')
     generated_test_cases = models.TextField(blank=True, verbose_name='生成的测试用例')
     review_feedback = models.TextField(blank=True, verbose_name='评审反馈')
     final_test_cases = models.TextField(blank=True, verbose_name='最终测试用例')

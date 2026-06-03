@@ -239,14 +239,26 @@ class TestCaseGenerationTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestCaseGenerationTask
         fields = ['id', 'task_id', 'title', 'requirement_text', 'status', 'status_display',
+                 'requirement_ids', 'case_type', 'case_creator', 'iteration',
                  'progress', 'project', 'project_name', 'writer_model_config', 'writer_model_name', 
                  'reviewer_model_config', 'reviewer_model_name', 'writer_prompt_config', 'writer_prompt_name',
+                 'structured_requirements', 'testability_report', 'clarifying_questions',
+                 'test_points', 'test_points_review_status', 'test_points_reviewed_at',
+                 'test_points_reviewed_by', 'strategy_matrix', 'scenario_matrix',
+                 'test_cases_json', 'test_cases_review_status', 'test_cases_reviewed_at',
+                 'test_cases_reviewed_by', 'coverage_report', 'dedupe_report', 'pipeline_artifacts',
                  'reviewer_prompt_config', 'reviewer_prompt_name', 'generated_test_cases',
                  'review_feedback', 'final_test_cases', 'generation_log', 'error_message',
                  'created_by', 'created_by_name', 'created_at', 'updated_at', 'completed_at']
         read_only_fields = ['task_id', 'status', 'progress', 'generated_test_cases', 
                           'review_feedback', 'final_test_cases', 'generation_log', 
-                          'error_message', 'created_by', 'completed_at']
+                          'error_message', 'created_by', 'completed_at',
+                          'structured_requirements', 'testability_report', 'clarifying_questions',
+                          'test_points', 'test_points_review_status', 'test_points_reviewed_at',
+                          'test_points_reviewed_by', 'strategy_matrix', 'scenario_matrix',
+                          'test_cases_json', 'test_cases_review_status', 'test_cases_reviewed_at',
+                          'test_cases_reviewed_by', 'coverage_report', 'dedupe_report',
+                          'pipeline_artifacts']
     
     def create(self, validated_data):
         # 自动设置创建者和任务ID
@@ -270,8 +282,26 @@ class TestCaseGenerationRequestSerializer(serializers.Serializer):
     """新的测试用例生成请求序列化器"""
     title = serializers.CharField(max_length=200, help_text="任务标题")
     requirement_text = serializers.CharField(help_text="需求描述")
+    requirement_ids = serializers.JSONField(help_text="需求ID，支持字符串或字符串列表")
+    case_type = serializers.CharField(max_length=100, help_text="用例类型")
+    case_creator = serializers.CharField(max_length=100, help_text="创建人")
+    iteration = serializers.CharField(max_length=100, help_text="归属迭代")
     use_writer_model = serializers.BooleanField(default=True, help_text="是否使用编写模型")
     use_reviewer_model = serializers.BooleanField(default=True, help_text="是否使用评审模型")
+    project = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_requirement_ids(self, value):
+        if isinstance(value, str):
+            ids = [item.strip() for item in value.replace('；', ',').replace(';', ',').split(',')]
+        elif isinstance(value, list):
+            ids = [str(item).strip() for item in value]
+        else:
+            raise serializers.ValidationError("需求ID必须是字符串或字符串列表")
+
+        ids = [item for item in ids if item]
+        if not ids:
+            raise serializers.ValidationError("请至少填写一个需求ID")
+        return ids
 
 
 class GenerationConfigSerializer(serializers.ModelSerializer):
