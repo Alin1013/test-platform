@@ -1494,7 +1494,10 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
         source_file.seek(0)
 
         def vision_extractor(filename, content_type, image_data):
-            vision_config = AIModelConfig.objects.filter(role='vision', is_active=True).first()
+            vision_config = (
+                AIModelConfig.objects.filter(role='vision', is_active=True).first()
+                or AIModelConfig.objects.filter(role='writer', is_active=True).first()
+            )
             config_error = self._ensure_ai_config_ready(vision_config, '视觉解析')
             if config_error:
                 raise ValueError(config_error)

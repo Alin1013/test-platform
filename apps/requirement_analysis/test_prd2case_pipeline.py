@@ -415,6 +415,32 @@ class PRD2CaseBackendAPITests(TestCase):
         self.assertEqual(task.source_extract_status, "parsed")
         self.assertEqual(task.template_schema["headers"], ["用例名称", "用例状态", "创建人"])
 
+    def test_generate_reuses_writer_model_for_image_when_vision_config_missing(self):
+        image = Image.new("RGB", (4, 4), "white")
+        image_buffer = BytesIO()
+        image.save(image_buffer, format="PNG")
+        request = self.factory.post("/api/requirement-analysis/testcase-generation/generate/", {
+            "title": "图片 PRD",
+            "source_file": SimpleUploadedFile("prd.png", image_buffer.getvalue(), content_type="image/png"),
+            "requirement_ids": "REQ-IMG",
+            "case_type": "功能测试",
+            "case_creator": "张三",
+            "iteration": "2026.06",
+        }, format="multipart")
+        request.user = self.user
+
+        with mock.patch.object(TestCaseGenerationTaskViewSet, "_start_test_point_generation_thread"), \
+             mock.patch(
+                 "apps.requirement_analysis.views.VisionDocumentExtractor.extract_text",
+                 new=AsyncMock(return_value="图片中的 PRD 文本"),
+             ):
+            response = TestCaseGenerationTaskViewSet.as_view({"post": "generate"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        task = TestCaseGenerationTask.objects.get(task_id=response.data["task_id"])
+        self.assertEqual(task.source_file_type, "png")
+        self.assertEqual(task.requirement_text, "图片中的 PRD 文本")
+
     def test_revise_test_points_requires_message(self):
         task = TestCaseGenerationTask.objects.create(
             task_id="TASK_REV001",
