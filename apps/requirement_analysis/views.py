@@ -1356,6 +1356,60 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
         thread.daemon = True
         thread.start()
 
+    def _start_case_generation_thread(self, task_id):
+        """启动已审核测试点 -> 测试用例生成线程，生成完成后停在用例预览审核阶段。"""
+        import threading
+
+        def execute_task():
+            task = TestCaseGenerationTask.objects.get(task_id=task_id)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                from .generation_pipeline import PRD2CasePipeline
+
+                task.status = 'generating'
+                task.progress = 55
+                task.pipeline_artifacts = {
+                    **(task.pipeline_artifacts or {}),
+                    'current_stage': 'case_generation',
+                }
+                task.save(update_fields=['status', 'progress', 'pipeline_artifacts', 'updated_at'])
+
+                result = loop.run_until_complete(PRD2CasePipeline(task).generate_cases_from_points())
+
+                task.test_cases_json = result.artifact
+                task.generated_test_cases = result.content
+                task.pipeline_artifacts = {
+                    **(task.pipeline_artifacts or {}),
+                    'current_stage': 'test_cases_review',
+                    'raw_test_cases': result.content,
+                }
+                task.status = 'reviewing'
+                task.progress = 80
+                task.save(update_fields=[
+                    'test_cases_json', 'generated_test_cases', 'pipeline_artifacts',
+                    'status', 'progress', 'updated_at'
+                ])
+                logger.info(f"任务 {task.task_id} 测试用例生成完成，等待人工审核")
+
+            except Exception as e:
+                logger.error(f"测试用例生成失败: {e}")
+                task.status = 'failed'
+                task.error_message = str(e)
+                task.save(update_fields=['status', 'error_message', 'updated_at'])
+            finally:
+                try:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception as e:
+                    logger.warning(f"Error shutting down asyncgens: {e}")
+                finally:
+                    loop.close()
+
+        thread = threading.Thread(target=execute_task)
+        thread.daemon = True
+        thread.start()
+
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """创建新的测试用例生成任务"""
@@ -1925,6 +1979,146 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['patch'], url_path='test_points')
+    def update_test_points(self, request, task_id=None):
+        """保存人工编辑后的测试点"""
+        try:
+            task = self.get_object()
+            points = request.data.get('test_points', [])
+            if not isinstance(points, list):
+                return Response({'error': 'test_points 必须是数组'}, status=status.HTTP_400_BAD_REQUEST)
+
+            task.test_points = points
+            task.test_points_review_status = 'revision_requested'
+            task.save(update_fields=['test_points', 'test_points_review_status', 'updated_at'])
+            return Response({'message': '测试点已保存', 'test_points': task.test_points}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"保存测试点失败: {e}")
+            return Response({'error': f'保存测试点失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'], url_path='approve_test_points')
+    def approve_test_points(self, request, task_id=None):
+        """审核通过测试点并启动测试用例生成"""
+        try:
+            task = self.get_object()
+            if not task.test_points:
+                return Response({'error': '没有可审核的测试点'}, status=status.HTTP_400_BAD_REQUEST)
+
+            task.test_points_review_status = 'approved'
+            task.test_points_reviewed_at = timezone.now()
+            task.test_points_reviewed_by = request.user if request.user.is_authenticated else task.created_by
+            task.pipeline_artifacts = {
+                **(task.pipeline_artifacts or {}),
+                'current_stage': 'case_generation',
+            }
+            task.save(update_fields=[
+                'test_points_review_status', 'test_points_reviewed_at',
+                'test_points_reviewed_by', 'pipeline_artifacts', 'updated_at'
+            ])
+
+            self._start_case_generation_thread(task.task_id)
+            return Response({
+                'message': '测试点已审核，已开始生成测试用例',
+                'task_id': task.task_id
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"审核测试点失败: {e}")
+            return Response({'error': f'审核测试点失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['patch'], url_path='test_cases')
+    def update_test_cases_json(self, request, task_id=None):
+        """保存人工编辑后的测试用例预览"""
+        try:
+            task = self.get_object()
+            cases = request.data.get('test_cases', [])
+            if not isinstance(cases, list):
+                return Response({'error': 'test_cases 必须是数组'}, status=status.HTTP_400_BAD_REQUEST)
+
+            task.test_cases_json = cases
+            task.test_cases_review_status = 'revision_requested'
+            task.save(update_fields=['test_cases_json', 'test_cases_review_status', 'updated_at'])
+            return Response({'message': '测试用例预览已保存', 'test_cases': task.test_cases_json},
+                            status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"保存测试用例预览失败: {e}")
+            return Response({'error': f'保存测试用例预览失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'], url_path='approve_test_cases')
+    def approve_test_cases(self, request, task_id=None):
+        """审核通过测试用例预览，允许导出和保存记录"""
+        try:
+            task = self.get_object()
+            if not task.test_cases_json:
+                return Response({'error': '没有可审核的测试用例'}, status=status.HTTP_400_BAD_REQUEST)
+
+            task.test_cases_review_status = 'approved'
+            task.test_cases_reviewed_at = timezone.now()
+            task.test_cases_reviewed_by = request.user if request.user.is_authenticated else task.created_by
+            task.status = 'completed'
+            task.progress = 100
+            task.completed_at = timezone.now()
+            task.pipeline_artifacts = {
+                **(task.pipeline_artifacts or {}),
+                'current_stage': 'completed',
+            }
+            task.save(update_fields=[
+                'test_cases_review_status', 'test_cases_reviewed_at', 'test_cases_reviewed_by',
+                'status', 'progress', 'completed_at', 'pipeline_artifacts', 'updated_at'
+            ])
+            return Response({'message': '测试用例已审核，可导出 Excel', 'task_id': task.task_id},
+                            status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"审核测试用例失败: {e}")
+            return Response({'error': f'审核测试用例失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['get'], url_path='export_excel')
+    def export_excel(self, request, task_id=None):
+        """导出审核通过后的 Excel 兼容表格"""
+        try:
+            task = self.get_object()
+            if task.test_cases_review_status != 'approved':
+                return Response({'error': '请先完成人工审核后再导出 Excel'}, status=status.HTTP_400_BAD_REQUEST)
+
+            from django.http import HttpResponse
+            from html import escape
+            from .generation_pipeline import EXCEL_HEADERS, build_excel_rows
+
+            rows = build_excel_rows(task.test_cases_json, {
+                'requirement_ids': task.requirement_ids,
+                'case_type': task.case_type,
+                'case_creator': task.case_creator,
+                'iteration': task.iteration,
+            })
+
+            def cell(value):
+                return f'<Cell><Data ss:Type="String">{escape(str(value or ""))}</Data></Cell>'
+
+            header_xml = ''.join(cell(header) for header in EXCEL_HEADERS)
+            row_xml = []
+            for row in rows:
+                row_xml.append('<Row>' + ''.join(cell(row.get(header, '')) for header in EXCEL_HEADERS) + '</Row>')
+
+            workbook_xml = f'''<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="测试用例">
+  <Table>
+   <Row>{header_xml}</Row>
+   {''.join(row_xml)}
+  </Table>
+ </Worksheet>
+</Workbook>'''
+
+            response = HttpResponse(workbook_xml.encode('utf-8'), content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = f'attachment; filename="{task.task_id}_testcases.xls"'
+            return response
+        except Exception as e:
+            logger.error(f"导出Excel失败: {e}")
+            return Response({'error': f'导出Excel失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(
         detail=True,
         methods=['get'],
@@ -2269,9 +2463,9 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if not task.final_test_cases:
+            if task.test_cases_review_status != 'approved':
                 return Response(
-                    {'error': '没有最终测试用例可以保存'},
+                    {'error': '请先完成测试用例预览审核后再保存到记录'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -2283,7 +2477,12 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 )
 
             # 解析并导入测试用例到测试用例管理系统
-            test_cases = self._parse_test_cases_content(task.final_test_cases)
+            test_cases = self._build_record_test_cases(task)
+            if not test_cases:
+                return Response(
+                    {'error': '没有最终测试用例可以保存'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             if test_cases:
                 try:
@@ -2799,6 +2998,50 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
 
         # 尝试结构化文本格式解析
         return self._parse_text_format(clean_content)
+
+    def _build_record_test_cases(self, task):
+        """将新旧生成结果统一转换成测试用例管理系统的导入结构。"""
+        if task.test_cases_json:
+            return [self._structured_case_to_record(case) for case in task.test_cases_json]
+        return self._parse_test_cases_content(task.final_test_cases)
+
+    def _structured_case_to_record(self, case):
+        preconditions = case.get('preconditions') or case.get('precondition') or ''
+        steps = case.get('steps') or ''
+
+        return {
+            'scenario': case.get('title') or case.get('scenario') or case.get('catalog') or '测试用例',
+            'precondition': self._join_record_value(preconditions),
+            'steps': self._render_record_steps(steps),
+            'expected': self._join_record_value(case.get('expected_result') or case.get('expected')),
+            'priority': case.get('priority') or 'P2',
+        }
+
+    def _join_record_value(self, value):
+        if value is None:
+            return ''
+        if isinstance(value, list):
+            return '\n'.join(str(item) for item in value if str(item).strip())
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    def _render_record_steps(self, steps):
+        if not isinstance(steps, list):
+            return self._join_record_value(steps)
+
+        rendered = []
+        for index, step in enumerate(steps, 1):
+            if isinstance(step, dict):
+                step_index = step.get('index') or index
+                action = step.get('action') or ''
+                expected = step.get('expected') or ''
+                rendered.append(f"{step_index}. {action}")
+                if expected:
+                    rendered.append(f"   预期：{expected}")
+            else:
+                rendered.append(f"{index}. {step}")
+        return '\n'.join(rendered)
 
     def _parse_table_format(self, content):
         """解析表格格式的测试用例"""

@@ -6,6 +6,8 @@ from apps.requirement_analysis.generation_pipeline import build_excel_rows, pars
 from apps.requirement_analysis.models import AIModelConfig, PromptConfig, TestCaseGenerationTask
 from apps.requirement_analysis.serializers import TestCaseGenerationRequestSerializer
 from apps.requirement_analysis.views import TestCaseGenerationTaskViewSet
+from apps.projects.models import Project
+from apps.testcases.models import TestCase as ManagedTestCase
 
 
 class PRD2CaseTaskModelTests(TestCase):
@@ -140,3 +142,65 @@ class TestCaseGenerationConfigValidationTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("API Key", response.data["error"])
+
+
+class PRD2CaseReviewGateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("review_user", password="password123")
+        self.project = Project.objects.create(
+            name="PRD2Case 项目",
+            owner=self.user,
+        )
+        self.task = TestCaseGenerationTask.objects.create(
+            task_id="TASK_GATE001",
+            title="登录 PRD",
+            requirement_text="手机号登录",
+            requirement_ids=["REQ-1"],
+            case_type="功能测试",
+            case_creator="张三",
+            iteration="2026.06",
+            test_points=[{"id": "TP-001", "title": "登录主流程", "review_status": "pending"}],
+            project=self.project,
+            created_by=self.user,
+        )
+
+    def test_export_requires_case_review_approval(self):
+        factory = APIRequestFactory()
+        request = factory.get(f"/api/requirement-analysis/testcase-generation/{self.task.task_id}/export_excel/")
+        request.user = self.user
+
+        response = TestCaseGenerationTaskViewSet.as_view({"get": "export_excel"})(request, task_id=self.task.task_id)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("审核", response.data["error"])
+
+    def test_save_to_records_uses_approved_structured_cases(self):
+        self.task.status = "completed"
+        self.task.test_cases_review_status = "approved"
+        self.task.test_cases_json = [{
+            "title": "手机号验证码登录成功",
+            "preconditions": ["用户未登录", "验证码有效"],
+            "steps": [
+                {"index": 1, "action": "输入手机号", "expected": "展示验证码输入框"},
+                {"index": 2, "action": "输入验证码并提交", "expected": "登录成功"},
+            ],
+            "expected_result": "登录成功并进入首页",
+            "priority": "P1",
+        }]
+        self.task.save()
+        factory = APIRequestFactory()
+        request = factory.post(
+            f"/api/requirement-analysis/testcase-generation/{self.task.task_id}/save_to_records/",
+            {},
+            format="json",
+        )
+        request.user = self.user
+
+        response = TestCaseGenerationTaskViewSet.as_view({"post": "save_to_records"})(request, task_id=self.task.task_id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["imported_count"], 1)
+        managed_case = ManagedTestCase.objects.get(project=self.project)
+        self.assertEqual(managed_case.title, "手机号验证码登录成功")
+        self.assertIn("输入手机号", managed_case.steps)
+        self.assertEqual(managed_case.priority, "high")
