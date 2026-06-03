@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     RequirementDocument, RequirementAnalysis, BusinessRequirement,
     GeneratedTestCase, AnalysisTask, AIModelConfig, PromptConfig, TestCaseGenerationTask,
-    GenerationConfig
+    GenerationConfig, TestCaseTemplateConfig
 )
 
 
@@ -240,6 +240,8 @@ class TestCaseGenerationTaskSerializer(serializers.ModelSerializer):
         model = TestCaseGenerationTask
         fields = ['id', 'task_id', 'title', 'requirement_text', 'status', 'status_display',
                  'requirement_ids', 'case_type', 'case_creator', 'iteration',
+                 'source_file', 'source_file_type', 'source_extract_status', 'source_extract_error',
+                 'template_file', 'template_schema', 'selected_template_name',
                  'progress', 'project', 'project_name', 'writer_model_config', 'writer_model_name', 
                  'reviewer_model_config', 'reviewer_model_name', 'writer_prompt_config', 'writer_prompt_name',
                  'structured_requirements', 'testability_report', 'clarifying_questions',
@@ -253,6 +255,8 @@ class TestCaseGenerationTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['task_id', 'status', 'progress', 'generated_test_cases', 
                           'review_feedback', 'final_test_cases', 'generation_log', 
                           'error_message', 'created_by', 'completed_at',
+                          'source_file_type', 'source_extract_status', 'source_extract_error',
+                          'template_schema', 'selected_template_name',
                           'structured_requirements', 'testability_report', 'clarifying_questions',
                           'test_points', 'test_points_review_status', 'test_points_reviewed_at',
                           'test_points_reviewed_by', 'strategy_matrix', 'scenario_matrix',
@@ -316,3 +320,29 @@ class GenerationConfigSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+
+class TestCaseTemplateConfigSerializer(serializers.ModelSerializer):
+    """测试用例Excel模板配置序列化器"""
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = TestCaseTemplateConfig
+        fields = [
+            'id', 'name', 'template_file', 'template_schema', 'is_active',
+            'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_by', 'created_by_name', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        if user.is_authenticated:
+            validated_data['created_by'] = user
+        else:
+            from apps.users.models import User
+            default_user = User.objects.filter(is_superuser=True).first()
+            if not default_user:
+                default_user = User.objects.first()
+            validated_data['created_by'] = default_user
+
+        return super().create(validated_data)

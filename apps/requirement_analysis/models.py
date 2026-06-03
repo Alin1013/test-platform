@@ -199,6 +199,7 @@ class AnalysisTask(models.Model):
 class AIModelConfig(models.Model):
     """AI模型配置模型"""
     MODEL_CHOICES = [
+        ('openai', 'OpenAI'),
         ('deepseek', 'DeepSeek'),
         ('qwen', '通义千问'),
         ('siliconflow', '硅基流动'),
@@ -209,6 +210,7 @@ class AIModelConfig(models.Model):
     ROLE_CHOICES = [
         ('writer', '测试用例编写专家'),
         ('reviewer', '测试评审专家'),
+        ('vision', '视觉解析模型'),
         ('browser_use_text', 'Browser Use - 文本模式'),
     ]
 
@@ -324,6 +326,31 @@ class GenerationConfig(models.Model):
         return cls.objects.filter(is_active=True).first()
 
 
+class TestCaseTemplateConfig(models.Model):
+    """测试用例Excel模板配置"""
+    name = models.CharField(max_length=200, verbose_name='模板名称')
+    template_file = models.FileField(
+        upload_to='testcase_templates/default/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='模板文件'
+    )
+    template_schema = models.JSONField(default=dict, blank=True, verbose_name='模板结构')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'testcase_template_config'
+        verbose_name = '测试用例模板配置'
+        verbose_name_plural = '测试用例模板配置'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
 class TestCaseGenerationTask(models.Model):
     """测试用例生成任务模型"""
     STATUS_CHOICES = [
@@ -345,6 +372,12 @@ class TestCaseGenerationTask(models.Model):
         ('pending', '待审核'),
         ('approved', '已审核'),
         ('revision_requested', '需修改'),
+    ]
+
+    SOURCE_EXTRACT_STATUS_CHOICES = [
+        ('pending', '待解析'),
+        ('parsed', '已解析'),
+        ('failed', '解析失败'),
     ]
 
     task_id = models.CharField(max_length=50, unique=True, verbose_name='任务ID')
@@ -455,6 +488,30 @@ class TestCaseGenerationTask(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='完成时间')
     is_saved_to_records = models.BooleanField(default=False, verbose_name='是否已保存到记录')
     saved_at = models.DateTimeField(null=True, blank=True, verbose_name='保存到记录时间')
+
+    # 文件源与Excel模板
+    source_file = models.FileField(
+        upload_to='requirement_sources/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='PRD源文件'
+    )
+    source_file_type = models.CharField(max_length=20, blank=True, verbose_name='源文件类型')
+    source_extract_status = models.CharField(
+        max_length=20,
+        choices=SOURCE_EXTRACT_STATUS_CHOICES,
+        default='pending',
+        verbose_name='源文件解析状态'
+    )
+    source_extract_error = models.TextField(blank=True, verbose_name='源文件解析错误')
+    template_file = models.FileField(
+        upload_to='testcase_templates/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='任务用例模板'
+    )
+    template_schema = models.JSONField(default=dict, blank=True, verbose_name='用例模板结构')
+    selected_template_name = models.CharField(max_length=200, blank=True, verbose_name='选中模板名称')
 
     class Meta:
         db_table = 'testcase_generation_task'

@@ -3,7 +3,12 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 
 from apps.requirement_analysis.generation_pipeline import build_excel_rows, parse_json_payload
-from apps.requirement_analysis.models import AIModelConfig, PromptConfig, TestCaseGenerationTask
+from apps.requirement_analysis.models import (
+    AIModelConfig,
+    PromptConfig,
+    TestCaseGenerationTask,
+    TestCaseTemplateConfig,
+)
 from apps.requirement_analysis.serializers import TestCaseGenerationRequestSerializer
 from apps.requirement_analysis.views import TestCaseGenerationTaskViewSet
 from apps.projects.models import Project
@@ -37,6 +42,41 @@ class PRD2CaseTaskModelTests(TestCase):
         self.assertEqual(task.test_cases_json, [])
         self.assertEqual(task.test_points_review_status, "pending")
         self.assertEqual(task.test_cases_review_status, "pending")
+
+    def test_ai_model_choices_include_openai_vision(self):
+        model_type_field = AIModelConfig._meta.get_field("model_type")
+        role_field = AIModelConfig._meta.get_field("role")
+
+        self.assertIn(("openai", "OpenAI"), model_type_field.choices)
+        self.assertIn(("vision", "视觉解析模型"), role_field.choices)
+
+    def test_task_defaults_include_source_and_template_fields(self):
+        task = TestCaseGenerationTask.objects.create(
+            task_id="TASK_REF001",
+            title="上传 PRD",
+            requirement_text="",
+            requirement_ids=["REQ-1"],
+            case_type="功能测试",
+            case_creator="张三",
+            iteration="2026.06",
+            created_by=self.user,
+        )
+
+        self.assertEqual(task.source_file_type, "")
+        self.assertEqual(task.source_extract_status, "pending")
+        self.assertEqual(task.source_extract_error, "")
+        self.assertEqual(task.template_schema, {})
+        self.assertEqual(task.selected_template_name, "")
+
+    def test_template_config_model_defaults(self):
+        config = TestCaseTemplateConfig.objects.create(
+            name="默认模板",
+            template_schema={"headers": ["用例名称"]},
+            created_by=self.user,
+        )
+
+        self.assertTrue(config.is_active)
+        self.assertEqual(config.template_schema["headers"], ["用例名称"])
 
 
 class TestCaseGenerationRequestSerializerTests(TestCase):
