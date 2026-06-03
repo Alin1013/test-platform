@@ -65,16 +65,18 @@ def build_excel_rows(test_cases: List[Dict[str, Any]], defaults: Dict[str, Any])
 class PRD2CasePipeline:
     def __init__(self, task: TestCaseGenerationTask):
         self.task = task
+        self.writer_model_config = task.writer_model_config
+        self.writer_prompt_content = task.writer_prompt_config.content
 
     def _writer_messages(self, stage: str, user_content: str) -> List[Dict[str, str]]:
         return [
-            {"role": "system", "content": self.task.writer_prompt_config.content},
+            {"role": "system", "content": self.writer_prompt_content},
             {"role": "user", "content": f"阶段：{stage}\n\n{user_content}"},
         ]
 
     async def _call_writer(self, stage: str, user_content: str) -> str:
         response = await AIModelService.call_openai_compatible_api(
-            self.task.writer_model_config,
+            self.writer_model_config,
             self._writer_messages(stage, user_content),
         )
         return response["choices"][0]["message"]["content"]

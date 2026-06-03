@@ -242,6 +242,20 @@ class PRD2CasePipelineRevisionTests(TestCase):
 
         self.assertEqual(result.artifact[0]["title"], "新点")
 
+    def test_generate_test_points_does_not_lazy_load_config_in_async_context(self):
+        task = TestCaseGenerationTask.objects.get(task_id=self.task.task_id)
+        mocked_call = AsyncMock(return_value={
+            "choices": [{"message": {"content": '[{"id":"TP-1","title":"新点"}]'}}],
+        })
+
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=mocked_call,
+        ):
+            result = async_to_sync(PRD2CasePipeline(task).generate_test_points)()
+
+        self.assertEqual(result.artifact[0]["title"], "新点")
+
     def test_revise_test_cases_includes_template_schema(self):
         mocked_call = AsyncMock(return_value={
             "choices": [{"message": {"content": '[{"id":"TC-1","title":"新用例"}]'}}],
@@ -254,6 +268,20 @@ class PRD2CasePipelineRevisionTests(TestCase):
 
         messages = mocked_call.call_args.args[1]
         self.assertIn("模板结构", messages[1]["content"])
+        self.assertEqual(result.artifact[0]["title"], "新用例")
+
+    def test_generate_cases_from_points_does_not_lazy_load_config_in_async_context(self):
+        task = TestCaseGenerationTask.objects.get(task_id=self.task.task_id)
+        mocked_call = AsyncMock(return_value={
+            "choices": [{"message": {"content": '[{"id":"TC-1","title":"新用例"}]'}}],
+        })
+
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=mocked_call,
+        ):
+            result = async_to_sync(PRD2CasePipeline(task).generate_cases_from_points)()
+
         self.assertEqual(result.artifact[0]["title"], "新用例")
 
     def test_vision_document_extractor_sends_image_payload(self):
