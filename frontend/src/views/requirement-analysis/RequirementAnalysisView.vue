@@ -138,6 +138,41 @@
               <div class="char-count">{{ manualInput.description.length }}/2000</div>
             </div>
 
+            <div class="metadata-grid">
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.requirementIds') }} <span class="required">*</span></label>
+                <input
+                  v-model="manualInput.requirementIds"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.requirementIdsPlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.caseType') }} <span class="required">*</span></label>
+                <input
+                  v-model="manualInput.caseType"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.caseTypePlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.caseCreator') }} <span class="required">*</span></label>
+                <input
+                  v-model="manualInput.caseCreator"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.caseCreatorPlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.iteration') }} <span class="required">*</span></label>
+                <input
+                  v-model="manualInput.iteration"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.iterationPlaceholder')">
+              </div>
+            </div>
+
             <div class="form-group">
               <label>{{ $t('requirementAnalysis.associatedProject') }}</label>
               <select v-model="manualInput.selectedProject" class="form-select">
@@ -211,6 +246,41 @@
                 :placeholder="$t('requirementAnalysis.documentPlaceholder')">
             </div>
 
+            <div class="metadata-grid">
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.requirementIds') }} <span class="required">*</span></label>
+                <input
+                  v-model="documentMetadata.requirementIds"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.requirementIdsPlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.caseType') }} <span class="required">*</span></label>
+                <input
+                  v-model="documentMetadata.caseType"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.caseTypePlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.caseCreator') }} <span class="required">*</span></label>
+                <input
+                  v-model="documentMetadata.caseCreator"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.caseCreatorPlaceholder')">
+              </div>
+              <div class="form-group">
+                <label>{{ $t('requirementAnalysis.iteration') }} <span class="required">*</span></label>
+                <input
+                  v-model="documentMetadata.iteration"
+                  type="text"
+                  class="form-input"
+                  :placeholder="$t('requirementAnalysis.iterationPlaceholder')">
+              </div>
+            </div>
+
             <div class="form-group">
               <label>{{ $t('requirementAnalysis.associatedProject') }}</label>
               <select v-model="selectedProject" class="form-select">
@@ -224,7 +294,7 @@
             <button
               class="generate-btn"
               @click="generateFromDocument"
-              :disabled="!documentTitle || isGenerating">
+              :disabled="!canGenerateDocument || isGenerating">
               <span v-if="isGenerating">{{ $t('requirementAnalysis.generating') }}</span>
               <span v-else>{{ $t('requirementAnalysis.generateButton') }}</span>
             </button>
@@ -253,7 +323,7 @@
           </div>
 
           <!-- 流式内容实时显示区域 -->
-          <div v-if="streamedContent" class="stream-content-display">
+          <div v-if="streamedContent && !testCases.length" class="stream-content-display">
             <div class="stream-header">
               <span class="stream-title">{{ $t('requirementAnalysis.realtimeGeneratedContent') }}</span>
               <span class="stream-status">{{ $t('requirementAnalysis.characters', { count: streamedContent.length }) }}</span>
@@ -262,7 +332,7 @@
           </div>
 
           <!-- 评审内容显示区域 -->
-          <div v-if="streamedReviewContent" class="stream-content-display" style="margin-top: 15px;">
+          <div v-if="streamedReviewContent && !testCases.length" class="stream-content-display" style="margin-top: 15px;">
             <div class="stream-header">
               <span class="stream-title">{{ $t('requirementAnalysis.aiReviewComments') }}</span>
               <span class="stream-status">{{ $t('requirementAnalysis.characters', { count: streamedReviewContent.length }) }}</span>
@@ -271,7 +341,7 @@
           </div>
 
           <!-- 最终版用例显示区域 -->
-          <div v-if="finalTestCases" class="stream-content-display" style="margin-top: 15px;">
+          <div v-if="finalTestCases && !testCases.length" class="stream-content-display" style="margin-top: 15px;">
             <div class="stream-header">
               <span class="stream-title">
                 {{ $t('requirementAnalysis.finalVersionTestCases') }}
@@ -285,32 +355,158 @@
           <div class="progress-steps">
             <div class="step" :class="{ active: currentStep >= 1 }">
               <span class="step-number">1</span>
-              <span class="step-text">{{ $t('requirementAnalysis.stepAnalysis') }}</span>
+              <span class="step-text">{{ $t('requirementAnalysis.stepPrd') }}</span>
             </div>
             <div class="step" :class="{ active: currentStep >= 2 }">
               <span class="step-number">2</span>
-              <span class="step-text">{{ $t('requirementAnalysis.stepWriting') }}</span>
+              <span class="step-text">{{ $t('requirementAnalysis.stepPointReview') }}</span>
             </div>
-            <div v-if="showReviewStep" class="step" :class="{ active: currentStep >= 3 }">
+            <div class="step" :class="{ active: currentStep >= 3 }">
               <span class="step-number">3</span>
-              <span class="step-text">{{ $t('requirementAnalysis.stepReview') }}</span>
+              <span class="step-text">{{ $t('requirementAnalysis.stepCaseGeneration') }}</span>
             </div>
-            <div class="step" :class="{ active: currentStep >= (showReviewStep ? 4 : 3) }">
-              <span class="step-number">{{ showReviewStep ? 4 : 3 }}</span>
-              <span class="step-text">{{ $t('requirementAnalysis.stepComplete') }}</span>
+            <div class="step" :class="{ active: currentStep >= 4 }">
+              <span class="step-number">4</span>
+              <span class="step-text">{{ $t('requirementAnalysis.stepCaseReview') }}</span>
             </div>
+          </div>
+
+          <div v-if="showResults" class="review-workbench">
+            <section v-if="testPoints.length" class="review-panel">
+              <div class="panel-header">
+                <div>
+                  <h4>{{ $t('requirementAnalysis.testPointReviewTitle') }}</h4>
+                  <p>{{ $t('requirementAnalysis.testPointReviewHint') }}</p>
+                </div>
+                <span class="review-status" :class="testPointReviewStatus">
+                  {{ formatReviewStatus(testPointReviewStatus) }}
+                </span>
+              </div>
+
+              <div class="review-list">
+                <article v-for="(point, index) in testPoints" :key="point.id || index" class="review-item">
+                  <div class="review-item-title">
+                    <input v-model="point.id" class="mini-input case-id-input" :placeholder="$t('requirementAnalysis.pointId')">
+                    <input v-model="point.title" class="mini-input title-input" :placeholder="$t('requirementAnalysis.pointTitle')">
+                  </div>
+                  <div class="editor-grid">
+                    <label>
+                      <span>{{ $t('requirementAnalysis.requirementIds') }}</span>
+                      <input v-model="point.requirement_ids_text" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.testObject') }}</span>
+                      <input v-model="point.test_object" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.coverageType') }}</span>
+                      <input v-model="point.coverage_type" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.priority') }}</span>
+                      <input v-model="point.priority" class="mini-input">
+                    </label>
+                  </div>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.preconditions') }}</span>
+                    <textarea v-model="point.preconditions_text" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.expectedFocus') }}</span>
+                    <textarea v-model="point.expected_focus" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.reviewComment') }}</span>
+                    <textarea v-model="point.review_comment" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                </article>
+              </div>
+
+              <div class="panel-actions">
+                <button class="secondary-action-btn" @click="saveTestPoints" :disabled="isGenerating || testPointReviewStatus === 'approved'">
+                  {{ $t('requirementAnalysis.saveEdits') }}
+                </button>
+                <button class="primary-action-btn" @click="approveTestPoints" :disabled="isGenerating || testPointReviewStatus === 'approved'">
+                  {{ $t('requirementAnalysis.approveAndGenerateCases') }}
+                </button>
+              </div>
+            </section>
+
+            <section v-if="testCases.length" class="review-panel">
+              <div class="panel-header">
+                <div>
+                  <h4>{{ $t('requirementAnalysis.casePreviewTitle') }}</h4>
+                  <p>{{ $t('requirementAnalysis.casePreviewHint') }}</p>
+                </div>
+                <span class="review-status" :class="testCaseReviewStatus">
+                  {{ formatReviewStatus(testCaseReviewStatus) }}
+                </span>
+              </div>
+
+              <div class="review-list">
+                <article v-for="(testCase, index) in testCases" :key="testCase.id || index" class="review-item">
+                  <div class="review-item-title">
+                    <input v-model="testCase.id" class="mini-input case-id-input" :placeholder="$t('requirementAnalysis.caseId')">
+                    <input v-model="testCase.title" class="mini-input title-input" :placeholder="$t('requirementAnalysis.caseTitle')">
+                  </div>
+                  <div class="editor-grid">
+                    <label>
+                      <span>{{ $t('requirementAnalysis.caseCatalog') }}</span>
+                      <input v-model="testCase.catalog" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.requirementIds') }}</span>
+                      <input v-model="testCase.requirement_ids_text" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.caseType') }}</span>
+                      <input v-model="testCase.case_type" class="mini-input">
+                    </label>
+                    <label>
+                      <span>{{ $t('requirementAnalysis.priority') }}</span>
+                      <input v-model="testCase.priority" class="mini-input">
+                    </label>
+                  </div>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.preconditions') }}</span>
+                    <textarea v-model="testCase.preconditions_text" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.steps') }}</span>
+                    <textarea v-model="testCase.steps_text" class="mini-textarea" rows="4"></textarea>
+                  </label>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.expectedResult') }}</span>
+                    <textarea v-model="testCase.expected_result" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                  <label class="wide-editor">
+                    <span>{{ $t('requirementAnalysis.reviewComment') }}</span>
+                    <textarea v-model="testCase.review_comment" class="mini-textarea" rows="2"></textarea>
+                  </label>
+                </article>
+              </div>
+
+              <div class="panel-actions">
+                <button class="secondary-action-btn" @click="saveTestCases" :disabled="isGenerating || testCaseReviewStatus === 'approved'">
+                  {{ $t('requirementAnalysis.saveEdits') }}
+                </button>
+                <button class="primary-action-btn" @click="approveTestCases" :disabled="isGenerating || testCaseReviewStatus === 'approved'">
+                  {{ $t('requirementAnalysis.approveCases') }}
+                </button>
+              </div>
+            </section>
           </div>
 
           <!-- 任务完成后的操作按钮 -->
           <div v-if="showResults" class="completion-actions">
-            <button class="download-btn" @click="downloadTestCases">
-              <span>📥 {{ $t('requirementAnalysis.downloadExcel') }}</span>
+            <button class="download-btn" @click="downloadTestCases" :disabled="testCaseReviewStatus !== 'approved'">
+              <span>{{ $t('requirementAnalysis.downloadExcel') }}</span>
             </button>
-            <button class="save-btn" @click="saveToTestCaseRecords">
-              <span>💾 {{ $t('requirementAnalysis.saveToRecords') }}</span>
+            <button class="save-btn" @click="saveToTestCaseRecords" :disabled="testCaseReviewStatus !== 'approved'">
+              <span>{{ $t('requirementAnalysis.saveToRecords') }}</span>
             </button>
             <button class="new-generation-btn" @click="resetGeneration">
-              <span>📝 {{ $t('requirementAnalysis.newGeneration') }}</span>
+              <span>{{ $t('requirementAnalysis.newGeneration') }}</span>
             </button>
           </div>
           <button v-else class="cancel-generation-btn" @click="cancelGeneration">
@@ -341,8 +537,16 @@
 <script>
 import api from '@/utils/api'
 import { ElMessage } from 'element-plus'
-import * as XLSX from 'xlsx'
 import { useUserStore } from '@/stores/user'
+import {
+  approveGeneratedTestCases,
+  approveGeneratedTestPoints,
+  createTestCaseGenerationTask,
+  exportGeneratedTestCases,
+  getTestCaseGenerationProgress,
+  updateGeneratedTestCases,
+  updateGeneratedTestPoints
+} from '@/api/requirement-analysis'
 
 export default {
   name: 'RequirementAnalysisView',
@@ -355,12 +559,22 @@ export default {
       manualInput: {
         title: '',
         description: '',
+        requirementIds: '',
+        caseType: '功能测试',
+        caseCreator: '',
+        iteration: '',
         selectedProject: ''
       },
 
       // 文件上传
       selectedFile: null,
       documentTitle: '',
+      documentMetadata: {
+        requirementIds: '',
+        caseType: '功能测试',
+        caseCreator: '',
+        iteration: ''
+      },
       selectedProject: '',
       projects: [],
       isDragOver: false,
@@ -381,6 +595,10 @@ export default {
       // 生成结果
       showResults: false,
       generationResult: null,
+      testPoints: [],
+      testCases: [],
+      testPointReviewStatus: 'pending',
+      testCaseReviewStatus: 'pending',
 
       // AI配置状态
       configStatus: {
@@ -434,7 +652,13 @@ export default {
     canGenerateManual() {
       return this.manualInput.title.trim() &&
              this.manualInput.description.trim() &&
-             this.manualInput.description.length <= 2000
+             this.manualInput.description.length <= 2000 &&
+             this.isMetadataComplete(this.manualInput)
+    },
+    canGenerateDocument() {
+      return this.selectedFile &&
+             this.documentTitle.trim() &&
+             this.isMetadataComplete(this.documentMetadata)
     }
   },
 
@@ -474,6 +698,122 @@ export default {
       } catch (error) {
         console.error(this.$t('requirementAnalysis.loadProjectsFailed'), error)
       }
+    },
+
+    isMetadataComplete(metadata) {
+      return Boolean(
+        metadata.requirementIds?.trim() &&
+        metadata.caseType?.trim() &&
+        metadata.caseCreator?.trim() &&
+        metadata.iteration?.trim()
+      )
+    },
+
+    splitTextList(value) {
+      if (!value) return []
+      if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean)
+      return String(value)
+        .replace(/；/g, ',')
+        .replace(/;/g, ',')
+        .split(/,|\n/)
+        .map(item => item.trim())
+        .filter(Boolean)
+    },
+
+    renderTextList(value) {
+      if (!value) return ''
+      if (Array.isArray(value)) return value.join('\n')
+      return String(value)
+    },
+
+    normalizeTestPointsForEditor(points) {
+      return points.map(point => ({
+        ...point,
+        requirement_ids_text: this.renderTextList(point.requirement_ids),
+        preconditions_text: this.renderTextList(point.preconditions),
+        review_comment: point.review_comment || ''
+      }))
+    },
+
+    serializeTestPoints() {
+      return this.testPoints.map(point => {
+        const {
+          requirement_ids_text: requirementIdsText,
+          preconditions_text: preconditionsText,
+          ...rest
+        } = point
+        return {
+          ...rest,
+          requirement_ids: this.splitTextList(requirementIdsText),
+          preconditions: this.splitTextList(preconditionsText),
+          review_status: rest.review_status || 'pending',
+          review_comment: rest.review_comment || ''
+        }
+      })
+    },
+
+    renderCaseSteps(steps) {
+      if (!steps) return ''
+      if (!Array.isArray(steps)) return String(steps)
+
+      return steps.map((step, index) => {
+        if (typeof step === 'object' && step !== null) {
+          const stepIndex = step.index || index + 1
+          const action = step.action || ''
+          const expected = step.expected ? `\n   预期：${step.expected}` : ''
+          return `${stepIndex}. ${action}${expected}`
+        }
+        return `${index + 1}. ${step}`
+      }).join('\n')
+    },
+
+    parseCaseSteps(text) {
+      const steps = []
+      String(text || '').split('\n').forEach(line => {
+        const value = line.trim()
+        if (!value) return
+
+        if (/^(预期|期望)[:：]/.test(value) && steps.length) {
+          steps[steps.length - 1].expected = value.replace(/^(预期|期望)[:：]\s*/, '')
+          return
+        }
+
+        steps.push({
+          index: steps.length + 1,
+          action: value.replace(/^\d+[\.\)、]\s*/, ''),
+          expected: ''
+        })
+      })
+      return steps
+    },
+
+    normalizeTestCasesForEditor(cases) {
+      return cases.map(testCase => ({
+        ...testCase,
+        requirement_ids_text: this.renderTextList(testCase.requirement_ids),
+        preconditions_text: this.renderTextList(testCase.preconditions),
+        steps_text: this.renderCaseSteps(testCase.steps),
+        review_comment: testCase.review_comment || ''
+      }))
+    },
+
+    serializeTestCases() {
+      return this.testCases.map(testCase => {
+        const {
+          requirement_ids_text: requirementIdsText,
+          preconditions_text: preconditionsText,
+          steps_text: stepsText,
+          ...rest
+        } = testCase
+        return {
+          ...rest,
+          requirement_ids: this.splitTextList(requirementIdsText),
+          preconditions: this.splitTextList(preconditionsText),
+          steps: this.parseCaseSteps(stepsText),
+          review_status: rest.review_status || 'pending',
+          review_comment: rest.review_comment || ''
+        }
+      })
     },
 
     async checkConfigStatus() {
@@ -669,12 +1009,13 @@ export default {
         this.manualInput.title,
         requirementText,
         this.manualInput.selectedProject,
-        this.globalOutputMode  // 使用全局输出模式
+        this.globalOutputMode,
+        this.manualInput
       )
     },
 
     async generateFromDocument() {
-      if (!this.selectedFile || !this.documentTitle) {
+      if (!this.canGenerateDocument) {
         ElMessage.error(this.$t('requirementAnalysis.selectFileAndTitle'))
         return
       }
@@ -710,7 +1051,8 @@ export default {
           this.documentTitle,
           requirementText,
           this.selectedProject,
-          this.globalOutputMode  // 使用全局输出模式
+          this.globalOutputMode,
+          this.documentMetadata
         )
 
       } catch (error) {
@@ -719,7 +1061,7 @@ export default {
       }
     },
 
-    async startGeneration(title, requirementText, projectId, outputMode = 'stream') {
+    async startGeneration(title, requirementText, projectId, outputMode = 'stream', metadata = {}) {
       // 在开始生成前，主动刷新token确保生成过程中不会过期
       try {
         const userStore = useUserStore()
@@ -744,12 +1086,20 @@ export default {
       this.streamedReviewContent = ''  // 清空评审内容
       this.hasShownCompletionMessage = false  // 重置完成消息标志位
       this.showResults = false  // 隐藏上一次的结果
+      this.testPoints = []
+      this.testCases = []
+      this.testPointReviewStatus = 'pending'
+      this.testCaseReviewStatus = 'pending'
 
       try {
         // 调用新的生成API
         const requestData = {
           title: title,
           requirement_text: requirementText,
+          requirement_ids: metadata.requirementIds,
+          case_type: metadata.caseType,
+          case_creator: metadata.caseCreator,
+          iteration: metadata.iteration,
           use_writer_model: true,
           use_reviewer_model: true,
           output_mode: outputMode  // 添加输出模式参数
@@ -760,19 +1110,14 @@ export default {
           requestData.project = projectId
         }
 
-        const response = await api.post('/requirement-analysis/testcase-generation/generate/', requestData)
+        const response = await createTestCaseGenerationTask(requestData)
 
         this.currentTaskId = response.data.task_id
         this.progressText = this.$t('requirementAnalysis.taskCreated')
 
         ElMessage.success(this.$t('requirementAnalysis.generateSuccess'))
 
-        // 根据输出模式选择不同的进度获取方式
-        if (outputMode === 'stream') {
-          this.startStreamingProgress()
-        } else {
-          this.startPolling()
-        }
+        this.startPolling()
 
       } catch (error) {
         console.error(this.$t('requirementAnalysis.createTaskFailed'), error)
@@ -918,35 +1263,12 @@ export default {
     async fetchFinalResult() {
       try {
         // 修复URL：去掉多余的/api/前缀（axios baseURL已经包含/api）
-        const response = await api.get(`/requirement-analysis/testcase-generation/${this.currentTaskId}/progress/`)
+        const response = await getTestCaseGenerationProgress(this.currentTaskId)
         const task = response.data
 
-        this.generationResult = task
+        this.applyTaskState(task)
         this.showResults = true
         this.isGenerating = false
-
-        // 设置第4步为完成状态
-        this.currentStep = 4
-
-        // 设置最终版用例（如果还没有通过流式接收完整）
-        if (task.final_test_cases) {
-          console.log('📝 Getting final cases from task object')
-          // 无论this.finalTestCases是否已有值，都用最新的final_test_cases覆盖
-          // 这样确保完整输出模式下也能正确显示最终版用例
-          this.finalTestCases = task.final_test_cases
-        }
-
-        // 如果评审内容为空，从task对象中获取
-        if (!this.streamedReviewContent && task.review_feedback) {
-          console.log('📝 Getting review content from task object')
-          this.streamedReviewContent = task.review_feedback
-        }
-
-        // 如果生成内容为空，从task对象中获取
-        if (!this.streamedContent && task.generated_test_cases) {
-          console.log('✍️ Getting generated content from task object')
-          this.streamedContent = task.generated_test_cases
-        }
 
         if (this.eventSource) {
           this.eventSource.close()
@@ -962,6 +1284,139 @@ export default {
         console.error('Failed to fetch final result:', error)
         ElMessage.error(this.$t('requirementAnalysis.fetchResultFailed'))
         this.isGenerating = false
+      }
+    },
+
+    applyTaskState(task) {
+      this.generationResult = task
+      this.testPointReviewStatus = task.test_points_review_status || 'pending'
+      this.testCaseReviewStatus = task.test_cases_review_status || 'pending'
+      this.currentStep = this.getStepFromStage(task.current_stage, task.status)
+
+      if (task.current_stage === 'test_points_review') {
+        this.progressText = this.$t('requirementAnalysis.statusTestPointsReady')
+      } else if (task.current_stage === 'case_generation') {
+        this.progressText = this.$t('requirementAnalysis.statusGeneratingCases')
+      } else if (task.current_stage === 'test_cases_review') {
+        this.progressText = this.$t('requirementAnalysis.statusCasesReady')
+      } else if (task.status === 'completed') {
+        this.progressText = this.$t('requirementAnalysis.statusCompleted')
+      } else if (task.status === 'generating') {
+        this.progressText = this.$t('requirementAnalysis.statusGenerating')
+      }
+
+      if (task.test_points && task.test_points.length) {
+        this.testPoints = this.normalizeTestPointsForEditor(task.test_points)
+      }
+
+      if (task.test_cases_json && task.test_cases_json.length) {
+        this.testCases = this.normalizeTestCasesForEditor(task.test_cases_json)
+      }
+
+      if (task.generated_test_cases) {
+        this.streamedContent = task.generated_test_cases
+      }
+      if (task.review_feedback) {
+        this.streamedReviewContent = task.review_feedback
+      }
+      if (task.final_test_cases) {
+        this.finalTestCases = task.final_test_cases
+      }
+    },
+
+    getStepFromStage(stage, taskStatus) {
+      if (stage === 'test_points_review') return 2
+      if (stage === 'case_generation') return 3
+      if (stage === 'test_cases_review' || stage === 'completed' || taskStatus === 'completed') return 4
+      return taskStatus === 'generating' ? 1 : 0
+    },
+
+    getStageReadyMessage(task) {
+      if (task.current_stage === 'test_points_review') {
+        return this.$t('requirementAnalysis.testPointsReady')
+      }
+      if (task.current_stage === 'test_cases_review') {
+        return this.$t('requirementAnalysis.testCasesReady')
+      }
+      return this.$t('requirementAnalysis.generateCompleteSuccess')
+    },
+
+    stopPolling() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval)
+        this.pollInterval = null
+      }
+    },
+
+    formatReviewStatus(status) {
+      const labels = {
+        pending: this.$t('requirementAnalysis.reviewPending'),
+        revision_requested: this.$t('requirementAnalysis.reviewRevisionRequested'),
+        approved: this.$t('requirementAnalysis.reviewApproved')
+      }
+      return labels[status] || status || this.$t('requirementAnalysis.reviewPending')
+    },
+
+    async saveTestPoints() {
+      if (!this.currentTaskId) return
+      try {
+        const response = await updateGeneratedTestPoints(this.currentTaskId, this.serializeTestPoints())
+        this.testPoints = this.normalizeTestPointsForEditor(response.data.test_points || [])
+        this.testPointReviewStatus = 'revision_requested'
+        ElMessage.success(this.$t('requirementAnalysis.saveSuccessMessage'))
+      } catch (error) {
+        console.error('Save test points failed:', error)
+        ElMessage.error(this.$t('requirementAnalysis.saveFailed') + ': ' + (error.response?.data?.error || error.message))
+      }
+    },
+
+    async approveTestPoints() {
+      if (!this.currentTaskId) return
+      try {
+        await updateGeneratedTestPoints(this.currentTaskId, this.serializeTestPoints())
+        await approveGeneratedTestPoints(this.currentTaskId)
+        this.testPointReviewStatus = 'approved'
+        this.isGenerating = true
+        this.showResults = true
+        this.hasShownCompletionMessage = false
+        this.progressText = this.$t('requirementAnalysis.statusGeneratingCases')
+        this.currentStep = 3
+        ElMessage.success(this.$t('requirementAnalysis.testPointsApproved'))
+        this.startPolling()
+      } catch (error) {
+        console.error('Approve test points failed:', error)
+        ElMessage.error(this.$t('requirementAnalysis.approveFailed') + ': ' + (error.response?.data?.error || error.message))
+      }
+    },
+
+    async saveTestCases() {
+      if (!this.currentTaskId) return
+      try {
+        const response = await updateGeneratedTestCases(this.currentTaskId, this.serializeTestCases())
+        this.testCases = this.normalizeTestCasesForEditor(response.data.test_cases || [])
+        this.testCaseReviewStatus = 'revision_requested'
+        ElMessage.success(this.$t('requirementAnalysis.saveSuccessMessage'))
+      } catch (error) {
+        console.error('Save test cases failed:', error)
+        ElMessage.error(this.$t('requirementAnalysis.saveFailed') + ': ' + (error.response?.data?.error || error.message))
+      }
+    },
+
+    async approveTestCases() {
+      if (!this.currentTaskId) return
+      try {
+        await updateGeneratedTestCases(this.currentTaskId, this.serializeTestCases())
+        await approveGeneratedTestCases(this.currentTaskId)
+        const response = await getTestCaseGenerationProgress(this.currentTaskId)
+        this.applyTaskState(response.data)
+        this.testCaseReviewStatus = 'approved'
+        this.showResults = true
+        this.isGenerating = false
+        this.currentStep = 4
+        ElMessage.success(this.$t('requirementAnalysis.testCasesApproved'))
+      } catch (error) {
+        console.error('Approve test cases failed:', error)
+        ElMessage.error(this.$t('requirementAnalysis.approveFailed') + ': ' + (error.response?.data?.error || error.message))
       }
     },
 
@@ -981,47 +1436,25 @@ export default {
       this.pollInterval = setInterval(async () => {
         try {
           // 修复URL：去掉多余的/api/前缀（axios baseURL已经包含/api）
-          const response = await api.get(`/requirement-analysis/testcase-generation/${this.currentTaskId}/progress/`)
+          const response = await getTestCaseGenerationProgress(this.currentTaskId)
           const task = response.data
 
           console.log(`${this.$t('requirementAnalysis.taskStatus')}: ${task.status}, ${this.$t('requirementAnalysis.progress')}: ${task.progress}%`)
 
-          // 更新进度显示
-          if (task.status === 'generating') {
-            this.currentStep = 2
-            this.progressText = this.$t('requirementAnalysis.statusGenerating')
-          } else if (task.status === 'reviewing') {
-            this.currentStep = 3
-            this.progressText = this.$t('requirementAnalysis.statusReviewing')
-          } else if (task.status === 'completed') {
-            this.currentStep = 4
-            this.progressText = this.$t('requirementAnalysis.statusCompleted')
+          this.applyTaskState(task)
 
-            // 任务完成，显示结果
-            this.generationResult = task
+          if (
+            task.status === 'completed' ||
+            task.current_stage === 'test_points_review' ||
+            task.current_stage === 'test_cases_review'
+          ) {
             this.showResults = true
             this.isGenerating = false
-
-            // 设置显示内容（完整输出模式下需要）
-            if (task.generated_test_cases) {
-              console.log('✍️ Polling mode - Setting generated content')
-              this.streamedContent = task.generated_test_cases
-            }
-            if (task.review_feedback) {
-              console.log('📝 Polling mode - Setting review content')
-              this.streamedReviewContent = task.review_feedback
-            }
-            if (task.final_test_cases) {
-              console.log('🎯 Polling mode - Setting final test cases')
-              this.finalTestCases = task.final_test_cases
-            }
-
-            clearInterval(this.pollInterval)
-            this.pollInterval = null
+            this.stopPolling()
 
             // 只显示一次完成消息
             if (!this.hasShownCompletionMessage) {
-              ElMessage.success(this.$t('requirementAnalysis.generateCompleteSuccess'))
+              ElMessage.success(this.getStageReadyMessage(task))
               this.hasShownCompletionMessage = true
             }
             return
@@ -1029,8 +1462,7 @@ export default {
             this.progressText = this.$t('requirementAnalysis.statusFailed')
             this.isGenerating = false
 
-            clearInterval(this.pollInterval)
-            this.pollInterval = null
+            this.stopPolling()
 
             ElMessage.error(this.$t('requirementAnalysis.generateFailed') + ': ' + (task.error_message || this.$t('requirementAnalysis.unknownError')))
             return
@@ -1056,98 +1488,34 @@ export default {
     // 下载测试用例为xlsx文件
     async downloadTestCases() {
       try {
-        // 解析最终测试用例内容
-        const finalTestCases = this.generationResult.final_test_cases;
-        const taskId = this.generationResult.task_id;
-
-        // 创建工作簿
-        const workbook = XLSX.utils.book_new();
-
-        // 过滤掉总结和建议部分，只保留测试用例内容
-        const filteredContent = this.filterTestCasesOnly(finalTestCases);
-
-        // 尝试解析表格格式的测试用例（参考AutoGenTestCase的做法）
-        const tableFormat = this.parseTableFormat(filteredContent);
-
-        let worksheetData = [];
-
-        if (tableFormat.length > 0) {
-          // 如果解析到表格格式，直接使用，但要确保表头正确
-          worksheetData = tableFormat;
-
-          // 检查并修正表头
-          if (worksheetData.length > 0) {
-            const header = worksheetData[0];
-            for (let i = 0; i < header.length; i++) {
-              if (header[i] && header[i].includes('测试步骤')) {
-                header[i] = header[i].replace('测试步骤', '操作步骤');
-              }
-              if (header[i] && header[i].includes('Test Steps')) {
-                header[i] = header[i].replace('Test Steps', '操作步骤');
-              }
-            }
-          }
-        } else {
-          // 否则尝试解析结构化格式
-          worksheetData = this.parseStructuredFormat(filteredContent);
+        if (this.testCaseReviewStatus !== 'approved') {
+          ElMessage.warning(this.$t('requirementAnalysis.approveBeforeExport'))
+          return
         }
 
-        // 将所有单元格中的<br>标签转换为换行符
-        worksheetData = worksheetData.map(row =>
-          row.map(cell => this.convertBrToNewline(cell))
-        );
+        const taskId = this.generationResult.task_id
+        const response = await exportGeneratedTestCases(taskId)
+        const blob = new Blob([response.data], {
+          type: response.headers['content-type'] || 'application/vnd.ms-excel'
+        })
+        const disposition = response.headers['content-disposition'] || ''
+        const filenameMatch = disposition.match(/filename="?([^"]+)"?/)
+        const fileName = filenameMatch
+          ? decodeURIComponent(filenameMatch[1])
+          : this.$t('requirementAnalysis.excelFileName', { taskId, date: new Date().toISOString().slice(0, 10) })
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(downloadUrl)
 
-        // 创建工作表
-        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-
-        // 设置列宽
-        const colWidths = [
-          { wch: 15 }, // 测试用例编号
-          { wch: 30 }, // 测试场景
-          { wch: 25 }, // 前置条件
-          { wch: 40 }, // 操作步骤
-          { wch: 30 }, // 预期结果
-          { wch: 10 }  // 优先级
-        ];
-        worksheet['!cols'] = colWidths;
-
-        // 设置表头样式（加粗）
-        if (worksheetData.length > 1) {
-          for (let col = 0; col < Math.min(6, worksheetData[0].length); col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-            if (!worksheet[cellAddress]) continue;
-            worksheet[cellAddress].s = {
-              font: { bold: true },
-              alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
-            };
-          }
-
-          // 设置自动换行
-          for (let row = 1; row < worksheetData.length; row++) {
-            for (let col = 0; col < Math.min(6, worksheetData[row].length); col++) {
-              const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-              if (worksheet[cellAddress]) {
-                worksheet[cellAddress].s = {
-                  alignment: { vertical: 'top', wrapText: true }
-                };
-              }
-            }
-          }
-        }
-
-        // 将工作表添加到工作簿
-        XLSX.utils.book_append_sheet(workbook, worksheet, this.$t('requirementAnalysis.testCaseSheetName'));
-
-        // 生成文件名（包含任务ID和日期）
-        const fileName = this.$t('requirementAnalysis.excelFileName', { taskId: taskId, date: new Date().toISOString().slice(0, 10) });
-
-        // 导出文件
-        XLSX.writeFile(workbook, fileName);
-
-        ElMessage.success(this.$t('requirementAnalysis.downloadSuccess'));
+        ElMessage.success(this.$t('requirementAnalysis.downloadSuccess'))
       } catch (error) {
-        console.error(this.$t('requirementAnalysis.downloadFailed'), error);
-        ElMessage.error(this.$t('requirementAnalysis.downloadFailed') + ': ' + (error.message || this.$t('requirementAnalysis.unknownError')));
+        console.error(this.$t('requirementAnalysis.downloadFailed'), error)
+        ElMessage.error(this.$t('requirementAnalysis.downloadFailed') + ': ' + (error.response?.data?.error || error.message || this.$t('requirementAnalysis.unknownError')))
       }
     },
 
@@ -1795,6 +2163,13 @@ export default {
   margin-bottom: 20px;
 }
 
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  margin-bottom: 4px;
+}
+
 .form-group label {
   display: block;
   margin-bottom: 8px;
@@ -2260,6 +2635,162 @@ export default {
   padding: 10px 20px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.review-workbench {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.review-panel {
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  background: #ffffff;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5edf5;
+}
+
+.panel-header h4 {
+  margin: 0 0 6px 0;
+  color: #1f2937;
+  font-size: 1rem;
+}
+
+.panel-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.review-status {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.review-status.approved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.review-status.revision_requested {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.review-list {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.review-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.review-item-title {
+  display: grid;
+  grid-template-columns: minmax(90px, 140px) minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.editor-grid label,
+.wide-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wide-editor {
+  margin-bottom: 12px;
+}
+
+.mini-input,
+.mini-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: #1f2937;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.mini-input:focus,
+.mini-textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.mini-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.primary-action-btn,
+.secondary-action-btn {
+  border: none;
+  border-radius: 7px;
+  padding: 10px 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-action-btn {
+  color: white;
+  background: #2563eb;
+}
+
+.secondary-action-btn {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.primary-action-btn:disabled,
+.secondary-action-btn:disabled,
+.completion-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .completion-actions {

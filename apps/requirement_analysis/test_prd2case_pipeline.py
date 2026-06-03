@@ -99,7 +99,9 @@ class PRD2CasePipelineUtilityTests(TestCase):
         )
 
         self.assertEqual(rows[0]["用例状态"], "")
-        self.assertEqual(rows[0]["需求ID"], "REQ-1")
+        self.assertEqual(rows[0]["需求ID"], "REQ-DEFAULT")
+        self.assertEqual(rows[0]["创建人"], "张三")
+        self.assertEqual(rows[0]["归属迭代"], "2026.06")
         self.assertIn("1. 输入验证码", rows[0]["用例步骤"])
 
 

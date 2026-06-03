@@ -147,3 +147,58 @@ export function deletePromptConfig(id) {
     method: 'delete'
   })
 }
+
+// ==================== PRD2Case 分阶段生成 ====================
+
+export function createTestCaseGenerationTask(data) {
+  return request({
+    url: '/requirement-analysis/testcase-generation/generate/',
+    method: 'post',
+    data
+  })
+}
+
+export function getTestCaseGenerationProgress(taskId) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/progress/`,
+    method: 'get'
+  })
+}
+
+export function updateGeneratedTestPoints(taskId, testPoints) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/test_points/`,
+    method: 'patch',
+    data: { test_points: testPoints }
+  })
+}
+
+export function approveGeneratedTestPoints(taskId) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/approve_test_points/`,
+    method: 'post'
+  })
+}
+
+export function updateGeneratedTestCases(taskId, testCases) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/test_cases/`,
+    method: 'patch',
+    data: { test_cases: testCases }
+  })
+}
+
+export function approveGeneratedTestCases(taskId) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/approve_test_cases/`,
+    method: 'post'
+  })
+}
+
+export function exportGeneratedTestCases(taskId) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/export_excel/`,
+    method: 'get',
+    responseType: 'blob'
+  })
+}

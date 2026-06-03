@@ -74,15 +74,15 @@ def build_excel_rows(test_cases: List[Dict[str, Any]], defaults: Dict[str, Any])
         rows.append({
             "用例目录": _join(case.get("catalog")),
             "用例名称": _join(case.get("title")),
-            "需求ID": _join(case.get("requirement_ids") or defaults.get("requirement_ids")),
+            "需求ID": _join(defaults.get("requirement_ids")),
             "前置条件": _join(case.get("preconditions")),
             "用例步骤": _render_steps(case.get("steps")),
             "预期结果": _join(case.get("expected_result")),
-            "用例类型": _join(case.get("case_type") or defaults.get("case_type")),
+            "用例类型": _join(defaults.get("case_type")),
             "用例状态": "",
             "用例等级": _join(case.get("priority")),
-            "创建人": _join(case.get("creator") or defaults.get("case_creator")),
-            "归属迭代": _join(case.get("iteration") or defaults.get("iteration")),
+            "创建人": _join(defaults.get("case_creator")),
+            "归属迭代": _join(defaults.get("iteration")),
         })
     return rows
 
