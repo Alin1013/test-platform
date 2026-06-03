@@ -1292,6 +1292,70 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by('-created_at')
 
+    def _ensure_ai_config_ready(self, config, role_label):
+        if not config:
+            return f'未找到可用的{role_label}模型配置'
+        if not config.api_key:
+            return f'{role_label}模型配置缺少 API Key'
+        return None
+
+    def _start_test_point_generation_thread(self, task_id):
+        """启动 PRD -> 测试点生成线程，生成完成后停在人工审核阶段。"""
+        import threading
+
+        def execute_task():
+            task = TestCaseGenerationTask.objects.get(task_id=task_id)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                from .generation_pipeline import PRD2CasePipeline
+
+                task.status = 'generating'
+                task.progress = 20
+                task.stream_buffer = ''
+                task.stream_position = 0
+                task.pipeline_artifacts = {
+                    **(task.pipeline_artifacts or {}),
+                    'current_stage': 'test_point_generation',
+                }
+                task.save(update_fields=[
+                    'status', 'progress', 'stream_buffer', 'stream_position',
+                    'pipeline_artifacts', 'updated_at'
+                ])
+
+                result = loop.run_until_complete(PRD2CasePipeline(task).generate_test_points())
+
+                task.test_points = result.artifact
+                task.pipeline_artifacts = {
+                    **(task.pipeline_artifacts or {}),
+                    'current_stage': 'test_points_review',
+                    'raw_test_points': result.content,
+                }
+                task.progress = 40
+                task.status = 'reviewing'
+                task.save(update_fields=[
+                    'test_points', 'pipeline_artifacts', 'progress', 'status', 'updated_at'
+                ])
+                logger.info(f"任务 {task.task_id} 测试点生成完成，等待人工审核")
+
+            except Exception as e:
+                logger.error(f"测试点生成任务执行失败: {e}")
+                task.status = 'failed'
+                task.error_message = str(e)
+                task.save(update_fields=['status', 'error_message', 'updated_at'])
+            finally:
+                try:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception as e:
+                    logger.warning(f"Error shutting down asyncgens: {e}")
+                finally:
+                    loop.close()
+
+        thread = threading.Thread(target=execute_task)
+        thread.daemon = True
+        thread.start()
+
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """创建新的测试用例生成任务"""
@@ -1317,6 +1381,12 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                         {'error': '未找到可用的测试用例编写模型配置'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                config_error = self._ensure_ai_config_ready(writer_config, '测试用例编写')
+                if config_error:
+                    return Response(
+                        {'error': config_error},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
                 writer_prompt = PromptConfig.get_active_config('writer')
                 if not writer_prompt:
@@ -1334,6 +1404,12 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                         {'error': '未找到可用的测试用例评审模型配置'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                config_error = self._ensure_ai_config_ready(reviewer_config, '测试用例评审')
+                if config_error:
+                    return Response(
+                        {'error': config_error},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
                 reviewer_prompt = PromptConfig.get_active_config('reviewer')
                 if not reviewer_prompt:
@@ -1346,6 +1422,10 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
             task_data = {
                 'title': validated_data['title'],
                 'requirement_text': validated_data['requirement_text'],
+                'requirement_ids': validated_data['requirement_ids'],
+                'case_type': validated_data['case_type'],
+                'case_creator': validated_data['case_creator'],
+                'iteration': validated_data['iteration'],
                 'writer_model_config': writer_config.id if writer_config else None,
                 'reviewer_model_config': reviewer_config.id if reviewer_config else None,
                 'writer_prompt_config': writer_prompt.id if writer_prompt else None,
@@ -1377,6 +1457,14 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
 
             if task_serializer.is_valid():
                 task = task_serializer.save()
+
+                self._start_test_point_generation_thread(task.task_id)
+
+                return Response({
+                    'message': '测试点生成任务已创建',
+                    'task_id': task.task_id,
+                    'task': task_serializer.data
+                }, status=status.HTTP_201_CREATED)
 
                 # 异步执行生成任务
                 def run_generation_task():
@@ -1806,6 +1894,23 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 'task_id': task.task_id,
                 'status': task.status,
                 'progress': task.progress,
+                'requirement_ids': task.requirement_ids,
+                'case_type': task.case_type,
+                'case_creator': task.case_creator,
+                'iteration': task.iteration,
+                'current_stage': (task.pipeline_artifacts or {}).get('current_stage', ''),
+                'structured_requirements': task.structured_requirements,
+                'testability_report': task.testability_report,
+                'clarifying_questions': task.clarifying_questions,
+                'test_points': task.test_points,
+                'test_points_review_status': task.test_points_review_status,
+                'strategy_matrix': task.strategy_matrix,
+                'scenario_matrix': task.scenario_matrix,
+                'test_cases_json': task.test_cases_json,
+                'test_cases_review_status': task.test_cases_review_status,
+                'coverage_report': task.coverage_report,
+                'dedupe_report': task.dedupe_report,
+                'pipeline_artifacts': task.pipeline_artifacts,
                 'generated_test_cases': task.generated_test_cases,
                 'review_feedback': task.review_feedback,
                 'final_test_cases': task.final_test_cases,
