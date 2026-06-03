@@ -7,23 +7,12 @@ from typing import Any, Dict, List
 from asgiref.sync import sync_to_async
 
 from .models import AIModelService, TestCaseGenerationTask
+from .template_service import DEFAULT_HEADERS, TemplateService
 
 logger = logging.getLogger(__name__)
 
 
-EXCEL_HEADERS = [
-    "用例目录",
-    "用例名称",
-    "需求ID",
-    "前置条件",
-    "用例步骤",
-    "预期结果",
-    "用例类型",
-    "用例状态",
-    "用例等级",
-    "创建人",
-    "归属迭代",
-]
+EXCEL_HEADERS = DEFAULT_HEADERS
 
 
 @dataclass
@@ -69,22 +58,7 @@ def _render_steps(steps: Any) -> str:
 
 
 def build_excel_rows(test_cases: List[Dict[str, Any]], defaults: Dict[str, Any]) -> List[Dict[str, str]]:
-    rows = []
-    for case in test_cases:
-        rows.append({
-            "用例目录": _join(case.get("catalog")),
-            "用例名称": _join(case.get("title")),
-            "需求ID": _join(defaults.get("requirement_ids")),
-            "前置条件": _join(case.get("preconditions")),
-            "用例步骤": _render_steps(case.get("steps")),
-            "预期结果": _join(case.get("expected_result")),
-            "用例类型": _join(defaults.get("case_type")),
-            "用例状态": "",
-            "用例等级": _join(case.get("priority")),
-            "创建人": _join(defaults.get("case_creator")),
-            "归属迭代": _join(defaults.get("iteration")),
-        })
-    return rows
+    return TemplateService.build_rows(test_cases, defaults, EXCEL_HEADERS)
 
 
 class PRD2CasePipeline:

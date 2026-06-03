@@ -3,6 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 from io import BytesIO
 from PIL import Image
+from openpyxl import Workbook, load_workbook
 
 from apps.requirement_analysis.document_parser import DocumentParser, UnsupportedSourceFileError
 from apps.requirement_analysis.generation_pipeline import build_excel_rows, parse_json_payload
@@ -13,6 +14,7 @@ from apps.requirement_analysis.models import (
     TestCaseTemplateConfig,
 )
 from apps.requirement_analysis.serializers import TestCaseGenerationRequestSerializer
+from apps.requirement_analysis.template_service import TemplateService
 from apps.requirement_analysis.views import TestCaseGenerationTaskViewSet
 from apps.projects.models import Project
 from apps.testcases.models import TestCase as ManagedTestCase
@@ -147,6 +149,33 @@ class DocumentParserTests(TestCase):
         self.assertEqual(result.text, "图片中的登录 PRD")
         self.assertEqual(result.file_type, "bmp")
         self.assertEqual(calls[0][1], "image/png")
+
+
+class TemplateServiceTests(TestCase):
+    def test_template_schema_reads_headers_and_example_rows(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["用例目录", "用例名称", "用例状态"])
+        sheet.append(["登录", "登录成功", ""])
+        buffer = BytesIO()
+        workbook.save(buffer)
+
+        schema = TemplateService.parse_template_bytes(buffer.getvalue(), filename="template.xlsx")
+
+        self.assertEqual(schema["headers"], ["用例目录", "用例名称", "用例状态"])
+        self.assertEqual(schema["example_rows"][0]["用例名称"], "登录成功")
+
+    def test_export_xlsx_keeps_case_status_blank(self):
+        data = TemplateService.build_workbook_bytes(
+            schema={"headers": ["用例名称", "用例状态", "创建人"]},
+            cases=[{"title": "登录成功", "case_status": "已评审", "creator": "李四"}],
+            defaults={"case_creator": "张三"},
+        )
+
+        workbook = load_workbook(BytesIO(data))
+        row = [cell.value for cell in workbook.active[2]]
+
+        self.assertEqual(row, ["登录成功", None, "张三"])
 
 
 class PRD2CasePipelineUtilityTests(TestCase):
