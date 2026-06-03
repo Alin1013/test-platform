@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from apps.requirement_analysis.generation_pipeline import build_excel_rows, parse_json_payload
 from apps.requirement_analysis.models import TestCaseGenerationTask
 from apps.requirement_analysis.serializers import TestCaseGenerationRequestSerializer
 
@@ -63,3 +64,36 @@ class TestCaseGenerationRequestSerializerTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["requirement_ids"], ["REQ-1", "REQ-2"])
+
+
+class PRD2CasePipelineUtilityTests(TestCase):
+    def test_parse_json_payload_extracts_fenced_json(self):
+        payload = '```json\n[{"id":"TP-001","title":"登录主流程"}]\n```'
+
+        self.assertEqual(parse_json_payload(payload), [{"id": "TP-001", "title": "登录主流程"}])
+
+    def test_build_excel_rows_keeps_case_status_blank(self):
+        rows = build_excel_rows(
+            [{
+                "catalog": "登录",
+                "title": "验证码登录成功",
+                "requirement_ids": ["REQ-1"],
+                "preconditions": ["用户未登录"],
+                "steps": [{"index": 1, "action": "输入验证码", "expected": "登录成功"}],
+                "expected_result": "登录成功",
+                "case_type": "功能测试",
+                "priority": "P1",
+                "creator": "张三",
+                "iteration": "2026.06",
+            }],
+            defaults={
+                "requirement_ids": ["REQ-DEFAULT"],
+                "case_type": "功能测试",
+                "case_creator": "张三",
+                "iteration": "2026.06",
+            },
+        )
+
+        self.assertEqual(rows[0]["用例状态"], "")
+        self.assertEqual(rows[0]["需求ID"], "REQ-1")
+        self.assertIn("1. 输入验证码", rows[0]["用例步骤"])
