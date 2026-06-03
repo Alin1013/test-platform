@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import re
@@ -100,6 +101,8 @@ PRD内容：
 默认用例类型：{self.task.case_type}
 默认创建人：{self.task.case_creator}
 默认归属迭代：{self.task.iteration}
+模板结构：
+{json.dumps(self.task.template_schema or TemplateService.default_schema(), ensure_ascii=False)}
 已审核测试点：
 {json.dumps(self.task.test_points, ensure_ascii=False)}
 PRD内容：
@@ -109,8 +112,75 @@ PRD内容：
         artifact = parse_json_payload(content)
         return PipelineResult(content=content, artifact=artifact)
 
+    def _build_revision_prompt(self, stage: str, current_data: Any, user_message: str) -> str:
+        template_section = ""
+        if "用例" in stage:
+            template_section = f"""
+模板结构：
+{json.dumps(self.task.template_schema or TemplateService.default_schema(), ensure_ascii=False)}
+"""
+
+        return f"""
+请根据人工审核意见生成完整的新版本{stage} JSON 数组。
+必须返回完整 JSON 数组，不要只返回差异，不要输出 Markdown。
+保留合理的既有字段，修正不符合审核意见的内容。
+需求ID默认使用：{self.task.requirement_ids}
+用例类型默认使用：{self.task.case_type}
+创建人默认使用：{self.task.case_creator}
+归属迭代默认使用：{self.task.iteration}
+{template_section}
+当前{stage}：
+{json.dumps(current_data, ensure_ascii=False)}
+
+人工审核意见：
+{user_message}
+
+PRD内容：
+{self.task.requirement_text}
+"""
+
+    async def revise_test_points(self, user_message: str) -> PipelineResult:
+        prompt = self._build_revision_prompt("测试点", self.task.test_points, user_message)
+        content = await self._call_writer("测试点修订", prompt)
+        artifact = parse_json_payload(content)
+        return PipelineResult(content=content, artifact=artifact)
+
+    async def revise_test_cases(self, user_message: str) -> PipelineResult:
+        prompt = self._build_revision_prompt("测试用例", self.task.test_cases_json, user_message)
+        content = await self._call_writer("测试用例修订", prompt)
+        artifact = parse_json_payload(content)
+        return PipelineResult(content=content, artifact=artifact)
+
     @staticmethod
     async def save_stage(task: TestCaseGenerationTask, **fields):
         for name, value in fields.items():
             setattr(task, name, value)
         await sync_to_async(task.save)(update_fields=list(fields.keys()) + ["updated_at"])
+
+
+class VisionDocumentExtractor:
+    @staticmethod
+    async def extract_text(config, filename: str, content_type: str, data: bytes) -> str:
+        encoded_image = base64.b64encode(data).decode("ascii")
+        data_url = f"data:{content_type};base64,{encoded_image}"
+        messages = [
+            {
+                "role": "system",
+                "content": "你是PRD图片解析助手，请尽可能完整地提取图片中的需求文字、表格和流程信息。",
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"请解析文件 {filename} 中的PRD内容，输出纯文本，不要添加无关说明。",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
+                ],
+            },
+        ]
+        response = await AIModelService.call_openai_compatible_api(config, messages)
+        return response["choices"][0]["message"]["content"].strip()

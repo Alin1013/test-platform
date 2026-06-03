@@ -1,12 +1,20 @@
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 from io import BytesIO
+from unittest import mock
+from unittest.mock import AsyncMock
 from PIL import Image
 from openpyxl import Workbook, load_workbook
 
 from apps.requirement_analysis.document_parser import DocumentParser, UnsupportedSourceFileError
-from apps.requirement_analysis.generation_pipeline import build_excel_rows, parse_json_payload
+from apps.requirement_analysis.generation_pipeline import (
+    PRD2CasePipeline,
+    VisionDocumentExtractor,
+    build_excel_rows,
+    parse_json_payload,
+)
 from apps.requirement_analysis.models import (
     AIModelConfig,
     PromptConfig,
@@ -176,6 +184,97 @@ class TemplateServiceTests(TestCase):
         row = [cell.value for cell in workbook.active[2]]
 
         self.assertEqual(row, ["登录成功", None, "张三"])
+
+
+class PRD2CasePipelineRevisionTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("pipeline_user", password="password123")
+        self.writer_config = AIModelConfig.objects.create(
+            name="Writer",
+            model_type="deepseek",
+            role="writer",
+            api_key="test-key",
+            base_url="https://api.example.com/v1",
+            model_name="writer-model",
+            created_by=self.user,
+        )
+        self.prompt = PromptConfig.objects.create(
+            name="Writer prompt",
+            prompt_type="writer",
+            content="你是测试专家",
+            is_active=True,
+            created_by=self.user,
+        )
+        self.task = TestCaseGenerationTask.objects.create(
+            task_id="TASK_PIPE001",
+            title="登录 PRD",
+            requirement_text="手机号验证码登录",
+            requirement_ids=["REQ-1"],
+            case_type="功能测试",
+            case_creator="张三",
+            iteration="2026.06",
+            test_points=[{"id": "TP-1", "title": "旧点"}],
+            test_cases_json=[{"id": "TC-1", "title": "旧用例"}],
+            template_schema={"headers": ["用例名称", "用例状态", "创建人"]},
+            writer_model_config=self.writer_config,
+            writer_prompt_config=self.prompt,
+            created_by=self.user,
+        )
+
+    def test_revise_test_points_returns_new_version(self):
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=AsyncMock(return_value={
+                "choices": [{"message": {"content": '[{"id":"TP-1","title":"新点"}]'}}],
+            }),
+        ):
+            result = async_to_sync(PRD2CasePipeline(self.task).revise_test_points)("补充异常场景")
+
+        self.assertEqual(result.artifact[0]["title"], "新点")
+
+    def test_revise_test_cases_includes_template_schema(self):
+        mocked_call = AsyncMock(return_value={
+            "choices": [{"message": {"content": '[{"id":"TC-1","title":"新用例"}]'}}],
+        })
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=mocked_call,
+        ):
+            result = async_to_sync(PRD2CasePipeline(self.task).revise_test_cases)("补充失败分支")
+
+        messages = mocked_call.call_args.args[1]
+        self.assertIn("模板结构", messages[1]["content"])
+        self.assertEqual(result.artifact[0]["title"], "新用例")
+
+    def test_vision_document_extractor_sends_image_payload(self):
+        vision_config = AIModelConfig.objects.create(
+            name="Vision",
+            model_type="openai",
+            role="vision",
+            api_key="test-key",
+            base_url="https://api.openai.com/v1",
+            model_name="gpt-4.1-mini",
+            created_by=self.user,
+        )
+        mocked_call = AsyncMock(return_value={
+            "choices": [{"message": {"content": "图片 PRD 文本"}}],
+        })
+
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=mocked_call,
+        ):
+            text = async_to_sync(VisionDocumentExtractor.extract_text)(
+                vision_config,
+                "prd.png",
+                "image/png",
+                b"image-bytes",
+            )
+
+        messages = mocked_call.call_args.args[1]
+        self.assertEqual(text, "图片 PRD 文本")
+        self.assertIsInstance(messages[1]["content"], list)
+        self.assertIn("data:image/png;base64,", messages[1]["content"][1]["image_url"]["url"])
 
 
 class PRD2CasePipelineUtilityTests(TestCase):
