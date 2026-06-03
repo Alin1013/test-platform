@@ -135,6 +135,15 @@ class DocumentParserTests(TestCase):
         self.assertIn("Phone", result.text)
         self.assertEqual(result.file_type, "html")
 
+    def test_markdown_parser_treats_content_as_text(self):
+        markdown = "# Login Requirement\n\n- Phone login\n- SMS code"
+
+        result = DocumentParser.extract_from_bytes("prd.md", markdown.encode("utf-8"))
+
+        self.assertIn("Login Requirement", result.text)
+        self.assertIn("Phone login", result.text)
+        self.assertEqual(result.file_type, "md")
+
     def test_unsupported_file_type_raises_clear_error(self):
         with self.assertRaises(UnsupportedSourceFileError):
             DocumentParser.extract_from_bytes("prd.zip", b"bad")

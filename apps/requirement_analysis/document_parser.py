@@ -42,6 +42,7 @@ class VisionExtractorRequiredError(ValueError):
 class DocumentParser:
     SUPPORTED_EXTENSIONS = {
         ".txt",
+        ".md",
         ".pdf",
         ".docx",
         ".html",
@@ -64,9 +65,9 @@ class DocumentParser:
         if extension not in cls.SUPPORTED_EXTENSIONS:
             raise UnsupportedSourceFileError(f"不支持的源文件类型: {extension or filename}")
 
-        if extension == ".txt":
+        if extension in {".txt", ".md"}:
             text = cls._extract_text(data)
-            file_type = "txt"
+            file_type = extension.lstrip(".")
             metadata = {"encoding": cls._detect_encoding(data)}
         elif extension in {".html", ".htm"}:
             text = cls._extract_html(data)

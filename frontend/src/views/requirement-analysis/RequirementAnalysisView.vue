@@ -21,7 +21,7 @@
       <div class="panel upload-panel">
         <div class="panel-title">
           <h2>上传内容</h2>
-          <span>支持 txt / pdf / docx / html / png / bmp / jpg</span>
+          <span>支持 txt / md / pdf / docx / html / png / bmp / jpg</span>
         </div>
 
         <div
@@ -41,7 +41,7 @@
             ref="sourceInput"
             class="hidden-input"
             type="file"
-            accept=".txt,.pdf,.docx,.html,.htm,.png,.bmp,.jpg,.jpeg"
+            accept=".txt,.md,.pdf,.docx,.html,.htm,.png,.bmp,.jpg,.jpeg"
             @change="onSourceFileChange"
           >
           <el-button :icon="Document" @click="$refs.sourceInput.click()">选择文件</el-button>
@@ -453,7 +453,7 @@ export default {
     },
 
     setSourceFile(file) {
-      const allowed = /\.(txt|pdf|docx|html|htm|png|bmp|jpg|jpeg)$/i
+      const allowed = /\.(txt|md|pdf|docx|html|htm|png|bmp|jpg|jpeg)$/i
       if (!allowed.test(file.name)) {
         ElMessage.error('不支持的 PRD 文件格式')
         return
