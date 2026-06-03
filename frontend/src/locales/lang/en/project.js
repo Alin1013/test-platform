@@ -80,7 +80,7 @@ export default {
     },
 
     // Title
-    title: 'TestHub Testing Platform',
+    title: 'test_platform Testing Platform',
     subtitle: 'All-in-One Intelligent Testing Solution',
 
     // Cards

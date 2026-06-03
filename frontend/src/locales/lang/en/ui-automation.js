@@ -462,7 +462,7 @@ export default {
     title: 'AI Intelligent Testing',
     taskInput: 'Task Input',
     taskDescription: 'Task Description',
-    taskPlaceholder: 'Describe the task in natural language, e.g.:\n1. Visit https://www.baidu.com\n2. Search \'TestHub\'\n3. Click the first search result',
+    taskPlaceholder: 'Describe the task in natural language, e.g.:\n1. Visit https://www.baidu.com\n2. Search \'test_platform\'\n3. Click the first search result',
     gifRecording: 'GIF Recording',
     on: 'On',
     off: 'Off',

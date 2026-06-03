@@ -1,7 +1,7 @@
 {
-  "name": "testhub-frontend",
+  "name": "test_platform-frontend",
   "version": "1.0.1",
-  "description": "TestHub前端应用",
+  "description": "test_platform前端应用",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

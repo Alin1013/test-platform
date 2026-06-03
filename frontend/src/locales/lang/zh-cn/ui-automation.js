@@ -462,7 +462,7 @@ export default {
     title: 'AI 智能测试',
     taskInput: '任务输入',
     taskDescription: '任务描述',
-    taskPlaceholder: '请用自然语言描述要执行的任务，例如：\n1. 访问 https://www.baidu.com\n2. 搜索 \'TestHub\'\n3. 点击第一条搜索结果',
+    taskPlaceholder: '请用自然语言描述要执行的任务，例如：\n1. 访问 https://www.baidu.com\n2. 搜索 \'test_platform\'\n3. 点击第一条搜索结果',
     gifRecording: 'GIF录制',
     on: '开启',
     off: '关闭',

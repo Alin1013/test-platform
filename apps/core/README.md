@@ -133,18 +133,18 @@ python manage.py download_webdrivers --browsers chrome
 
 #### 方案1: 使用 systemd (推荐 Linux)
 
-创建服务文件 `/etc/systemd/system/testhub-scheduler.service`:
+创建服务文件 `/etc/systemd/system/test_platform-scheduler.service`:
 
 ```ini
 [Unit]
-Description=TestHub 统一定时任务调度器
+Description=test_platform 统一定时任务调度器
 After=network.target
 
 [Service]
 Type=simple
 User=your_user
 Group=your_group
-WorkingDirectory=/path/to/testhub_platform
+WorkingDirectory=/path/to/test_platform
 Environment="PATH=/path/to/venv/bin"
 ExecStart=/path/to/venv/bin/python manage.py run_all_scheduled_tasks
 Restart=always
@@ -157,31 +157,31 @@ WantedBy=multi-user.target
 启动服务:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable testhub-scheduler
-sudo systemctl start testhub-scheduler
-sudo systemctl status testhub-scheduler
+sudo systemctl enable test_platform-scheduler
+sudo systemctl start test_platform-scheduler
+sudo systemctl status test_platform-scheduler
 ```
 
 #### 方案2: 使用 Supervisor
 
-配置文件 `/etc/supervisor/conf.d/testhub-scheduler.conf`:
+配置文件 `/etc/supervisor/conf.d/test_platform-scheduler.conf`:
 
 ```ini
-[program:testhub-scheduler]
+[program:test_platform-scheduler]
 command=/path/to/venv/bin/python manage.py run_all_scheduled_tasks
-directory=/path/to/testhub_platform
+directory=/path/to/test_platform
 user=your_user
 autostart=true
 autorestart=true
 redirect_stderr=true
-stdout_logfile=/var/log/supervisor/testhub-scheduler.log
+stdout_logfile=/var/log/supervisor/test_platform-scheduler.log
 ```
 
 启动:
 ```bash
 sudo supervisorctl reread
 sudo supervisorctl update
-sudo supervisorctl start testhub-scheduler
+sudo supervisorctl start test_platform-scheduler
 ```
 
 #### 方案3: 使用 nohup (简单方式)
@@ -199,16 +199,16 @@ tail -f logs/scheduler.log
 
 ```bash
 # 使用 screen
-screen -S testhub-scheduler
+screen -S test_platform-scheduler
 python manage.py run_all_scheduled_tasks
 # 按 Ctrl+A+D 分离会话
 
 # 重新连接
-screen -r testhub-scheduler
+screen -r test_platform-scheduler
 
 # 使用 tmux
-tmux new-session -d -s testhub-scheduler 'python manage.py run_all_scheduled_tasks'
-tmux attach-session -t testhub-scheduler
+tmux new-session -d -s test_platform-scheduler 'python manage.py run_all_scheduled_tasks'
+tmux attach-session -t test_platform-scheduler
 ```
 
 ## 调度器输出示例
