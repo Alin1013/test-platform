@@ -1,7 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory
+from io import BytesIO
+from PIL import Image
 
+from apps.requirement_analysis.document_parser import DocumentParser, UnsupportedSourceFileError
 from apps.requirement_analysis.generation_pipeline import build_excel_rows, parse_json_payload
 from apps.requirement_analysis.models import (
     AIModelConfig,
@@ -108,6 +111,42 @@ class TestCaseGenerationRequestSerializerTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["requirement_ids"], ["REQ-1", "REQ-2"])
+
+
+class DocumentParserTests(TestCase):
+    def test_html_parser_preserves_text_and_tables(self):
+        html = b"<h1>Login Requirement</h1><table><tr><th>Field</th><td>Phone</td></tr></table>"
+
+        result = DocumentParser.extract_from_bytes("prd.html", html)
+
+        self.assertIn("Login Requirement", result.text)
+        self.assertIn("Field", result.text)
+        self.assertIn("Phone", result.text)
+        self.assertEqual(result.file_type, "html")
+
+    def test_unsupported_file_type_raises_clear_error(self):
+        with self.assertRaises(UnsupportedSourceFileError):
+            DocumentParser.extract_from_bytes("prd.zip", b"bad")
+
+    def test_bmp_image_uses_vision_extractor(self):
+        image = Image.new("RGB", (4, 4), "white")
+        buffer = BytesIO()
+        image.save(buffer, format="BMP")
+        calls = []
+
+        def fake_vision(filename, content_type, data):
+            calls.append((filename, content_type, data[:8]))
+            return "图片中的登录 PRD"
+
+        result = DocumentParser.extract_from_bytes(
+            "prd.bmp",
+            buffer.getvalue(),
+            vision_extractor=fake_vision,
+        )
+
+        self.assertEqual(result.text, "图片中的登录 PRD")
+        self.assertEqual(result.file_type, "bmp")
+        self.assertEqual(calls[0][1], "image/png")
 
 
 class PRD2CasePipelineUtilityTests(TestCase):
