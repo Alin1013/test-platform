@@ -173,6 +173,14 @@ export function updateGeneratedTestPoints(taskId, testPoints) {
   })
 }
 
+export function reviseGeneratedTestPoints(taskId, message) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/revise_test_points/`,
+    method: 'post',
+    data: { message }
+  })
+}
+
 export function approveGeneratedTestPoints(taskId) {
   return request({
     url: `/requirement-analysis/testcase-generation/${taskId}/approve_test_points/`,
@@ -188,10 +196,33 @@ export function updateGeneratedTestCases(taskId, testCases) {
   })
 }
 
+export function reviseGeneratedTestCases(taskId, message) {
+  return request({
+    url: `/requirement-analysis/testcase-generation/${taskId}/revise_test_cases/`,
+    method: 'post',
+    data: { message }
+  })
+}
+
 export function approveGeneratedTestCases(taskId) {
   return request({
     url: `/requirement-analysis/testcase-generation/${taskId}/approve_test_cases/`,
     method: 'post'
+  })
+}
+
+export function getActiveTestCaseTemplate() {
+  return request({
+    url: '/requirement-analysis/testcase-template/active/',
+    method: 'get'
+  })
+}
+
+export function createTestCaseTemplateConfig(data) {
+  return request({
+    url: '/requirement-analysis/testcase-template/',
+    method: 'post',
+    data
   })
 }
 
