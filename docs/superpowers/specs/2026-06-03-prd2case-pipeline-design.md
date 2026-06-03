@@ -4,24 +4,27 @@ Date: 2026-06-03
 
 ## Goal
 
-Upgrade the existing AI test case generation feature from a one-step "requirement text to test cases" flow into a usable PRD-to-test-assets workflow.
+Upgrade the existing AI test case generation feature from a one-step "PRD to test cases" flow into a usable "PRD to test points to reviewed test cases" workflow.
 
-The first version keeps the current requirement analysis page, task API, SSE progress stream, Excel export, and "save to test case records" workflow. The change adds staged AI artifacts so QA users can see how the model moved from PRD content to structured requirements, testability findings, test strategy, scenario matrix, final test cases, and coverage/dedupe review.
+The first version keeps the current requirement analysis page, task API, SSE progress stream, Excel export, and save-to-records workflow. The main change is adding two required human review gates:
+
+1. AI generates test points from the PRD. The user reviews and edits the test points before case generation starts.
+2. AI generates test cases from the approved test points. The user reviews and edits cases on a preview page before Excel export is allowed.
+
+This makes the feature more controllable: QA users can validate "what should be tested" before AI expands those points into detailed executable cases.
 
 ## Source Research
 
-The user research document at `/Users/alin/Documents/自动化/prd-testcase-generation-framework.md` recommends avoiding one-shot generation. The project should instead follow a staged pipeline:
+The user research document at `/Users/alin/Documents/自动化/prd-testcase-generation-framework.md` recommends avoiding one-shot generation. The adjusted MVP pipeline is:
 
-1. Parse and clean the document.
-2. Extract structured requirements.
-3. Score testability.
-4. Generate clarification questions.
-5. Plan test strategy.
-6. Generate a scenario matrix.
-7. Generate executable test cases.
-8. Validate coverage, remove duplicates, support review and export.
-
-This design implements that direction as an MVP retrofit of the current system.
+1. Parse and clean PRD text or uploaded documents.
+2. Capture user-provided PRD metadata.
+3. Extract structured requirements and source traces.
+4. Generate test points.
+5. Pause for the first human review and edit step.
+6. Generate test cases from approved test points.
+7. Pause for the second human review and edit step on the preview page.
+8. Export Excel only after the second review is confirmed.
 
 ## Current System Fit
 
@@ -44,24 +47,30 @@ The existing frontend already has:
 - Excel export.
 - Save generated cases to the test case management system.
 
-Because of this, the MVP should not introduce a separate PRD2Case workspace. It should upgrade the existing page and task flow.
+Because of this, the MVP should upgrade the existing page and task flow instead of introducing a separate workspace.
 
 ## Scope
 
 ### In Scope
 
-- Add staged pipeline artifacts to `TestCaseGenerationTask`.
-- Add a pipeline service that orchestrates the AI generation stages.
+- Add required PRD metadata input: `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- Save those metadata fields on the generation task.
+- Generate test points before test cases.
+- Add a required human review and edit gate for generated test points.
+- Generate test cases only after test points are approved.
+- Add a required human review and edit gate for generated test cases.
+- Export Excel only after the test case preview is approved.
+- Export Excel using the exact header fields from the uploaded image.
+- Keep `用例状态` blank in exported Excel. Users modify this column later after export.
 - Keep existing model and prompt configuration screens.
-- Keep existing task creation endpoint and response shape.
+- Keep existing task creation endpoint and response shape where possible.
 - Return staged artifacts from task progress and detail serializers.
-- Extend SSE to emit named pipeline stage updates.
-- Show staged results in the existing frontend page.
+- Extend SSE to emit named pipeline stage and review-gate updates.
 - Keep final Markdown output for backward compatibility.
 - Add structured JSON output for reliable UI rendering, export, and future imports.
-- Keep Excel download and save-to-records working.
+- Keep save-to-records working after the second review is approved.
 
-### Out of Scope For This Iteration
+### Out Of Scope For This Iteration
 
 - Jira, Confluence, Figma, TAPD, ZenTao, or TestRail integrations.
 - Historical test case RAG.
@@ -70,40 +79,145 @@ Because of this, the MVP should not introduce a separate PRD2Case workspace. It 
 - New permission model.
 - New standalone PRD2Case page.
 
+## User Workflow
+
+### Step 1: Submit PRD And Metadata
+
+The user enters or uploads PRD content from the existing requirement analysis page.
+
+The submit form must also require:
+
+- `需求ID`: one or more requirement IDs involved in the PRD.
+- `用例类型`: default case type for generated rows.
+- `创建人`: creator name to fill into Excel.
+- `归属迭代`: iteration name/version to fill into Excel.
+
+These fields are saved to the task and reused in generated test cases and Excel output.
+
+### Step 2: AI Generates Test Points
+
+AI analyzes the PRD and outputs editable test points. Test points describe what should be tested, not detailed steps.
+
+Examples:
+
+- 验证手机号验证码登录主流程.
+- 验证验证码错误提示.
+- 验证验证码过期后的处理.
+- 验证连续错误达到上限后的锁定规则.
+
+### Step 3: First Human Review
+
+The task pauses after test points are generated.
+
+The user can:
+
+- Edit generated test points.
+- Add missing test points.
+- Delete irrelevant test points.
+- Adjust priority, source trace, preconditions, test data hints, and expected focus.
+- Approve the reviewed test point set.
+
+Case generation cannot start until this review is approved.
+
+### Step 4: AI Generates Test Cases
+
+AI generates detailed test cases from the approved test points. The approved test points are the primary source; raw PRD text remains supporting context.
+
+Each generated case must trace back to:
+
+- One or more user-entered `需求ID` values.
+- One approved test point.
+- A PRD source quote or extracted acceptance criterion when possible.
+
+### Step 5: Second Human Review
+
+After cases are generated, the frontend shows an editable preview table.
+
+The user can:
+
+- Edit every Excel-bound field except `用例状态`.
+- Add missing cases.
+- Delete irrelevant cases.
+- Reorder cases.
+- Confirm the preview is ready for export.
+
+Excel export and save-to-records are disabled until this review is approved.
+
+### Step 6: Excel Export
+
+Excel export uses the approved preview table as the source of truth.
+
+The header row must exactly match the uploaded image:
+
+1. 用例目录
+2. 用例名称
+3. 需求ID
+4. 前置条件
+5. 用例步骤
+6. 预期结果
+7. 用例类型
+8. 用例状态
+9. 用例等级
+10. 创建人
+11. 归属迭代
+
+`用例状态` must remain blank in exported Excel. It is reserved for later user-side editing after export.
+
 ## Data Model Changes
 
-Add the following fields to `TestCaseGenerationTask`:
+Add these fields to `TestCaseGenerationTask`:
 
-- `structured_requirements`: JSONField, default object/list.
+- `requirement_ids`: JSONField, default list. User-entered requirement IDs.
+- `case_type`: CharField. User-entered default value for Excel `用例类型`.
+- `case_creator`: CharField. User-entered default value for Excel `创建人`.
+- `iteration`: CharField. User-entered default value for Excel `归属迭代`.
+- `structured_requirements`: JSONField, default list.
 - `testability_report`: JSONField, default object.
 - `clarifying_questions`: JSONField, default list.
+- `test_points`: JSONField, default list.
+- `test_points_review_status`: CharField with values `pending`, `approved`, `revision_requested`.
+- `test_points_reviewed_at`: DateTimeField, nullable.
+- `test_points_reviewed_by`: ForeignKey to user, nullable.
 - `strategy_matrix`: JSONField, default list.
 - `scenario_matrix`: JSONField, default list.
+- `test_cases_json`: JSONField, default list.
+- `test_cases_review_status`: CharField with values `pending`, `approved`, `revision_requested`.
+- `test_cases_reviewed_at`: DateTimeField, nullable.
+- `test_cases_reviewed_by`: ForeignKey to user, nullable.
 - `coverage_report`: JSONField, default object.
 - `dedupe_report`: JSONField, default object.
 - `pipeline_artifacts`: JSONField, default object.
 
-The existing text fields remain:
+Existing text fields remain:
 
-- `generated_test_cases`: raw/generated draft Markdown.
+- `generated_test_cases`: generated draft Markdown.
 - `review_feedback`: AI review Markdown.
-- `final_test_cases`: final Markdown consumed by current export/import paths.
+- `final_test_cases`: final Markdown consumed by current fallback export/import paths.
 - `generation_log`: human-readable task log.
 
-The structured fields are the source for improved frontend display and future reliable exports. The Markdown fields preserve compatibility with existing parsing and adoption behavior.
+Excel export is allowed only when:
+
+- `test_points_review_status = approved`
+- `test_cases_review_status = approved`
+- `test_cases_json` or `final_test_cases` is available
 
 ## Pipeline Service
 
 Create a focused service, likely `apps/requirement_analysis/generation_pipeline.py`.
 
-The service should expose one main async method:
+The service should expose async methods for separate phases because the flow pauses for human review:
 
 ```python
-async def run_prd2case_pipeline(task, callbacks=None) -> PipelineResult:
+async def generate_test_points(task, callbacks=None) -> PipelineResult:
+    ...
+
+async def generate_test_cases_from_approved_points(task, callbacks=None) -> PipelineResult:
     ...
 ```
 
-The service owns stage orchestration and artifact normalization. `AIModelService` continues to own low-level OpenAI-compatible API calls.
+`AIModelService` continues to own low-level OpenAI-compatible API calls. The pipeline service owns stage orchestration, artifact normalization, JSON parsing, and Markdown/Excel-ready rendering.
+
+## Pipeline Stages
 
 ### Stage 1: Document Normalize
 
@@ -118,11 +232,27 @@ Output:
 
 Behavior:
 
-- Do not call the model for basic text cleanup in the MVP.
 - Preserve user-provided wording.
-- Store result in `pipeline_artifacts.document`.
+- Do basic cleanup without model calls where possible.
+- Store normalized content in `pipeline_artifacts.document`.
 
-### Stage 2: Structured Requirement Extraction
+### Stage 2: Metadata Capture
+
+Input:
+
+- `需求ID`
+- `用例类型`
+- `创建人`
+- `归属迭代`
+
+Behavior:
+
+- Validate all four fields before creating the task.
+- Store them on the task.
+- Use them as defaults for generated cases and Excel rows.
+- If `需求ID` contains multiple IDs, store as a list and render joined text in Excel.
+
+### Stage 3: Structured Requirement Extraction
 
 Output JSON shape:
 
@@ -149,13 +279,13 @@ Rules:
 
 - Only use information present in the PRD.
 - Do not invent business rules.
-- Every requirement should include a source quote when possible.
+- Include source quotes when possible.
 
 Stored in:
 
 - `structured_requirements`
 
-### Stage 3: Testability And Clarification
+### Stage 4: Testability And Clarification
 
 Output JSON shape:
 
@@ -197,15 +327,82 @@ Stored in:
 - `testability_report`
 - `clarifying_questions`
 
-The MVP should still generate cases when information is incomplete, but low-confidence or missing areas must be visible in the report.
-
-### Stage 4: Test Strategy Matrix
+### Stage 5: Test Point Generation
 
 Output JSON shape:
 
 ```json
 [
   {
+    "id": "TP-001",
+    "requirement_ids": ["REQ-001"],
+    "title": "验证码登录主流程验证",
+    "test_object": "手机号验证码登录",
+    "coverage_type": "functional",
+    "design_technique": "scenario-based",
+    "priority": "P1",
+    "preconditions": ["用户未登录"],
+    "test_data_hint": "已注册手机号、有效验证码",
+    "expected_focus": "登录成功并跳转到目标页面",
+    "source_trace": [
+      {
+        "requirement_id": "REQ-001",
+        "quote": "输入正确手机号和验证码后登录成功"
+      }
+    ],
+    "review_status": "pending",
+    "review_comment": ""
+  }
+]
+```
+
+Rules:
+
+- Test points describe test intent, not detailed steps.
+- Every test point must trace back to a requirement ID or PRD source quote.
+- Include positive, negative, boundary, permission, data, integration, and non-functional points when applicable.
+- Keep the list editable before moving to case generation.
+
+Stored in:
+
+- `test_points`
+- `pipeline_artifacts.test_points`
+
+### Stage 6: First Human Review Gate
+
+The task pauses after test point generation.
+
+Allowed user actions:
+
+- Edit test point title, priority, preconditions, data hint, expected focus, source trace, and review comment.
+- Add missing test points.
+- Delete irrelevant test points.
+- Approve or reject individual test points.
+- Approve the reviewed test point set and continue to case generation.
+
+Behavior:
+
+- Case generation cannot start until the reviewed test point set is approved.
+- The approved test point JSON becomes the source input for test case generation.
+- The system persists edited test points before starting the next stage.
+
+Stored in:
+
+- `test_points`
+- `test_points_review_status`
+- `test_points_reviewed_at`
+- `test_points_reviewed_by`
+
+### Stage 7: Test Strategy And Scenario Matrix
+
+The strategy and scenario matrix can be generated from the approved test points. It remains useful for traceability and coverage reporting, but it is not the first human review artifact.
+
+Strategy output example:
+
+```json
+[
+  {
+    "test_point_id": "TP-001",
     "requirement_id": "REQ-001",
     "category": "functional",
     "design_technique": "scenario-based",
@@ -216,28 +413,13 @@ Output JSON shape:
 ]
 ```
 
-Required categories when applicable:
-
-- `functional`
-- `negative`
-- `boundary`
-- `permission`
-- `data`
-- `integration`
-- `non_functional`
-
-Stored in:
-
-- `strategy_matrix`
-
-### Stage 5: Scenario Matrix
-
-Output JSON shape:
+Scenario output example:
 
 ```json
 [
   {
     "id": "SCN-001",
+    "test_point_id": "TP-001",
     "requirement_id": "REQ-001",
     "title": "验证码登录主流程",
     "type": "functional",
@@ -250,9 +432,10 @@ Output JSON shape:
 
 Stored in:
 
+- `strategy_matrix`
 - `scenario_matrix`
 
-### Stage 6: Test Case Generation
+### Stage 8: Test Case Generation From Approved Test Points
 
 Output JSON shape:
 
@@ -260,15 +443,16 @@ Output JSON shape:
 [
   {
     "id": "TC-001",
+    "catalog": "用户登录",
     "title": "验证已注册手机号使用正确验证码登录成功",
     "requirement_ids": ["REQ-001"],
+    "test_point_id": "TP-001",
     "scenario_id": "SCN-001",
-    "type": "functional",
+    "case_type": "功能测试",
     "priority": "P1",
+    "creator": "张三",
+    "iteration": "2026.06 版本迭代",
     "preconditions": ["用户未登录"],
-    "test_data": {
-      "phone": "13800000000"
-    },
     "steps": [
       {
         "index": 1,
@@ -276,43 +460,74 @@ Output JSON shape:
         "expected": "页面展示手机号和验证码输入框"
       }
     ],
+    "expected_result": "登录成功并跳转到目标页面",
     "source_trace": [
       {
         "requirement_id": "REQ-001",
+        "test_point_id": "TP-001",
         "acceptance_criteria": "输入正确手机号和验证码后登录成功"
       }
     ],
-    "automation_candidate": true,
-    "review_status": "draft"
+    "review_status": "pending",
+    "review_comment": ""
   }
 ]
 ```
 
 Rules:
 
-- Every test case must bind to at least one requirement.
-- Every test case should bind to one scenario.
+- Every test case must bind to at least one approved test point.
+- Every test case must bind to the user-entered requirement ID by default.
 - Steps must be executable.
 - Expected results must be verifiable.
-- Cases without source support should be marked as suggestions rather than normal cases.
+- AI output must not include or fill case status.
+- Cases without source support should not enter the final export unless the user manually approves them during preview review.
 
 Stored in:
 
+- `test_cases_json`
 - `pipeline_artifacts.test_cases`
-- `generated_test_cases` as Markdown/table text.
+- `generated_test_cases` as Markdown/table fallback text.
 
-### Stage 7: Coverage And Dedupe Review
+### Stage 9: Second Human Review Gate
+
+After case generation, the task enters preview/edit state.
+
+Allowed user actions:
+
+- Edit `用例目录`, `用例名称`, `需求ID`, `前置条件`, `用例步骤`, `预期结果`, `用例类型`, `用例等级`, `创建人`, and `归属迭代`.
+- Add missing cases.
+- Delete irrelevant cases.
+- Reorder cases.
+- Approve or reject cases.
+- Approve the full preview set for Excel export.
+
+Behavior:
+
+- Excel export is disabled until the user confirms the preview is correct.
+- Edited preview data is the source of Excel export.
+- `用例状态` is displayed as a blank column for template consistency, but Excel export always writes it as blank.
+
+Stored in:
+
+- `test_cases_json`
+- `test_cases_review_status`
+- `test_cases_reviewed_at`
+- `test_cases_reviewed_by`
+- `final_test_cases`
+
+### Stage 10: Coverage And Dedupe Review
 
 Coverage report shape:
 
 ```json
 {
   "requirement_coverage": 0.92,
-  "acceptance_criteria_coverage": 0.88,
+  "test_point_coverage": 1.0,
   "matrix": [
     {
       "requirement_id": "REQ-001",
-      "acceptance_criteria": "AC-001 登录成功",
+      "test_point_id": "TP-001",
       "scenario_id": "SCN-001",
       "test_case_id": "TC-001",
       "status": "covered"
@@ -344,29 +559,45 @@ Stored in:
 
 The MVP can use model-based and rule-based dedupe hints. It does not need embeddings.
 
-### Stage 8: Final Markdown Rendering
+## Excel Export Contract
 
-Render final cases into a stable Markdown table compatible with the current frontend parser.
+Excel export must use the approved `test_cases_json` preview data when available.
 
-Recommended columns:
+Header fields, in order:
 
-- 用例 ID
-- 模块
-- 标题
-- 优先级
-- 类型
-- 前置条件
-- 测试数据
-- 操作步骤
-- 预期结果
-- 来源需求
-- 覆盖 AC
-- 自动化建议
-- 评审状态
+| Column | Field |
+|---|---|
+| A | 用例目录 |
+| B | 用例名称 |
+| C | 需求ID |
+| D | 前置条件 |
+| E | 用例步骤 |
+| F | 预期结果 |
+| G | 用例类型 |
+| H | 用例状态 |
+| I | 用例等级 |
+| J | 创建人 |
+| K | 归属迭代 |
 
-Stored in:
+Field mapping:
 
-- `final_test_cases`
+- `用例目录`: `case.catalog`
+- `用例名称`: `case.title`
+- `需求ID`: `case.requirement_ids`, defaulting to task `requirement_ids`
+- `前置条件`: `case.preconditions`
+- `用例步骤`: rendered numbered steps
+- `预期结果`: `case.expected_result` or step-level expected results
+- `用例类型`: `case.case_type`, defaulting to task `case_type`
+- `用例状态`: always exported as an empty value
+- `用例等级`: `case.priority`
+- `创建人`: `case.creator`, defaulting to task `case_creator`
+- `归属迭代`: `case.iteration`, defaulting to task `iteration`
+
+Important rule:
+
+- AI must not fill `用例状态`.
+- The preview/export layer creates the `用例状态` column as an empty value.
+- Excel export always writes `用例状态` as a blank cell. Users update this column later outside the AI generation flow.
 
 ## API Compatibility
 
@@ -374,16 +605,18 @@ Keep the current endpoint:
 
 - `POST /api/requirement-analysis/testcase-generation/generate/`
 
-Keep request fields:
+Extend request fields:
 
 - `title`
 - `requirement_text`
+- `requirement_ids`
+- `case_type`
+- `case_creator`
+- `iteration`
 - `use_writer_model`
 - `use_reviewer_model`
 - `output_mode`
 - `project`
-
-The endpoint should run the new pipeline internally.
 
 Extend progress response:
 
@@ -392,12 +625,20 @@ Extend progress response:
   "task_id": "TASK_XXXXXXXX",
   "status": "generating",
   "progress": 45,
-  "current_stage": "scenario_matrix",
+  "current_stage": "test_points_review",
+  "requirement_ids": ["REQ-001"],
+  "case_type": "功能测试",
+  "case_creator": "张三",
+  "iteration": "2026.06 版本迭代",
   "structured_requirements": [],
   "testability_report": {},
   "clarifying_questions": [],
+  "test_points": [],
+  "test_points_review_status": "pending",
   "strategy_matrix": [],
   "scenario_matrix": [],
+  "test_cases_json": [],
+  "test_cases_review_status": "pending",
   "coverage_report": {},
   "dedupe_report": {},
   "pipeline_artifacts": {},
@@ -407,7 +648,18 @@ Extend progress response:
 }
 ```
 
-`current_stage` can be stored inside `pipeline_artifacts` unless a separate model field is preferred.
+Add or extend task actions:
+
+- `PATCH /api/requirement-analysis/testcase-generation/{task_id}/test_points/`
+  Save user edits to test points.
+- `POST /api/requirement-analysis/testcase-generation/{task_id}/approve_test_points/`
+  Mark reviewed test points as approved and start case generation.
+- `PATCH /api/requirement-analysis/testcase-generation/{task_id}/test_cases/`
+  Save user edits to preview test cases.
+- `POST /api/requirement-analysis/testcase-generation/{task_id}/approve_test_cases/`
+  Mark preview cases as approved and enable Excel export.
+- `GET /api/requirement-analysis/testcase-generation/{task_id}/export_excel/`
+  Export Excel only after test case review approval.
 
 ## SSE Events
 
@@ -420,62 +672,108 @@ Keep current event types:
 - `status`
 - `done`
 
-Add a new event type:
+Add:
 
 - `pipeline_stage`
+- `review_gate`
 
-Example:
+Example stage event:
 
 ```json
 {
   "type": "pipeline_stage",
-  "stage": "strategy_matrix",
-  "title": "测试策略矩阵",
-  "progress": 42,
+  "stage": "test_point_generation",
+  "title": "测试点生成",
+  "progress": 35,
   "artifact": []
 }
 ```
 
-The frontend should tolerate missing `pipeline_stage` events so complete mode and old tasks remain compatible.
+Example review gate event:
+
+```json
+{
+  "type": "review_gate",
+  "stage": "test_points_review",
+  "title": "请审核测试点",
+  "progress": 40
+}
+```
+
+When a review gate is emitted, the frontend should stop auto-advancing and show the editable review UI.
 
 ## Frontend Changes
 
 Keep `RequirementAnalysisView.vue` as the entry point.
 
-Add a staged result area with tabs or stacked panels:
+Initial form changes:
+
+- Add required inputs for `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- Send these fields with task creation.
+
+Add staged panels:
 
 - 需求抽取
 - 可测试性与澄清问题
-- 测试策略矩阵
-- 场景矩阵
-- 最终测试用例
+- 测试点审核
+- 测试策略与场景矩阵
+- 测试用例预览审核
 - 覆盖与去重报告
 
-Behavior:
+Test point review panel:
+
+- Editable list/table of generated test points.
+- Buttons to add, delete, save, and approve.
+- "生成测试用例" is disabled until test points are approved.
+
+Case preview panel:
+
+- Editable table with columns matching Excel:
+  - 用例目录
+  - 用例名称
+  - 需求ID
+  - 前置条件
+  - 用例步骤
+  - 预期结果
+  - 用例类型
+  - 用例状态
+  - 用例等级
+  - 创建人
+  - 归属迭代
+- Buttons to add, delete, save, approve, export Excel, and save to records.
+- Excel export and save-to-records are disabled until preview is approved.
+- The `用例状态` column is shown blank for template consistency and is exported blank.
+
+Display behavior:
 
 - During streaming, update current stage and show partial artifacts when available.
+- After test point generation, pause at the editable test point review panel.
+- After case generation, pause at the editable case preview table.
 - On completion, fetch final task progress and render all artifacts.
-- Keep the current Markdown display for generated/final content.
-- Keep Excel download and save buttons.
-- Prefer structured JSON for future export if present; fall back to existing Markdown parsing.
+- Keep existing Markdown display as a compatibility fallback.
 
 ## Prompt Strategy
 
-The active writer prompt should remain configurable by the user, but the pipeline service adds stage-specific user instructions.
+The active writer prompt remains configurable by the user, but the pipeline service adds stage-specific user instructions.
 
 Prompt principles:
 
 - Ask for strict JSON for structured stages.
+- Ask the model to generate test points before test cases.
+- Generate test cases only from approved test points.
+- Preserve user-entered `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- Do not fill `用例状态`; Excel export must keep it blank.
 - Include a fallback parser that can extract JSON from fenced Markdown.
 - If parsing fails, store a readable fallback artifact and continue when possible.
-- Final case rendering should be deterministic in Python from structured cases when JSON is valid.
-- Avoid asking the model to output all artifacts in a single response.
+- Final Excel rows should be deterministic in Python from approved preview JSON.
 
 ## Error Handling
 
-- If one AI stage fails, mark the task as failed only when downstream generation cannot continue.
-- If JSON parsing fails for a non-critical artifact, save the raw text in `pipeline_artifacts.raw_outputs`.
-- If final case JSON fails but Markdown exists, preserve Markdown and keep existing behavior.
+- If required metadata is missing at task creation, return a validation error before creating the task.
+- If test point JSON parsing fails, save raw output and show a clear retry/edit path.
+- If the user has not approved test points, case generation must not start.
+- If case generation fails, keep approved test points available.
+- If the user has not approved case preview, Excel export and save-to-records must return a clear error.
 - If coverage/dedupe review fails, complete the task with generated cases and add an error note to `review_feedback`.
 - Do not silently hide low testability scores or missing information.
 
@@ -492,10 +790,17 @@ Frontend verification:
 
 - Run `npm --prefix frontend run build`.
 - Start backend and frontend dev servers.
-- Generate cases from a small PRD.
-- Confirm staged artifacts render.
-- Confirm Excel export still downloads.
-- Confirm save-to-records still imports cases.
+- Submit a small PRD with `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- Confirm test points are generated first.
+- Edit at least one test point, approve the test point set, and continue generation.
+- Confirm cases are generated from approved test points.
+- Edit at least one case in the preview table.
+- Confirm Excel export is disabled before case preview approval.
+- Approve the preview and export Excel.
+- Confirm Excel headers exactly match `用例目录`, `用例名称`, `需求ID`, `前置条件`, `用例步骤`, `预期结果`, `用例类型`, `用例状态`, `用例等级`, `创建人`, `归属迭代`.
+- Confirm `需求ID`, `用例类型`, `创建人`, and `归属迭代` are filled from initial metadata.
+- Confirm `用例状态` is blank in exported Excel.
+- Confirm save-to-records still imports approved cases.
 
 Manual sample PRD:
 
@@ -506,10 +811,14 @@ Manual sample PRD:
 
 The feature is considered usable for this iteration when:
 
-- A user can paste or upload PRD text from the existing page.
-- The task shows staged AI progress.
-- The result includes structured requirements, testability findings, strategy, scenarios, final cases, and coverage/dedupe report.
-- Final test cases remain exportable to Excel.
-- Final test cases can still be saved into the test case management module.
-- Generated test cases have traceability back to requirements or acceptance criteria.
-
+- A user can paste or upload PRD text from the existing page and must enter `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- AI generates test points before test cases.
+- The user can review and edit generated test points before case generation.
+- AI generates test cases only after the test point review is approved.
+- The user can review and edit generated test cases in a preview table before export.
+- Excel export is allowed only after the case preview review is approved.
+- Excel output uses the required header fields from the uploaded image.
+- Excel output fills initial metadata into `需求ID`, `用例类型`, `创建人`, and `归属迭代`.
+- Excel output always keeps `用例状态` blank.
+- Final test cases can still be saved into the test case management module after approval.
+- Generated test cases have traceability back to approved test points and requirements or acceptance criteria.
