@@ -4,6 +4,7 @@ import re
 import os  # Added import
 import json
 import time
+import uuid
 from rest_framework import viewsets, status
 from django.conf import settings  # Added import
 from rest_framework.decorators import action, permission_classes
@@ -28,13 +29,13 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from django.db import models
 
 from .models import (
     RequirementDocument, RequirementAnalysis, BusinessRequirement,
     GeneratedTestCase, AnalysisTask, AIModelConfig, PromptConfig, TestCaseGenerationTask,
-    GenerationConfig, AIModelService
+    GenerationConfig, AIModelService, TestCaseTemplateConfig
 )
 from .serializers import (
     RequirementDocumentSerializer, RequirementAnalysisSerializer,
@@ -42,9 +43,12 @@ from .serializers import (
     AnalysisTaskSerializer, DocumentUploadSerializer,
     TestCaseGenerationRequestSerializer, TestCaseReviewRequestSerializer,
     AIModelConfigSerializer, PromptConfigSerializer, TestCaseGenerationTaskSerializer,
-    GenerationConfigSerializer
+    GenerationConfigSerializer, TestCaseTemplateConfigSerializer
 )
+from .document_parser import DocumentParser
+from .generation_pipeline import PRD2CasePipeline, VisionDocumentExtractor
 from .services import RequirementAnalysisService, DocumentProcessor
+from .template_service import TemplateService
 
 logger = logging.getLogger(__name__)
 
@@ -1265,6 +1269,45 @@ class GenerationConfigViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class TestCaseTemplateConfigViewSet(viewsets.ModelViewSet):
+    """测试用例Excel模板配置视图集"""
+    queryset = TestCaseTemplateConfig.objects.all()
+    serializer_class = TestCaseTemplateConfigSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        return super().get_queryset().order_by('-created_at')
+
+    def perform_create(self, serializer):
+        template_file = self.request.FILES.get('template_file')
+        template_schema = serializer.validated_data.get('template_schema') or {}
+        if template_file and not template_schema:
+            data = template_file.read()
+            template_file.seek(0)
+            template_schema = TemplateService.parse_template_bytes(data, template_file.name)
+        user = self.request.user if self.request.user.is_authenticated else None
+        if user is None:
+            from apps.users.models import User
+            user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+        serializer.save(created_by=user, template_schema=template_schema)
+
+    def perform_update(self, serializer):
+        template_file = self.request.FILES.get('template_file')
+        template_schema = serializer.validated_data.get('template_schema') or serializer.instance.template_schema
+        if template_file:
+            data = template_file.read()
+            template_file.seek(0)
+            template_schema = TemplateService.parse_template_bytes(data, template_file.name)
+        serializer.save(template_schema=template_schema)
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        config = self.get_queryset().filter(is_active=True).first()
+        if not config:
+            return Response(TemplateService.default_schema(), status=status.HTTP_200_OK)
+        return Response(self.get_serializer(config).data, status=status.HTTP_200_OK)
+
+
 class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
     """测试用例生成任务视图集"""
     queryset = TestCaseGenerationTask.objects.all()
@@ -1410,9 +1453,155 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
         thread.daemon = True
         thread.start()
 
+    def _request_user_or_default(self, request):
+        if request.user.is_authenticated:
+            return request.user
+        from apps.users.models import User
+        return User.objects.filter(is_superuser=True).first() or User.objects.first()
+
+    def _get_default_output_mode(self, request):
+        output_mode = request.data.get('output_mode')
+        if output_mode in ['stream', 'complete']:
+            return output_mode
+        gen_config = GenerationConfig.get_active_config()
+        return gen_config.default_output_mode if gen_config else 'stream'
+
+    def _resolve_template_schema(self, template_file=None):
+        if template_file:
+            data = template_file.read()
+            template_file.seek(0)
+            schema = TemplateService.parse_template_bytes(data, template_file.name)
+            return schema, schema.get('name') or template_file.name
+
+        config = TestCaseTemplateConfig.objects.filter(is_active=True).first()
+        if config:
+            schema = config.template_schema or TemplateService.default_schema(config.name)
+            return schema, config.name
+
+        schema = TemplateService.default_schema()
+        return schema, schema["name"]
+
+    def _parse_source_content(self, source_file, requirement_text):
+        if not source_file:
+            return {
+                'text': (requirement_text or '').strip(),
+                'file_type': 'text',
+                'status': 'parsed',
+                'error': '',
+            }
+
+        data = source_file.read()
+        source_file.seek(0)
+
+        def vision_extractor(filename, content_type, image_data):
+            vision_config = AIModelConfig.objects.filter(role='vision', is_active=True).first()
+            config_error = self._ensure_ai_config_ready(vision_config, '视觉解析')
+            if config_error:
+                raise ValueError(config_error)
+            return async_to_sync(VisionDocumentExtractor.extract_text)(
+                vision_config,
+                filename,
+                content_type,
+                image_data,
+            )
+
+        parsed = DocumentParser.extract_from_bytes(
+            source_file.name,
+            data,
+            vision_extractor=vision_extractor,
+        )
+        return {
+            'text': parsed.text,
+            'file_type': parsed.file_type,
+            'status': 'parsed',
+            'error': '',
+        }
+
+    def _generate_from_source(self, request):
+        """创建文件驱动的 PRD -> 测试点任务，生成完成后停在人工审核。"""
+        try:
+            serializer = TestCaseGenerationRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            validated_data = serializer.validated_data
+
+            writer_config = AIModelConfig.objects.filter(role='writer', is_active=True).first()
+            config_error = self._ensure_ai_config_ready(writer_config, '测试用例编写')
+            if config_error:
+                return Response({'error': config_error}, status=status.HTTP_400_BAD_REQUEST)
+
+            writer_prompt = PromptConfig.get_active_config('writer')
+            if not writer_prompt:
+                return Response({'error': '未找到可用的测试用例编写提示词配置'}, status=status.HTTP_400_BAD_REQUEST)
+
+            reviewer_config = None
+            reviewer_prompt = None
+            if validated_data.get('use_reviewer_model', False):
+                reviewer_config = AIModelConfig.objects.filter(role='reviewer', is_active=True).first()
+                config_error = self._ensure_ai_config_ready(reviewer_config, '测试用例评审')
+                if config_error:
+                    return Response({'error': config_error}, status=status.HTTP_400_BAD_REQUEST)
+                reviewer_prompt = PromptConfig.get_active_config('reviewer')
+                if not reviewer_prompt:
+                    return Response({'error': '未找到可用的测试用例评审提示词配置'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                source_info = self._parse_source_content(
+                    validated_data.get('source_file'),
+                    validated_data.get('requirement_text'),
+                )
+            except Exception as parse_error:
+                return Response({'error': f'源文件解析失败: {str(parse_error)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            template_schema, selected_template_name = self._resolve_template_schema(
+                validated_data.get('template_file')
+            )
+            user = self._request_user_or_default(request)
+
+            task = TestCaseGenerationTask.objects.create(
+                task_id=f"TASK_{uuid.uuid4().hex[:8].upper()}",
+                title=validated_data['title'],
+                requirement_text=source_info['text'],
+                requirement_ids=validated_data['requirement_ids'],
+                case_type=validated_data['case_type'],
+                case_creator=validated_data['case_creator'],
+                iteration=validated_data['iteration'],
+                output_mode=self._get_default_output_mode(request),
+                project_id=validated_data.get('project'),
+                writer_model_config=writer_config,
+                reviewer_model_config=reviewer_config,
+                writer_prompt_config=writer_prompt,
+                reviewer_prompt_config=reviewer_prompt,
+                created_by=user,
+                source_file=validated_data.get('source_file'),
+                source_file_type=source_info['file_type'],
+                source_extract_status=source_info['status'],
+                source_extract_error=source_info['error'],
+                template_file=validated_data.get('template_file'),
+                template_schema=template_schema,
+                selected_template_name=selected_template_name,
+                status='pending',
+                progress=0,
+                pipeline_artifacts={'current_stage': 'source_parsed'},
+            )
+
+            self._start_test_point_generation_thread(task.task_id)
+
+            return Response({
+                'message': '测试点生成任务已创建',
+                'task_id': task.task_id,
+                'task': TestCaseGenerationTaskSerializer(task, context={'request': request}).data,
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"创建文件驱动生成任务时出错: {e}")
+            return Response({'error': f'创建任务失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """创建新的测试用例生成任务"""
+        return self._generate_from_source(request)
+
         try:
             serializer = TestCaseGenerationRequestSerializer(data=request.data)
             if not serializer.is_valid():
@@ -1996,6 +2185,50 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
             logger.error(f"保存测试点失败: {e}")
             return Response({'error': f'保存测试点失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['post'], url_path='revise_test_points')
+    def revise_test_points(self, request, task_id=None):
+        """根据人工反馈生成新的测试点版本"""
+        try:
+            task = self.get_object()
+            message = (request.data.get('message') or '').strip()
+            if not message:
+                return Response({'error': 'message 不能为空'}, status=status.HTTP_400_BAD_REQUEST)
+            if not task.test_points:
+                return Response({'error': '没有可修订的测试点'}, status=status.HTTP_400_BAD_REQUEST)
+
+            config_error = self._ensure_ai_config_ready(task.writer_model_config, '测试用例编写')
+            if config_error:
+                return Response({'error': config_error}, status=status.HTTP_400_BAD_REQUEST)
+            if not task.writer_prompt_config:
+                return Response({'error': '未找到可用的测试用例编写提示词配置'}, status=status.HTTP_400_BAD_REQUEST)
+
+            result = async_to_sync(PRD2CasePipeline(task).revise_test_points)(message)
+            conversations = (task.pipeline_artifacts or {}).get('test_point_revision_conversations', [])
+            conversations.append({
+                'message': message,
+                'raw_response': result.content,
+                'created_at': timezone.now().isoformat(),
+            })
+            task.test_points = result.artifact
+            task.test_points_review_status = 'revision_requested'
+            task.status = 'reviewing'
+            task.pipeline_artifacts = {
+                **(task.pipeline_artifacts or {}),
+                'current_stage': 'test_points_review',
+                'test_point_revision_conversations': conversations,
+            }
+            task.save(update_fields=[
+                'test_points', 'test_points_review_status', 'status',
+                'pipeline_artifacts', 'updated_at'
+            ])
+            return Response({
+                'message': '测试点已根据反馈生成新版本',
+                'test_points': task.test_points,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"修订测试点失败: {e}")
+            return Response({'error': f'修订测试点失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=True, methods=['post'], url_path='approve_test_points')
     def approve_test_points(self, request, task_id=None):
         """审核通过测试点并启动测试用例生成"""
@@ -2043,6 +2276,50 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
             logger.error(f"保存测试用例预览失败: {e}")
             return Response({'error': f'保存测试用例预览失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['post'], url_path='revise_test_cases')
+    def revise_test_cases(self, request, task_id=None):
+        """根据人工反馈生成新的测试用例版本"""
+        try:
+            task = self.get_object()
+            message = (request.data.get('message') or '').strip()
+            if not message:
+                return Response({'error': 'message 不能为空'}, status=status.HTTP_400_BAD_REQUEST)
+            if not task.test_cases_json:
+                return Response({'error': '没有可修订的测试用例'}, status=status.HTTP_400_BAD_REQUEST)
+
+            config_error = self._ensure_ai_config_ready(task.writer_model_config, '测试用例编写')
+            if config_error:
+                return Response({'error': config_error}, status=status.HTTP_400_BAD_REQUEST)
+            if not task.writer_prompt_config:
+                return Response({'error': '未找到可用的测试用例编写提示词配置'}, status=status.HTTP_400_BAD_REQUEST)
+
+            result = async_to_sync(PRD2CasePipeline(task).revise_test_cases)(message)
+            conversations = (task.pipeline_artifacts or {}).get('test_case_revision_conversations', [])
+            conversations.append({
+                'message': message,
+                'raw_response': result.content,
+                'created_at': timezone.now().isoformat(),
+            })
+            task.test_cases_json = result.artifact
+            task.test_cases_review_status = 'revision_requested'
+            task.status = 'reviewing'
+            task.pipeline_artifacts = {
+                **(task.pipeline_artifacts or {}),
+                'current_stage': 'test_cases_review',
+                'test_case_revision_conversations': conversations,
+            }
+            task.save(update_fields=[
+                'test_cases_json', 'test_cases_review_status', 'status',
+                'pipeline_artifacts', 'updated_at'
+            ])
+            return Response({
+                'message': '测试用例已根据反馈生成新版本',
+                'test_cases': task.test_cases_json,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"修订测试用例失败: {e}")
+            return Response({'error': f'修订测试用例失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=True, methods=['post'], url_path='approve_test_cases')
     def approve_test_cases(self, request, task_id=None):
         """审核通过测试用例预览，允许导出和保存记录"""
@@ -2073,47 +2350,28 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='export_excel')
     def export_excel(self, request, task_id=None):
-        """导出审核通过后的 Excel 兼容表格"""
+        """导出审核通过后的 xlsx 测试用例表格"""
         try:
             task = self.get_object()
             if task.test_cases_review_status != 'approved':
                 return Response({'error': '请先完成人工审核后再导出 Excel'}, status=status.HTTP_400_BAD_REQUEST)
 
             from django.http import HttpResponse
-            from html import escape
-            from .generation_pipeline import EXCEL_HEADERS, build_excel_rows
-
-            rows = build_excel_rows(task.test_cases_json, {
-                'requirement_ids': task.requirement_ids,
-                'case_type': task.case_type,
-                'case_creator': task.case_creator,
-                'iteration': task.iteration,
-            })
-
-            def cell(value):
-                return f'<Cell><Data ss:Type="String">{escape(str(value or ""))}</Data></Cell>'
-
-            header_xml = ''.join(cell(header) for header in EXCEL_HEADERS)
-            row_xml = []
-            for row in rows:
-                row_xml.append('<Row>' + ''.join(cell(row.get(header, '')) for header in EXCEL_HEADERS) + '</Row>')
-
-            workbook_xml = f'''<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Worksheet ss:Name="测试用例">
-  <Table>
-   <Row>{header_xml}</Row>
-   {''.join(row_xml)}
-  </Table>
- </Worksheet>
-</Workbook>'''
-
-            response = HttpResponse(workbook_xml.encode('utf-8'), content_type='application/vnd.ms-excel')
-            response['Content-Disposition'] = f'attachment; filename="{task.task_id}_testcases.xls"'
+            workbook_bytes = TemplateService.build_workbook_bytes(
+                task.template_schema or TemplateService.default_schema(),
+                task.test_cases_json,
+                {
+                    'requirement_ids': task.requirement_ids,
+                    'case_type': task.case_type,
+                    'case_creator': task.case_creator,
+                    'iteration': task.iteration,
+                },
+            )
+            response = HttpResponse(
+                workbook_bytes,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+            response['Content-Disposition'] = f'attachment; filename="{task.task_id}_testcases.xlsx"'
             return response
         except Exception as e:
             logger.error(f"导出Excel失败: {e}")

@@ -1,5 +1,6 @@
 from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 from io import BytesIO
@@ -351,6 +352,112 @@ class TestCaseGenerationConfigValidationTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("API Key", response.data["error"])
+
+
+class PRD2CaseBackendAPITests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("api_refactor_user", password="password123")
+        self.factory = APIRequestFactory()
+        self.writer_config = AIModelConfig.objects.create(
+            name="Writer",
+            model_type="deepseek",
+            role="writer",
+            api_key="test-key",
+            base_url="https://api.example.com/v1",
+            model_name="writer-model",
+            created_by=self.user,
+        )
+        self.prompt = PromptConfig.objects.create(
+            name="Writer prompt",
+            prompt_type="writer",
+            content="你是测试专家",
+            is_active=True,
+            created_by=self.user,
+        )
+
+    def test_generate_accepts_uploaded_txt_and_template(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["用例名称", "用例状态", "创建人"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        request = self.factory.post("/api/requirement-analysis/testcase-generation/generate/", {
+            "title": "登录 PRD",
+            "source_file": SimpleUploadedFile("prd.txt", b"login prd", content_type="text/plain"),
+            "template_file": SimpleUploadedFile(
+                "template.xlsx",
+                buffer.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            "requirement_ids": "REQ-1",
+            "case_type": "功能测试",
+            "case_creator": "张三",
+            "iteration": "2026.06",
+        }, format="multipart")
+        request.user = self.user
+
+        with mock.patch.object(TestCaseGenerationTaskViewSet, "_start_test_point_generation_thread"):
+            response = TestCaseGenerationTaskViewSet.as_view({"post": "generate"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        task = TestCaseGenerationTask.objects.get(task_id=response.data["task_id"])
+        self.assertEqual(task.requirement_text, "login prd")
+        self.assertEqual(task.source_file_type, "txt")
+        self.assertEqual(task.source_extract_status, "parsed")
+        self.assertEqual(task.template_schema["headers"], ["用例名称", "用例状态", "创建人"])
+
+    def test_revise_test_points_requires_message(self):
+        task = TestCaseGenerationTask.objects.create(
+            task_id="TASK_REV001",
+            title="登录 PRD",
+            requirement_text="手机号登录",
+            requirement_ids=["REQ-1"],
+            case_type="功能测试",
+            case_creator="张三",
+            iteration="2026.06",
+            test_points=[{"id": "TP-1", "title": "旧点"}],
+            writer_model_config=self.writer_config,
+            writer_prompt_config=self.prompt,
+            created_by=self.user,
+        )
+        request = self.factory.post(
+            f"/api/requirement-analysis/testcase-generation/{task.task_id}/revise_test_points/",
+            {},
+            format="json",
+        )
+        request.user = self.user
+
+        response = TestCaseGenerationTaskViewSet.as_view({"post": "revise_test_points"})(request, task_id=task.task_id)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("message", response.data["error"])
+
+    def test_export_excel_returns_xlsx_after_approval(self):
+        task = TestCaseGenerationTask.objects.create(
+            task_id="TASK_XLSX001",
+            title="登录 PRD",
+            requirement_text="手机号登录",
+            requirement_ids=["REQ-1"],
+            case_type="功能测试",
+            case_creator="张三",
+            iteration="2026.06",
+            test_cases_json=[{"title": "登录成功", "case_status": "已评审"}],
+            test_cases_review_status="approved",
+            template_schema={"headers": ["用例名称", "用例状态", "创建人"]},
+            created_by=self.user,
+        )
+        request = self.factory.get(f"/api/requirement-analysis/testcase-generation/{task.task_id}/export_excel/")
+        request.user = self.user
+
+        response = TestCaseGenerationTaskViewSet.as_view({"get": "export_excel"})(request, task_id=task.task_id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        workbook = load_workbook(BytesIO(response.content))
+        self.assertEqual([cell.value for cell in workbook.active[2]], ["登录成功", None, "张三"])
 
 
 class PRD2CaseReviewGateTests(TestCase):

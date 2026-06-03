@@ -282,17 +282,34 @@ class TestCaseGenerationTaskSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class RequirementIdsInputField(serializers.Field):
+    """Accept requirement IDs from multipart strings or JSON arrays."""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
 class TestCaseGenerationRequestSerializer(serializers.Serializer):
     """新的测试用例生成请求序列化器"""
     title = serializers.CharField(max_length=200, help_text="任务标题")
-    requirement_text = serializers.CharField(help_text="需求描述")
-    requirement_ids = serializers.JSONField(help_text="需求ID，支持字符串或字符串列表")
+    source_file = serializers.FileField(required=False, allow_null=True, help_text="PRD源文件")
+    template_file = serializers.FileField(required=False, allow_null=True, help_text="测试用例Excel模板")
+    requirement_text = serializers.CharField(required=False, allow_blank=True, help_text="需求描述")
+    requirement_ids = RequirementIdsInputField(help_text="需求ID，支持字符串或字符串列表")
     case_type = serializers.CharField(max_length=100, help_text="用例类型")
     case_creator = serializers.CharField(max_length=100, help_text="创建人")
     iteration = serializers.CharField(max_length=100, help_text="归属迭代")
     use_writer_model = serializers.BooleanField(default=True, help_text="是否使用编写模型")
-    use_reviewer_model = serializers.BooleanField(default=True, help_text="是否使用评审模型")
+    use_reviewer_model = serializers.BooleanField(default=False, help_text="是否使用评审模型")
     project = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs.get("source_file") and not (attrs.get("requirement_text") or "").strip():
+            raise serializers.ValidationError("请上传PRD源文件或填写需求描述")
+        return attrs
 
     def validate_requirement_ids(self, value):
         if isinstance(value, str):
