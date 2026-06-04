@@ -324,6 +324,32 @@ class PRD2CasePipelineRevisionTests(TestCase):
 
         self.assertEqual(result.artifact[0]["title"], "新用例")
 
+    def test_generate_cases_from_points_batches_large_point_sets(self):
+        task = TestCaseGenerationTask.objects.get(task_id=self.task.task_id)
+        task.test_points = [
+            {"id": f"TP-{index:03d}", "title": f"测试点 {index:03d}"}
+            for index in range(1, 26)
+        ]
+        task.save(update_fields=["test_points", "updated_at"])
+        mocked_call = AsyncMock(side_effect=[
+            {"choices": [{"message": {"content": '[{"id":"TC-1","title":"第一批用例"}]'}}]},
+            {"choices": [{"message": {"content": '[{"id":"TC-2","title":"第二批用例"}]'}}]},
+        ])
+
+        with mock.patch(
+            "apps.requirement_analysis.generation_pipeline.AIModelService.call_openai_compatible_api",
+            new=mocked_call,
+        ):
+            result = async_to_sync(PRD2CasePipeline(task).generate_cases_from_points)()
+
+        self.assertEqual(mocked_call.call_count, 2)
+        first_prompt = mocked_call.call_args_list[0].args[1][1]["content"]
+        second_prompt = mocked_call.call_args_list[1].args[1][1]["content"]
+        self.assertIn("TP-001", first_prompt)
+        self.assertNotIn("TP-021", first_prompt)
+        self.assertIn("TP-021", second_prompt)
+        self.assertEqual([case["title"] for case in result.artifact], ["第一批用例", "第二批用例"])
+
     def test_vision_document_extractor_sends_image_payload(self):
         vision_config = AIModelConfig.objects.create(
             name="Vision",

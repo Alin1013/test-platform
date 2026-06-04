@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 EXCEL_HEADERS = DEFAULT_HEADERS
+CASE_GENERATION_BATCH_SIZE = 20
 
 
 @dataclass
@@ -94,11 +95,24 @@ PRD内容：
         artifact = parse_json_payload(content)
         return PipelineResult(content=content, artifact=artifact)
 
-    async def generate_cases_from_points(self) -> PipelineResult:
-        prompt = f"""
+    def _build_case_generation_prompt(
+        self,
+        points: List[Dict[str, Any]],
+        batch_index: int,
+        total_batches: int,
+        start_number: int,
+    ) -> str:
+        batch_hint = ""
+        if total_batches > 1:
+            batch_hint = f"""
+当前为第 {batch_index}/{total_batches} 批测试点。
+本批用例 ID 请从 TC-{start_number:03d} 开始递增，避免和其他批次重复。
+"""
+        return f"""
 请只基于已审核测试点生成测试用例 JSON 数组。
 禁止输出用例状态字段。
 每条用例必须包含 id、catalog、title、requirement_ids、test_point_id、scenario_id、case_type、priority、creator、iteration、preconditions、steps、expected_result、source_trace、review_status、review_comment。
+{batch_hint}
 默认需求ID：{self.task.requirement_ids}
 默认用例类型：{self.task.case_type}
 默认创建人：{self.task.case_creator}
@@ -106,13 +120,42 @@ PRD内容：
 模板结构：
 {json.dumps(self.task.template_schema or TemplateService.default_schema(), ensure_ascii=False)}
 已审核测试点：
-{json.dumps(self.task.test_points, ensure_ascii=False)}
+{json.dumps(points, ensure_ascii=False)}
 PRD内容：
 {self.task.requirement_text}
 """
-        content = await self._call_writer("测试用例生成", prompt)
-        artifact = parse_json_payload(content)
-        return PipelineResult(content=content, artifact=artifact)
+
+    async def generate_cases_from_points(self) -> PipelineResult:
+        points = list(self.task.test_points or [])
+        if not points:
+            prompt = self._build_case_generation_prompt([], 1, 1, 1)
+            content = await self._call_writer("测试用例生成", prompt)
+            artifact = parse_json_payload(content)
+            return PipelineResult(content=content, artifact=artifact)
+
+        batches = [
+            points[index:index + CASE_GENERATION_BATCH_SIZE]
+            for index in range(0, len(points), CASE_GENERATION_BATCH_SIZE)
+        ]
+        all_cases = []
+        raw_responses = []
+        for batch_index, batch in enumerate(batches, 1):
+            start_number = len(all_cases) + 1
+            prompt = self._build_case_generation_prompt(
+                batch,
+                batch_index,
+                len(batches),
+                start_number,
+            )
+            content = await self._call_writer("测试用例生成", prompt)
+            artifact = parse_json_payload(content)
+            if not isinstance(artifact, list):
+                raise ValueError("测试用例生成结果必须是 JSON 数组")
+            all_cases.extend(artifact)
+            raw_responses.append(content)
+
+        combined_content = raw_responses[0] if len(raw_responses) == 1 else json.dumps(all_cases, ensure_ascii=False)
+        return PipelineResult(content=combined_content, artifact=all_cases)
 
     def _build_revision_prompt(self, stage: str, current_data: Any, user_message: str) -> str:
         template_section = ""
