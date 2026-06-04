@@ -156,13 +156,13 @@
             <span>{{ reviewStatusLabel(testPointReviewStatus) }}</span>
           </div>
           <div class="review-actions">
-            <el-button :icon="EditPen" @click="addTestPoint">新增测试点</el-button>
-            <el-button :loading="savingPoints" @click="saveTestPoints">保存修改</el-button>
+            <el-button :icon="EditPen" :disabled="!canEditTestPoints" @click="addTestPoint">新增测试点</el-button>
+            <el-button :loading="savingPoints" :disabled="!canEditTestPoints" @click="saveTestPoints">保存修改</el-button>
             <el-button
               type="primary"
               :icon="Check"
               :loading="approvingPoints"
-              :disabled="testPointReviewStatus === 'approved'"
+              :disabled="!canEditTestPoints"
               @click="approveTestPoints"
             >
               审核完成并生成用例
@@ -170,7 +170,16 @@
           </div>
         </div>
 
-        <div class="ai-feedback">
+        <el-alert
+          v-if="!canEditTestPoints"
+          :title="testPointLockMessage"
+          type="info"
+          show-icon
+          :closable="false"
+          class="stage-alert"
+        />
+
+        <div v-else class="ai-feedback">
           <textarea
             v-model.trim="pointRevisionMessage"
             rows="3"
@@ -188,40 +197,40 @@
 
         <div class="point-list">
           <article v-for="(point, index) in testPoints" :key="point.localKey" class="editor-item">
-            <button class="delete-icon" @click="removeTestPoint(index)">x</button>
+            <button class="delete-icon" :disabled="!canEditTestPoints" @click="removeTestPoint(index)">x</button>
             <div class="editor-grid">
               <label>
                 <span>ID</span>
-                <input v-model.trim="point.id" class="field compact">
+                <input v-model.trim="point.id" class="field compact" :disabled="!canEditTestPoints">
               </label>
               <label class="wide">
                 <span>标题</span>
-                <input v-model.trim="point.title" class="field compact">
+                <input v-model.trim="point.title" class="field compact" :disabled="!canEditTestPoints">
               </label>
               <label>
                 <span>优先级</span>
-                <input v-model.trim="point.priority" class="field compact">
+                <input v-model.trim="point.priority" class="field compact" :disabled="!canEditTestPoints">
               </label>
               <label>
                 <span>覆盖类型</span>
-                <input v-model.trim="point.coverage_type" class="field compact">
+                <input v-model.trim="point.coverage_type" class="field compact" :disabled="!canEditTestPoints">
               </label>
               <label>
                 <span>需求 ID</span>
-                <input v-model.trim="point.requirement_ids_text" class="field compact">
+                <input v-model.trim="point.requirement_ids_text" class="field compact" :disabled="!canEditTestPoints">
               </label>
               <label>
                 <span>测试对象</span>
-                <input v-model.trim="point.test_object" class="field compact">
+                <input v-model.trim="point.test_object" class="field compact" :disabled="!canEditTestPoints">
               </label>
             </div>
             <label class="block-editor">
               <span>前置条件</span>
-              <textarea v-model="point.preconditions_text" rows="2" />
+              <textarea v-model="point.preconditions_text" rows="2" :disabled="!canEditTestPoints" />
             </label>
             <label class="block-editor">
               <span>预期关注点</span>
-              <textarea v-model="point.expected_focus" rows="2" />
+              <textarea v-model="point.expected_focus" rows="2" :disabled="!canEditTestPoints" />
             </label>
           </article>
         </div>
@@ -416,6 +425,18 @@ export default {
     },
     createActionLabel() {
       return this.isXmindSource ? '生成测试用例' : '生成测试点'
+    },
+    canEditTestPoints() {
+      return this.testPointReviewStatus !== 'approved'
+    },
+    testPointLockMessage() {
+      if (this.task?.current_stage === 'case_generation') {
+        return '测试点已审核并锁定，后台正在根据这些测试点生成测试用例。需要补充测试点时，请在审核完成前修改或发起新任务。'
+      }
+      if (this.task?.current_stage === 'test_cases_review' || this.task?.status === 'completed') {
+        return '测试点已审核并锁定。当前请在测试用例预览区审核和修改生成结果。'
+      }
+      return '测试点已审核并锁定。'
     }
   },
   mounted() {
@@ -926,7 +947,8 @@ export default {
   font-size: 14px;
 }
 
-.config-alert {
+.config-alert,
+.stage-alert {
   margin-bottom: 16px;
 }
 
