@@ -1548,7 +1548,7 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 'test_data_hint': point.get('test_data_hint') or '',
                 'expected_focus': point.get('expected_focus') or title,
                 'source_trace': source_trace,
-                'review_status': 'approved',
+                'review_status': point.get('review_status') or 'pending',
                 'review_comment': point.get('review_comment') or '',
             })
         return normalized
@@ -1598,11 +1598,11 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 source_info.get('test_points'),
                 validated_data['requirement_ids'],
             )
-            skip_test_point_generation = source_info['file_type'] == 'xmind' and bool(imported_test_points)
+            xmind_points_imported = source_info['file_type'] == 'xmind' and bool(imported_test_points)
             pipeline_artifacts = {
-                'current_stage': 'case_generation' if skip_test_point_generation else 'source_parsed',
+                'current_stage': 'test_points_review' if xmind_points_imported else 'source_parsed',
             }
-            if skip_test_point_generation:
+            if xmind_points_imported:
                 pipeline_artifacts.update({
                     'source_mode': 'xmind_test_points',
                     'raw_test_points': imported_test_points,
@@ -1631,17 +1631,14 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 template_schema=template_schema,
                 selected_template_name=selected_template_name,
                 test_points=imported_test_points,
-                test_points_review_status='approved' if skip_test_point_generation else 'pending',
-                test_points_reviewed_at=timezone.now() if skip_test_point_generation else None,
-                test_points_reviewed_by=user if skip_test_point_generation else None,
-                status='generating' if skip_test_point_generation else 'pending',
-                progress=55 if skip_test_point_generation else 0,
+                test_points_review_status='pending',
+                status='reviewing' if xmind_points_imported else 'pending',
+                progress=40 if xmind_points_imported else 0,
                 pipeline_artifacts=pipeline_artifacts,
             )
 
-            if skip_test_point_generation:
-                self._start_case_generation_thread(task.task_id)
-                message = 'XMind测试点已导入，已开始生成测试用例'
+            if xmind_points_imported:
+                message = 'XMind测试点已导入，等待人工审核'
             else:
                 self._start_test_point_generation_thread(task.task_id)
                 message = '测试点生成任务已创建'

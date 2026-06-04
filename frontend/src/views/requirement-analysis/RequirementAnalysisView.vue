@@ -3,7 +3,7 @@
     <header class="page-title">
       <div>
         <h1>AI 用例生成</h1>
-        <p>PRD 文件生成测试点，或从 XMind 测试点直接生成测试用例，确认无误后下载 Excel。</p>
+        <p>PRD 文件生成测试点，或从 XMind 导入测试点，审核后生成测试用例并下载 Excel。</p>
       </div>
       <el-button v-if="currentTaskId" :icon="Refresh" @click="resetWorkspace">新任务</el-button>
     </header>
@@ -424,7 +424,7 @@ export default {
       return Boolean(this.sourceFile && /\.xmind$/i.test(this.sourceFile.name))
     },
     createActionLabel() {
-      return this.isXmindSource ? '生成测试用例' : '生成测试点'
+      return this.isXmindSource ? '导入测试点' : '生成测试点'
     },
     canEditTestPoints() {
       return this.testPointReviewStatus !== 'approved'
@@ -546,10 +546,7 @@ export default {
         const response = await createTestCaseGenerationTask(formData)
         this.currentTaskId = response.data.task_id
         this.task = response.data.task
-        this.statusText = '测试点生成中'
-        if (this.isXmindSource) {
-          this.statusText = '测试用例生成中'
-        }
+        this.statusText = this.isXmindSource ? '测试点待审核' : '测试点生成中'
         this.taskProgress = 0
         this.activeStep = 1
         this.loadingStage = true

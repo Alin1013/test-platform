@@ -535,7 +535,7 @@ class PRD2CaseBackendAPITests(TestCase):
         self.assertEqual(task.source_file_type, "png")
         self.assertEqual(task.requirement_text, "图片中的 PRD 文本")
 
-    def test_generate_xmind_skips_test_point_generation_and_starts_case_generation(self):
+    def test_generate_xmind_imports_test_points_and_waits_for_manual_review(self):
         request = self.factory.post("/api/requirement-analysis/testcase-generation/generate/", {
             "title": "XMind 测试点",
             "source_file": SimpleUploadedFile(
@@ -557,12 +557,14 @@ class PRD2CaseBackendAPITests(TestCase):
         self.assertEqual(response.status_code, 201)
         task = TestCaseGenerationTask.objects.get(task_id=response.data["task_id"])
         self.assertEqual(task.source_file_type, "xmind")
-        self.assertEqual(task.test_points_review_status, "approved")
-        self.assertEqual(task.pipeline_artifacts["current_stage"], "case_generation")
+        self.assertEqual(task.status, "reviewing")
+        self.assertEqual(task.progress, 40)
+        self.assertEqual(task.test_points_review_status, "pending")
+        self.assertEqual(task.pipeline_artifacts["current_stage"], "test_points_review")
         self.assertEqual(task.test_points[0]["requirement_ids"], ["REQ-XMIND"])
-        self.assertEqual(task.test_points[0]["review_status"], "approved")
+        self.assertEqual(task.test_points[0]["review_status"], "pending")
         start_points.assert_not_called()
-        start_cases.assert_called_once_with(task.task_id)
+        start_cases.assert_not_called()
 
     def test_revise_test_points_requires_message(self):
         task = TestCaseGenerationTask.objects.create(
