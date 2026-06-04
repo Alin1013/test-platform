@@ -1488,6 +1488,8 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 'file_type': 'text',
                 'status': 'parsed',
                 'error': '',
+                'metadata': {},
+                'test_points': [],
             }
 
         data = source_file.read()
@@ -1518,7 +1520,38 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
             'file_type': parsed.file_type,
             'status': 'parsed',
             'error': '',
+            'metadata': parsed.metadata,
+            'test_points': parsed.metadata.get('xmind_test_points', []),
         }
+
+    def _normalize_imported_test_points(self, points, requirement_ids):
+        normalized = []
+        for index, point in enumerate(points or [], 1):
+            title = str(point.get('title') or '').strip()
+            if not title:
+                continue
+            source_trace = str(point.get('source_trace') or title).strip()
+            point_requirement_ids = point.get('requirement_ids') or requirement_ids
+            if isinstance(point_requirement_ids, str):
+                point_requirement_ids = [point_requirement_ids]
+            point_requirement_ids = [str(item).strip() for item in point_requirement_ids if str(item).strip()]
+
+            normalized.append({
+                'id': point.get('id') or f'TP-XMIND-{index:03d}',
+                'requirement_ids': point_requirement_ids or requirement_ids,
+                'title': title,
+                'test_object': point.get('test_object') or title,
+                'coverage_type': point.get('coverage_type') or '功能',
+                'design_technique': point.get('design_technique') or 'XMind导入',
+                'priority': point.get('priority') or 'P2',
+                'preconditions': point.get('preconditions') or '',
+                'test_data_hint': point.get('test_data_hint') or '',
+                'expected_focus': point.get('expected_focus') or title,
+                'source_trace': source_trace,
+                'review_status': 'approved',
+                'review_comment': point.get('review_comment') or '',
+            })
+        return normalized
 
     def _generate_from_source(self, request):
         """创建文件驱动的 PRD -> 测试点任务，生成完成后停在人工审核。"""
@@ -1561,6 +1594,19 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 validated_data.get('template_file')
             )
             user = self._request_user_or_default(request)
+            imported_test_points = self._normalize_imported_test_points(
+                source_info.get('test_points'),
+                validated_data['requirement_ids'],
+            )
+            skip_test_point_generation = source_info['file_type'] == 'xmind' and bool(imported_test_points)
+            pipeline_artifacts = {
+                'current_stage': 'case_generation' if skip_test_point_generation else 'source_parsed',
+            }
+            if skip_test_point_generation:
+                pipeline_artifacts.update({
+                    'source_mode': 'xmind_test_points',
+                    'raw_test_points': imported_test_points,
+                })
 
             task = TestCaseGenerationTask.objects.create(
                 task_id=f"TASK_{uuid.uuid4().hex[:8].upper()}",
@@ -1584,15 +1630,24 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 template_file=validated_data.get('template_file'),
                 template_schema=template_schema,
                 selected_template_name=selected_template_name,
-                status='pending',
-                progress=0,
-                pipeline_artifacts={'current_stage': 'source_parsed'},
+                test_points=imported_test_points,
+                test_points_review_status='approved' if skip_test_point_generation else 'pending',
+                test_points_reviewed_at=timezone.now() if skip_test_point_generation else None,
+                test_points_reviewed_by=user if skip_test_point_generation else None,
+                status='generating' if skip_test_point_generation else 'pending',
+                progress=55 if skip_test_point_generation else 0,
+                pipeline_artifacts=pipeline_artifacts,
             )
 
-            self._start_test_point_generation_thread(task.task_id)
+            if skip_test_point_generation:
+                self._start_case_generation_thread(task.task_id)
+                message = 'XMind测试点已导入，已开始生成测试用例'
+            else:
+                self._start_test_point_generation_thread(task.task_id)
+                message = '测试点生成任务已创建'
 
             return Response({
-                'message': '测试点生成任务已创建',
+                'message': message,
                 'task_id': task.task_id,
                 'task': TestCaseGenerationTaskSerializer(task, context={'request': request}).data,
             }, status=status.HTTP_201_CREATED)

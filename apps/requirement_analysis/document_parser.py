@@ -1,7 +1,10 @@
 from dataclasses import dataclass, field
 from io import BytesIO
+import json
 from pathlib import Path
 from typing import Callable, Optional
+import zipfile
+from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 from PIL import Image
@@ -51,6 +54,7 @@ class DocumentParser:
         ".jpg",
         ".jpeg",
         ".bmp",
+        ".xmind",
     }
     IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp"}
 
@@ -81,6 +85,9 @@ class DocumentParser:
             text = cls._extract_docx(data)
             file_type = "docx"
             metadata = {}
+        elif extension == ".xmind":
+            text, metadata = cls._extract_xmind(data)
+            file_type = "xmind"
         else:
             text, metadata = cls._extract_image(filename, extension, data, vision_extractor)
             file_type = extension.lstrip(".")
@@ -138,6 +145,172 @@ class DocumentParser:
                 if cells:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
+
+    @classmethod
+    def _extract_xmind(cls, data: bytes) -> tuple[str, dict]:
+        try:
+            with zipfile.ZipFile(BytesIO(data)) as archive:
+                names = set(archive.namelist())
+                if "content.json" in names:
+                    payload = json.loads(archive.read("content.json").decode("utf-8"))
+                    points = cls._extract_xmind_json_points(payload)
+                elif "content.xml" in names:
+                    root = ElementTree.fromstring(archive.read("content.xml"))
+                    points = cls._extract_xmind_xml_points(root)
+                else:
+                    raise EmptyExtractedTextError("XMind 文件缺少 content.json 或 content.xml")
+        except zipfile.BadZipFile as exc:
+            raise UnsupportedSourceFileError("XMind 文件格式无效") from exc
+        except json.JSONDecodeError as exc:
+            raise UnsupportedSourceFileError("XMind content.json 格式无效") from exc
+        except ElementTree.ParseError as exc:
+            raise UnsupportedSourceFileError("XMind content.xml 格式无效") from exc
+
+        if not points:
+            raise EmptyExtractedTextError("XMind 文件未解析出测试点")
+
+        text = "\n".join(point["source_trace"] for point in points)
+        return text, {"xmind_test_points": points}
+
+    @classmethod
+    def _extract_xmind_json_points(cls, payload) -> list[dict]:
+        if isinstance(payload, dict):
+            sheets = payload.get("sheets") or payload.get("children") or [payload]
+        elif isinstance(payload, list):
+            sheets = payload
+        else:
+            sheets = []
+
+        raw_points = []
+        for sheet in sheets:
+            if not isinstance(sheet, dict):
+                continue
+            root_topic = sheet.get("rootTopic") or sheet.get("root_topic") or sheet.get("topic")
+            if root_topic:
+                cls._collect_xmind_json_leaves(root_topic, [], raw_points)
+
+        return cls._format_xmind_points(raw_points)
+
+    @classmethod
+    def _collect_xmind_json_leaves(cls, topic: dict, parents: list[str], raw_points: list[dict]):
+        title = str(topic.get("title") or "").strip()
+        path = parents + ([title] if title else [])
+        children = cls._xmind_json_children(topic)
+        if children:
+            for child in children:
+                cls._collect_xmind_json_leaves(child, path, raw_points)
+            return
+
+        if title:
+            raw_points.append({
+                "title": title,
+                "source_trace": " > ".join(path),
+                "test_object": parents[-1] if parents else title,
+                "note": cls._xmind_json_note(topic),
+            })
+
+    @staticmethod
+    def _xmind_json_children(topic: dict) -> list[dict]:
+        children = topic.get("children") or {}
+        result = []
+        if isinstance(children, dict):
+            for value in children.values():
+                if isinstance(value, list):
+                    result.extend(item for item in value if isinstance(item, dict))
+                elif isinstance(value, dict):
+                    result.append(value)
+        elif isinstance(children, list):
+            result.extend(item for item in children if isinstance(item, dict))
+        return result
+
+    @staticmethod
+    def _xmind_json_note(topic: dict) -> str:
+        notes = topic.get("notes")
+        if isinstance(notes, dict):
+            plain = notes.get("plain")
+            if isinstance(plain, dict):
+                return str(plain.get("content") or "").strip()
+            if isinstance(plain, str):
+                return plain.strip()
+        return ""
+
+    @classmethod
+    def _extract_xmind_xml_points(cls, root) -> list[dict]:
+        raw_points = []
+        for sheet in cls._xml_children(root, "sheet"):
+            for topic in cls._xml_children(sheet, "topic"):
+                cls._collect_xmind_xml_leaves(topic, [], raw_points)
+        if not raw_points and cls._xml_name(root.tag) == "topic":
+            cls._collect_xmind_xml_leaves(root, [], raw_points)
+        return cls._format_xmind_points(raw_points)
+
+    @classmethod
+    def _collect_xmind_xml_leaves(cls, topic, parents: list[str], raw_points: list[dict]):
+        title = cls._xml_child_text(topic, "title")
+        path = parents + ([title] if title else [])
+        children = cls._xmind_xml_topic_children(topic)
+        if children:
+            for child in children:
+                cls._collect_xmind_xml_leaves(child, path, raw_points)
+            return
+
+        if title:
+            raw_points.append({
+                "title": title,
+                "source_trace": " > ".join(path),
+                "test_object": parents[-1] if parents else title,
+                "note": cls._xmind_xml_note(topic),
+            })
+
+    @classmethod
+    def _xmind_xml_topic_children(cls, topic) -> list:
+        children = []
+        for children_node in cls._xml_children(topic, "children"):
+            for topics_node in cls._xml_children(children_node, "topics"):
+                children.extend(cls._xml_children(topics_node, "topic"))
+        return children
+
+    @classmethod
+    def _xmind_xml_note(cls, topic) -> str:
+        for notes_node in cls._xml_children(topic, "notes"):
+            for plain_node in cls._xml_children(notes_node, "plain"):
+                return "".join(plain_node.itertext()).strip()
+        return ""
+
+    @classmethod
+    def _format_xmind_points(cls, raw_points: list[dict]) -> list[dict]:
+        points = []
+        for index, point in enumerate(raw_points, 1):
+            note = point.get("note", "")
+            points.append({
+                "id": f"TP-XMIND-{index:03d}",
+                "title": point["title"],
+                "test_object": point.get("test_object") or point["title"],
+                "coverage_type": "功能",
+                "design_technique": "XMind导入",
+                "priority": "P2",
+                "preconditions": "",
+                "test_data_hint": note,
+                "expected_focus": note or point["title"],
+                "source_trace": point["source_trace"],
+                "review_status": "pending",
+                "review_comment": "",
+            })
+        return points
+
+    @staticmethod
+    def _xml_name(tag: str) -> str:
+        return tag.rsplit("}", 1)[-1]
+
+    @classmethod
+    def _xml_children(cls, node, name: str) -> list:
+        return [child for child in list(node) if cls._xml_name(child.tag) == name]
+
+    @classmethod
+    def _xml_child_text(cls, node, name: str) -> str:
+        for child in cls._xml_children(node, name):
+            return "".join(child.itertext()).strip()
+        return ""
 
     @staticmethod
     def _extract_image(

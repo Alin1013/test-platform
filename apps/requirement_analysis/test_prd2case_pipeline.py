@@ -1,4 +1,6 @@
 from asgiref.sync import async_to_sync
+import json
+import zipfile
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -27,6 +29,34 @@ from apps.requirement_analysis.template_service import TemplateService
 from apps.requirement_analysis.views import TestCaseGenerationTaskViewSet
 from apps.projects.models import Project
 from apps.testcases.models import TestCase as ManagedTestCase
+
+
+def make_xmind_bytes():
+    content = [
+        {
+            "title": "Sheet 1",
+            "rootTopic": {
+                "title": "登录模块测试点",
+                "children": {
+                    "attached": [
+                        {
+                            "title": "验证码登录",
+                            "children": {
+                                "attached": [
+                                    {"title": "正确手机号和验证码可以登录成功"},
+                                    {"title": "验证码错误时提示登录失败"},
+                                ]
+                            },
+                        }
+                    ]
+                },
+            },
+        }
+    ]
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("content.json", json.dumps(content, ensure_ascii=False))
+    return buffer.getvalue()
 
 
 class PRD2CaseTaskModelTests(TestCase):
@@ -167,6 +197,16 @@ class DocumentParserTests(TestCase):
         self.assertEqual(result.text, "图片中的登录 PRD")
         self.assertEqual(result.file_type, "bmp")
         self.assertEqual(calls[0][1], "image/png")
+
+    def test_xmind_parser_extracts_leaf_topics_as_test_points(self):
+        result = DocumentParser.extract_from_bytes("login.xmind", make_xmind_bytes())
+
+        self.assertEqual(result.file_type, "xmind")
+        self.assertIn("正确手机号和验证码可以登录成功", result.text)
+        points = result.metadata["xmind_test_points"]
+        self.assertEqual(len(points), 2)
+        self.assertEqual(points[0]["title"], "正确手机号和验证码可以登录成功")
+        self.assertEqual(points[0]["source_trace"], "登录模块测试点 > 验证码登录 > 正确手机号和验证码可以登录成功")
 
 
 class TemplateServiceTests(TestCase):
@@ -468,6 +508,35 @@ class PRD2CaseBackendAPITests(TestCase):
         task = TestCaseGenerationTask.objects.get(task_id=response.data["task_id"])
         self.assertEqual(task.source_file_type, "png")
         self.assertEqual(task.requirement_text, "图片中的 PRD 文本")
+
+    def test_generate_xmind_skips_test_point_generation_and_starts_case_generation(self):
+        request = self.factory.post("/api/requirement-analysis/testcase-generation/generate/", {
+            "title": "XMind 测试点",
+            "source_file": SimpleUploadedFile(
+                "login.xmind",
+                make_xmind_bytes(),
+                content_type="application/octet-stream",
+            ),
+            "requirement_ids": "REQ-XMIND",
+            "case_type": "功能测试",
+            "case_creator": "张三",
+            "iteration": "2026.06",
+        }, format="multipart")
+        request.user = self.user
+
+        with mock.patch.object(TestCaseGenerationTaskViewSet, "_start_test_point_generation_thread") as start_points, \
+             mock.patch.object(TestCaseGenerationTaskViewSet, "_start_case_generation_thread") as start_cases:
+            response = TestCaseGenerationTaskViewSet.as_view({"post": "generate"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        task = TestCaseGenerationTask.objects.get(task_id=response.data["task_id"])
+        self.assertEqual(task.source_file_type, "xmind")
+        self.assertEqual(task.test_points_review_status, "approved")
+        self.assertEqual(task.pipeline_artifacts["current_stage"], "case_generation")
+        self.assertEqual(task.test_points[0]["requirement_ids"], ["REQ-XMIND"])
+        self.assertEqual(task.test_points[0]["review_status"], "approved")
+        start_points.assert_not_called()
+        start_cases.assert_called_once_with(task.task_id)
 
     def test_revise_test_points_requires_message(self):
         task = TestCaseGenerationTask.objects.create(

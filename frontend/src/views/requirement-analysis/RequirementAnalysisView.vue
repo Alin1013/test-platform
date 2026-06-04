@@ -3,7 +3,7 @@
     <header class="page-title">
       <div>
         <h1>AI 用例生成</h1>
-        <p>PRD 文件生成测试点，审核后生成测试用例，确认无误后下载 Excel。</p>
+        <p>PRD 文件生成测试点，或从 XMind 测试点直接生成测试用例，确认无误后下载 Excel。</p>
       </div>
       <el-button v-if="currentTaskId" :icon="Refresh" @click="resetWorkspace">新任务</el-button>
     </header>
@@ -21,7 +21,7 @@
       <div class="panel upload-panel">
         <div class="panel-title">
           <h2>上传内容</h2>
-          <span>支持 txt / md / pdf / docx / html / png / bmp / jpg</span>
+          <span>支持 txt / md / pdf / docx / html / xmind / png / bmp / jpg</span>
         </div>
 
         <div
@@ -35,13 +35,13 @@
           <div class="dropzone-text">
             <strong>{{ sourceFile ? sourceFile.name : '选择或拖入 PRD 文件' }}</strong>
             <span v-if="sourceFile">{{ formatFileSize(sourceFile.size) }}</span>
-            <span v-else>图片文件会调用已配置的视觉模型解析</span>
+            <span v-else>图片文件会调用视觉模型解析，XMind 会直接读取测试点</span>
           </div>
           <input
             ref="sourceInput"
             class="hidden-input"
             type="file"
-            accept=".txt,.md,.pdf,.docx,.html,.htm,.png,.bmp,.jpg,.jpeg"
+            accept=".txt,.md,.pdf,.docx,.html,.htm,.xmind,.png,.bmp,.jpg,.jpeg"
             @change="onSourceFileChange"
           >
           <el-button :icon="Document" @click="$refs.sourceInput.click()">选择文件</el-button>
@@ -111,7 +111,7 @@
             :disabled="!canCreateTask"
             @click="createGenerationTask"
           >
-            生成测试点
+            {{ createActionLabel }}
           </el-button>
         </div>
       </div>
@@ -410,6 +410,12 @@ export default {
         this.form.caseCreator &&
         this.form.iteration
       )
+    },
+    isXmindSource() {
+      return Boolean(this.sourceFile && /\.xmind$/i.test(this.sourceFile.name))
+    },
+    createActionLabel() {
+      return this.isXmindSource ? '生成测试用例' : '生成测试点'
     }
   },
   mounted() {
@@ -453,7 +459,7 @@ export default {
     },
 
     setSourceFile(file) {
-      const allowed = /\.(txt|md|pdf|docx|html|htm|png|bmp|jpg|jpeg)$/i
+      const allowed = /\.(txt|md|pdf|docx|html|htm|xmind|png|bmp|jpg|jpeg)$/i
       if (!allowed.test(file.name)) {
         ElMessage.error('不支持的 PRD 文件格式')
         return
@@ -520,6 +526,9 @@ export default {
         this.currentTaskId = response.data.task_id
         this.task = response.data.task
         this.statusText = '测试点生成中'
+        if (this.isXmindSource) {
+          this.statusText = '测试用例生成中'
+        }
         this.taskProgress = 0
         this.activeStep = 1
         this.loadingStage = true
