@@ -8,7 +8,7 @@ const { TextArea } = Input;
 const typeLabels: Record<TestCaseType, string> = {
   functional: '功能用例',
   api: '接口用例',
-  ui: '界面自动化',
+  ui: 'UI自动化',
 };
 
 interface CaseDrawerProps {

@@ -132,7 +132,7 @@ export function TestCasesPage() {
     <section className="page-section test-cases-page">
       <PageHeader
         title="测试用例"
-        description="按模块维护功能、接口和界面自动化资产"
+        description="按模块维护功能、接口和UI自动化资产"
         actions={
           <Button
             aria-label={`新建${typeLabels[type]}`}

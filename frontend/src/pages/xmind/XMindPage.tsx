@@ -67,7 +67,7 @@ export function XMindPage() {
 
   return (
     <section className="page-section xmind-page">
-      <PageHeader title="XMind 转换器" description="将思维导图节点解析为结构化测试用例" />
+      <PageHeader title="用例生成器" description="将思维导图节点解析为结构化测试用例" />
 
       {workflow.status === 'idle' ? (
         <div

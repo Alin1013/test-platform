@@ -21,7 +21,7 @@ import './dashboard.css';
 const typeLabels: Record<TestCaseType, string> = {
   functional: '功能',
   api: '接口',
-  ui: '界面自动化',
+  ui: 'UI自动化',
 };
 
 const chartColors: Record<TestCaseType, string> = {
@@ -194,8 +194,8 @@ export function DashboardPage() {
             <Button aria-label="新建接口用例" icon={<PlusOutlined />} onClick={() => openCreate('api')}>
               新建接口用例
             </Button>
-            <Button aria-label="新建界面自动化" icon={<PlusOutlined />} onClick={() => openCreate('ui')}>
-              新建界面自动化
+            <Button aria-label="新建UI自动化" icon={<PlusOutlined />} onClick={() => openCreate('ui')}>
+              新建UI自动化
             </Button>
           </div>
         </Card>

@@ -24,19 +24,19 @@ const menuItems = [
     children: [
       { key: '/test-cases/functional', label: '功能用例' },
       { key: '/test-cases/api', label: '接口用例' },
-      { key: '/test-cases/ui', label: '界面自动化' },
+      { key: '/test-cases/ui', label: 'UI自动化' },
     ],
   },
-  { key: '/xmind', icon: <BulbOutlined aria-hidden="true" />, label: 'XMind 转换器' },
+  { key: '/xmind', icon: <BulbOutlined aria-hidden="true" />, label: '用例生成器' },
   { key: '/personnel', icon: <TeamOutlined aria-hidden="true" />, label: '人员管理' },
   { key: '/settings', icon: <SettingOutlined aria-hidden="true" />, label: '设置' },
 ];
 
 function Brand() {
   return (
-    <div className="app-brand" aria-label="智测管理平台">
+    <div className="app-brand" aria-label="测试平台">
       <span className="app-brand__mark">测</span>
-      <span className="app-brand__name">智测管理平台</span>
+      <span className="app-brand__name">测试平台</span>
     </div>
   );
 }
@@ -96,7 +96,7 @@ export function AppShell() {
               id="project-selector"
               aria-label="选择项目"
               value="alpha"
-              options={[{ value: 'alpha', label: '阿尔法测试平台' }]}
+              options={[{ value: 'alpha', label: '测试平台' }]}
             />
             <Tooltip title="通知">
               <Badge dot offset={[-4, 5]}>

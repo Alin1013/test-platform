@@ -11,6 +11,8 @@ it('展示用例总数与最近用例', async () => {
 
   expect(await screen.findByText('用例总数')).toBeInTheDocument();
   expect(screen.getByRole('region', { name: '最近用例' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '新建UI自动化' })).toBeInTheDocument();
+  expect(screen.getAllByText('UI自动化')).not.toHaveLength(0);
 });
 
 it('导出电子表格前选择文件格式', async () => {
@@ -29,7 +31,9 @@ it('导出电子表格前选择文件格式', async () => {
 it('选择 XLSX 后下载工作簿', async () => {
   const user = userEvent.setup();
   let downloadedFilename = '';
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload() {
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload(
+    this: HTMLAnchorElement,
+  ) {
     downloadedFilename = this.download;
   });
   renderApp('/dashboard');

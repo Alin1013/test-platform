@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 const pages = [
   { path: '/dashboard', title: '仪表盘', slug: 'dashboard', screenshot: true },
   { path: '/test-cases/api', title: '测试用例', slug: 'test-cases', screenshot: true },
-  { path: '/xmind', title: 'XMind 转换器', slug: 'xmind', screenshot: true },
+  { path: '/xmind', title: '用例生成器', slug: 'xmind', screenshot: true },
   { path: '/personnel', title: '人员管理', slug: 'personnel', screenshot: true },
   { path: '/settings', title: '系统设置', slug: 'settings', screenshot: false },
 ] as const;
@@ -96,14 +96,14 @@ async function waitForDashboardChart(page: Page) {
   );
 }
 
-test('桌面端可从仪表盘导航到 XMind 转换器和人员管理', async ({ page }, testInfo) => {
+test('桌面端可从仪表盘导航到用例生成器和人员管理', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const browserErrors = collectBrowserErrors(page);
 
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: '仪表盘' })).toBeVisible();
-  await page.getByRole('menuitem', { name: 'XMind 转换器' }).click();
-  await expect(page.getByRole('heading', { name: 'XMind 转换器' })).toBeVisible();
+  await page.getByRole('menuitem', { name: '用例生成器' }).click();
+  await expect(page.getByRole('heading', { name: '用例生成器' })).toBeVisible();
   await page.getByRole('menuitem', { name: '人员管理' }).click();
   await expect(page.getByRole('heading', { name: '人员管理' })).toBeVisible();
 
@@ -155,8 +155,8 @@ test('移动端可打开主导航并在页面间导航且内容不溢出或重�
   await page.getByRole('button', { name: '打开导航' }).click();
   const navigation = page.getByRole('dialog', { name: '主导航' });
   await expect(navigation).toBeVisible();
-  await navigation.getByRole('menuitem', { name: 'XMind 转换器' }).click();
-  await expect(page.getByRole('heading', { name: 'XMind 转换器' })).toBeVisible();
+  await navigation.getByRole('menuitem', { name: '用例生成器' }).click();
+  await expect(page.getByRole('heading', { name: '用例生成器' })).toBeVisible();
 
   await page.getByRole('button', { name: '打开导航' }).click();
   await page.getByRole('dialog', { name: '主导航' }).getByRole('menuitem', { name: '人员管理' }).click();
