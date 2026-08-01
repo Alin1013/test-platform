@@ -1,10 +1,11 @@
-import { ConfigProvider } from 'antd';
+import { App as AntdApp, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { PlatformServiceProvider } from '../services/PlatformServiceContext';
 import { AppShell } from './AppShell';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
 
 interface AppProps {
   router?: 'browser' | 'memory';
@@ -17,7 +18,7 @@ function AppRoutes() {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route element={<AppShell />}>
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/test-cases/:type" element={<PlaceholderPage title="测试用例" />} />
+        <Route path="/test-cases/:type" element={<TestCasesPage />} />
         <Route path="/xmind" element={<PlaceholderPage title="XMind 转换器" />} />
         <Route path="/personnel" element={<PlaceholderPage title="人员管理" />} />
         <Route path="/settings" element={<PlaceholderPage title="系统设置" />} />
@@ -44,7 +45,9 @@ function Providers({ children }: { children: React.ReactNode }) {
       locale={zhCN}
       theme={{ token: { borderRadius: 6, colorPrimary: '#1677ff', fontSize: 14 } }}
     >
-      <PlatformServiceProvider>{children}</PlatformServiceProvider>
+      <AntdApp>
+        <PlatformServiceProvider>{children}</PlatformServiceProvider>
+      </AntdApp>
     </ConfigProvider>
   );
 }
