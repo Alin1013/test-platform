@@ -1,0 +1,3 @@
+# 当前已实现部分为 React 前端，不包含 Python 运行时依赖。
+# 前端依赖由 frontend/package.json 和 frontend/package-lock.json 管理。
+# 后端技术栈确定后，在此文件中添加经过验证并锁定版本的 Python 依赖。

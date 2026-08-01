@@ -4,3 +4,6 @@
 /frontend/playwright-report
 /frontend/test-results
 /docs
+/.playwright-cli
+/frontend/output
+/.venv/

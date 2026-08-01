@@ -6,7 +6,7 @@ import {
   PlusOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { Button, Card, message, Skeleton, Table, Tag } from 'antd';
+import { App, Button, Card, Modal, Segmented, Skeleton, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
 import { Cell, Pie, PieChart } from 'recharts';
@@ -29,6 +29,16 @@ const chartColors: Record<TestCaseType, string> = {
   api: '#43b398',
   ui: '#efb94d',
 };
+
+type ExportFormat = 'csv' | 'xlsx';
+
+function downloadBlob(blob: Blob, filename: string) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
 
 const columns: ColumnsType<TestCaseRecord> = [
   { title: '编号', dataIndex: 'id', width: 120 },
@@ -68,7 +78,11 @@ const columns: ColumnsType<TestCaseRecord> = [
 export function DashboardPage() {
   const service = usePlatformService();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void service.getDashboard().then(setData);
@@ -76,18 +90,37 @@ export function DashboardPage() {
 
   const openCreate = (type: TestCaseType) => navigate(`/test-cases/${type}?create=1`);
 
-  const exportCases = () => {
+  const exportCases = async () => {
     if (!data) return;
-    const rows = ['编号,用例名称,类型,优先级,状态'];
-    data.recentCases.forEach((item) => {
-      rows.push([item.id, item.name, typeLabels[item.type], item.priority, item.status].join(','));
-    });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' }));
-    link.download = '测试用例.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-    void message.success('电子表格已导出');
+    const rows = [
+      ['编号', '用例名称', '类型', '优先级', '状态'],
+      ...data.recentCases.map((item) => [
+        item.id,
+        item.name,
+        typeLabels[item.type],
+        item.priority,
+        item.status,
+      ]),
+    ];
+
+    setExporting(true);
+    try {
+      if (exportFormat === 'xlsx') {
+        const { default: writeExcelFile } = await import('write-excel-file/universal');
+        const blob = await writeExcelFile(rows).toBlob();
+        downloadBlob(blob, '测试用例.xlsx');
+      } else {
+        const csv = rows.map((row) => row.join(',')).join('\n');
+        downloadBlob(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }), '测试用例.csv');
+      }
+
+      setExportDialogOpen(false);
+      void message.success(`${exportFormat.toUpperCase()} 文件已导出`);
+    } catch {
+      void message.error('导出失败，请稍后重试');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!data) {
@@ -139,7 +172,11 @@ export function DashboardPage() {
 
         <Card className="dashboard-card" title="导入导出中心">
           <div className="dashboard-action-stack">
-            <Button icon={<FileExcelOutlined />} onClick={exportCases}>
+            <Button
+              aria-label="导出电子表格"
+              icon={<FileExcelOutlined />}
+              onClick={() => setExportDialogOpen(true)}
+            >
               导出电子表格
             </Button>
             <Button icon={<DownloadOutlined />}>导入用例文件</Button>
@@ -184,6 +221,31 @@ export function DashboardPage() {
           />
         </div>
       </Card>
+
+      <Modal
+        title="导出电子表格"
+        open={exportDialogOpen}
+        okText="导出"
+        cancelText="取消"
+        okButtonProps={{ 'aria-label': '导出' }}
+        cancelButtonProps={{ 'aria-label': '取消' }}
+        confirmLoading={exporting}
+        destroyOnHidden
+        onOk={() => void exportCases()}
+        onCancel={() => setExportDialogOpen(false)}
+      >
+        <p>选择导出文件格式</p>
+        <Segmented<ExportFormat>
+          block
+          aria-label="导出文件格式"
+          value={exportFormat}
+          options={[
+            { label: 'CSV', value: 'csv' },
+            { label: 'XLSX', value: 'xlsx' },
+          ]}
+          onChange={setExportFormat}
+        />
+      </Modal>
     </section>
   );
 }

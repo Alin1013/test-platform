@@ -2,6 +2,13 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../../tests/renderApp';
 
+it('UI 自动化页使用统一名称', async () => {
+  renderApp('/test-cases/ui');
+
+  expect(await screen.findByRole('tab', { name: 'UI自动化' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '新建UI自动化' })).toBeInTheDocument();
+});
+
 it('从仪表盘进入时自动打开接口用例抽屉', async () => {
   renderApp('/test-cases/api?create=1');
 

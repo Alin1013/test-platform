@@ -30,5 +30,15 @@ Object.defineProperty(window, 'scrollTo', {
   value: () => undefined,
 });
 
+Object.defineProperty(URL, 'createObjectURL', {
+  configurable: true,
+  value: () => 'blob:test-download',
+});
+
+Object.defineProperty(URL, 'revokeObjectURL', {
+  configurable: true,
+  value: () => undefined,
+});
+
 const browserGetComputedStyle = window.getComputedStyle;
 window.getComputedStyle = (element: Element) => browserGetComputedStyle(element);

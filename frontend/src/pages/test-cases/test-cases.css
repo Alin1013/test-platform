@@ -158,6 +158,10 @@
 }
 
 @media (max-width: 620px) {
+  .ant-drawer-content-wrapper:has(.case-drawer) {
+    width: min(100vw, 480px) !important;
+  }
+
   .case-list-panel {
     padding: 12px;
   }
