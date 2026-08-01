@@ -6,6 +6,7 @@ import { PlatformServiceProvider } from '../services/PlatformServiceContext';
 import { AppShell } from './AppShell';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
+import { XMindPage } from '../pages/xmind/XMindPage';
 
 interface AppProps {
   router?: 'browser' | 'memory';
@@ -19,7 +20,7 @@ function AppRoutes() {
       <Route element={<AppShell />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
-        <Route path="/xmind" element={<PlaceholderPage title="XMind 转换器" />} />
+        <Route path="/xmind" element={<XMindPage />} />
         <Route path="/personnel" element={<PlaceholderPage title="人员管理" />} />
         <Route path="/settings" element={<PlaceholderPage title="系统设置" />} />
       </Route>

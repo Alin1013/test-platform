@@ -1,0 +1,367 @@
+.xmind-page {
+  max-width: 1320px;
+}
+
+.xmind-dropzone,
+.xmind-uploading,
+.xmind-preview,
+.xmind-complete {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.xmind-dropzone {
+  display: flex;
+  min-height: 430px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 48px 24px;
+  border: 2px dashed #b9c8d8;
+  background: #fbfdff;
+  text-align: center;
+}
+
+.xmind-dropzone:hover {
+  border-color: #438fce;
+  background: #f7fbff;
+}
+
+.xmind-dropzone__icon,
+.xmind-stage-heading__icon {
+  display: grid;
+  place-items: center;
+  color: #1677ff;
+  background: #eaf4fd;
+}
+
+.xmind-dropzone__icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 6px;
+  font-size: 28px;
+}
+
+.xmind-dropzone h2 {
+  margin: 18px 0 0;
+  font-size: 18px;
+}
+
+.xmind-dropzone > p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.xmind-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.xmind-file-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 22px;
+  padding: 4px 15px;
+  border: 1px solid #1677ff;
+  border-radius: 6px;
+  color: #fff;
+  background: #1677ff;
+  cursor: pointer;
+  line-height: 1.55;
+}
+
+.xmind-file-button:hover {
+  border-color: #4096ff;
+  background: #4096ff;
+}
+
+.xmind-file-button:focus-within,
+.xmind-file-input:focus + .xmind-file-button {
+  outline: 2px solid #91caff;
+  outline-offset: 2px;
+}
+
+.xmind-dropzone .xmind-dropzone__error {
+  margin-top: 14px;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.xmind-uploading {
+  display: grid;
+  width: min(720px, 100%);
+  gap: 22px;
+  margin: 64px auto 0;
+  padding: 28px;
+}
+
+.xmind-stage-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.xmind-stage-heading__icon {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  font-size: 19px;
+}
+
+.xmind-stage-heading > div:last-child {
+  min-width: 0;
+}
+
+.xmind-stage-heading span,
+.xmind-eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.xmind-stage-heading h2 {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+
+.xmind-uploading .ant-btn {
+  justify-self: start;
+}
+
+.xmind-preview {
+  overflow: hidden;
+}
+
+.xmind-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xmind-preview__header > div {
+  min-width: 0;
+}
+
+.xmind-preview__header h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+
+.xmind-preview__header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.xmind-preview__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 430px;
+}
+
+.xmind-preview-panel {
+  min-width: 0;
+  padding: 20px 22px;
+}
+
+.xmind-preview-panel + .xmind-preview-panel {
+  border-left: 1px solid var(--border);
+  background: #fbfcfe;
+}
+
+.xmind-preview-panel > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e9eef4;
+}
+
+.xmind-preview-panel h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.xmind-preview-panel header span {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.xmind-tree {
+  padding: 18px 4px;
+  color: #344a61;
+}
+
+.xmind-tree__root,
+.xmind-tree__children > div {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+}
+
+.xmind-tree__root {
+  font-weight: 650;
+}
+
+.xmind-tree__children {
+  position: relative;
+  margin-left: 6px;
+  padding-left: 28px;
+}
+
+.xmind-tree__children::before {
+  position: absolute;
+  top: 0;
+  bottom: 18px;
+  left: 4px;
+  width: 1px;
+  background: #cbd7e3;
+  content: '';
+}
+
+.xmind-tree__children > div::before {
+  position: absolute;
+  left: 4px;
+  width: 18px;
+  height: 1px;
+  background: #cbd7e3;
+  content: '';
+}
+
+.xmind-tree__node,
+.xmind-tree__leaf {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #2b8cc9;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.xmind-tree__leaf {
+  width: 7px;
+  height: 7px;
+  border-width: 1px;
+  border-color: #6e8ba8;
+}
+
+.xmind-mapping {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #dbe5ef;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.xmind-mapping__label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.xmind-mapping strong {
+  display: block;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  color: #1268ae;
+  font-size: 16px;
+}
+
+.xmind-mapping p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.xmind-complete {
+  display: flex;
+  min-height: 430px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.xmind-complete__icon {
+  margin-bottom: 18px;
+  color: var(--success);
+  font-size: 44px;
+}
+
+.xmind-complete h2 {
+  margin: 6px 0 0;
+  font-size: 22px;
+}
+
+.xmind-complete p {
+  max-width: 560px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.xmind-complete__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .xmind-preview__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .xmind-preview__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .xmind-preview-panel + .xmind-preview-panel {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .xmind-dropzone,
+  .xmind-complete {
+    min-height: 350px;
+    padding: 36px 18px;
+  }
+
+  .xmind-uploading,
+  .xmind-preview__header,
+  .xmind-preview-panel {
+    padding: 18px;
+  }
+
+  .xmind-preview__header .ant-btn,
+  .xmind-complete__actions,
+  .xmind-complete__actions .ant-btn {
+    width: 100%;
+  }
+}
