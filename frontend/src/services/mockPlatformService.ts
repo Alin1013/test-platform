@@ -1,4 +1,4 @@
-import { initialTestCases, initialUsers } from '../mocks/fixtures';
+import { initialRoles, initialTestCases, initialUsers } from '../mocks/fixtures';
 import type {
   CreateTestCaseInput,
   CreateUserInput,
@@ -96,6 +96,10 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async setUserEnabled(id: string, enabled: boolean) {
       users = users.map((user) => (user.id === id ? { ...user, enabled } : user));
       await respond(undefined);
+    },
+
+    async listRoles() {
+      return respond(initialRoles);
     },
   };
 }

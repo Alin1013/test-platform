@@ -1,10 +1,11 @@
 import { App as AntdApp, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
 import { PlatformServiceProvider } from '../services/PlatformServiceContext';
 import { AppShell } from './AppShell';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { PersonnelPage } from '../pages/personnel/PersonnelPage';
+import { SettingsPage } from '../pages/settings/SettingsPage';
 import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
 import { XMindPage } from '../pages/xmind/XMindPage';
 
@@ -21,22 +22,10 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
         <Route path="/xmind" element={<XMindPage />} />
-        <Route path="/personnel" element={<PlaceholderPage title="人员管理" />} />
-        <Route path="/settings" element={<PlaceholderPage title="系统设置" />} />
+        <Route path="/personnel" element={<PersonnelPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
-  );
-}
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <section className="page-section">
-      <PageHeader title={title} description="页面内容正在构建中" />
-      <div className="placeholder-panel">
-        <strong>{title}</strong>
-        <p>当前路由与工作台布局已就绪。</p>
-      </div>
-    </section>
   );
 }
 

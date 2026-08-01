@@ -31,3 +31,11 @@ it('新增用户并切换启用状态', async () => {
 
   expect((await service.listUsers()).find((item) => item.id === user.id)?.enabled).toBe(false);
 });
+
+it('返回角色与权限列表', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  const roles = await service.listRoles();
+
+  expect(roles.map((role) => role.name)).toEqual(['测试负责人', '测试工程师', '开发人员']);
+});

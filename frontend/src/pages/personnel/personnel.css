@@ -1,0 +1,145 @@
+.personnel-page {
+  max-width: 1400px;
+}
+
+.personnel-tabs {
+  margin-bottom: 14px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.personnel-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.personnel-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.personnel-panel--permissions {
+  padding: 0;
+  overflow: hidden;
+}
+
+.personnel-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 160px 140px;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.personnel-table-scroll,
+.permission-matrix__scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.personnel-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.personnel-user strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.personnel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.personnel-status > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.personnel-status.is-enabled > span {
+  background: var(--success);
+}
+
+.personnel-status.is-disabled > span {
+  background: #8b98a8;
+}
+
+.permission-matrix {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: var(--text);
+  text-align: center;
+}
+
+.permission-matrix th,
+.permission-matrix td {
+  height: 52px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.permission-matrix thead th {
+  color: #53657a;
+  background: #f7f9fc;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.permission-matrix tbody th {
+  width: 160px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.permission-matrix tbody tr:last-child th,
+.permission-matrix tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.user-drawer-root .ant-drawer-content-wrapper {
+  width: min(100vw, 480px) !important;
+}
+
+.user-drawer__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .personnel-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .personnel-toolbar > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .personnel-panel {
+    padding: 12px;
+  }
+
+  .personnel-panel--permissions {
+    padding: 0;
+  }
+
+  .personnel-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .personnel-toolbar > :first-child {
+    grid-column: auto;
+  }
+}

@@ -3,6 +3,12 @@ export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
 export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已停用';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 export type UserRole = '测试负责人' | '测试工程师' | '开发人员';
+export type PermissionKey =
+  | 'caseView'
+  | 'caseEdit'
+  | 'xmindConvert'
+  | 'personnelManage'
+  | 'systemSettings';
 
 export interface TestCaseRecord {
   id: string;
@@ -55,6 +61,11 @@ export interface CreateUserInput {
   password: string;
 }
 
+export interface PermissionRole {
+  name: UserRole;
+  permissions: Record<PermissionKey, boolean>;
+}
+
 export interface DashboardData {
   counts: Record<TestCaseType, number>;
   total: number;
@@ -68,4 +79,5 @@ export interface PlatformService {
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
+  listRoles(): Promise<PermissionRole[]>;
 }

@@ -1,0 +1,234 @@
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { App, Button, Empty, Input, Select, Skeleton, Switch, Table, Tabs, Tag } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PageHeader } from '../../components/PageHeader';
+import { PersonAvatar } from '../../components/PersonAvatar';
+import { usePlatformService } from '../../services/PlatformServiceContext';
+import type { CreateUserInput, UserRecord, UserRole } from '../../services/contracts';
+import { PermissionMatrix } from './components/PermissionMatrix';
+import { UserDrawer } from './components/UserDrawer';
+import './personnel.css';
+
+type UserStatusFilter = 'enabled' | 'disabled';
+
+const roleOptions: UserRole[] = ['测试负责人', '测试工程师', '开发人员'];
+
+const roleColors: Record<UserRole, string> = {
+  测试负责人: 'blue',
+  测试工程师: 'cyan',
+  开发人员: 'gold',
+};
+
+export function PersonnelPage() {
+  const service = usePlatformService();
+  const { message } = App.useApp();
+  const [activeTab, setActiveTab] = useState('users');
+  const [users, setUsers] = useState<UserRecord[] | null>(null);
+  const [keyword, setKeyword] = useState('');
+  const [role, setRole] = useState<UserRole | undefined>();
+  const [status, setStatus] = useState<UserStatusFilter | undefined>();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      setUsers(await service.listUsers());
+    } catch {
+      setUsers([]);
+      void message.error('用户列表加载失败');
+    }
+  }, [message, service]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  const filteredUsers = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    return users?.filter((user) => {
+      const matchesKeyword =
+        !normalizedKeyword ||
+        user.name.toLowerCase().includes(normalizedKeyword) ||
+        user.email.toLowerCase().includes(normalizedKeyword);
+      const matchesRole = !role || user.role === role;
+      const matchesStatus =
+        !status || (status === 'enabled' ? user.enabled : !user.enabled);
+
+      return matchesKeyword && matchesRole && matchesStatus;
+    });
+  }, [keyword, role, status, users]);
+
+  const setUserEnabled = useCallback(
+    async (user: UserRecord, enabled: boolean) => {
+      setUsers((current) =>
+        current?.map((item) => (item.id === user.id ? { ...item, enabled } : item)) ?? null,
+      );
+      setUpdatingUserId(user.id);
+
+      try {
+        await service.setUserEnabled(user.id, enabled);
+        void message.success(enabled ? '用户已启用' : '用户已停用');
+      } catch {
+        setUsers((current) =>
+          current?.map((item) =>
+            item.id === user.id ? { ...item, enabled: user.enabled } : item,
+          ) ?? null,
+        );
+        void message.error('更新用户状态失败');
+      } finally {
+        setUpdatingUserId(null);
+      }
+    },
+    [message, service],
+  );
+
+  const columns = useMemo<ColumnsType<UserRecord>>(
+    () => [
+      {
+        title: '姓名',
+        dataIndex: 'name',
+        width: 150,
+        render: (name: string) => (
+          <span className="personnel-user">
+            <PersonAvatar name={name} size={28} />
+            <strong>{name}</strong>
+          </span>
+        ),
+      },
+      { title: '邮箱', dataIndex: 'email', width: 230, ellipsis: true },
+      { title: '部门', dataIndex: 'department', width: 140 },
+      {
+        title: '角色',
+        dataIndex: 'role',
+        width: 130,
+        render: (userRole: UserRole) => <Tag color={roleColors[userRole]}>{userRole}</Tag>,
+      },
+      {
+        title: '状态',
+        dataIndex: 'enabled',
+        width: 100,
+        render: (enabled: boolean) => (
+          <span className={`personnel-status ${enabled ? 'is-enabled' : 'is-disabled'}`}>
+            <span aria-hidden="true" />
+            {enabled ? '已启用' : '已停用'}
+          </span>
+        ),
+      },
+      {
+        title: '操作',
+        key: 'actions',
+        width: 104,
+        render: (_, user) => (
+          <Switch
+            size="small"
+            aria-label={`${user.name}的启用状态`}
+            checked={user.enabled}
+            loading={updatingUserId === user.id}
+            disabled={updatingUserId !== null}
+            onChange={(enabled) => void setUserEnabled(user, enabled)}
+          />
+        ),
+      },
+    ],
+    [setUserEnabled, updatingUserId],
+  );
+
+  const addUser = async (input: CreateUserInput) => {
+    const created = await service.addUser(input);
+    await loadUsers();
+    return created;
+  };
+
+  return (
+    <section className="page-section personnel-page">
+      <PageHeader
+        title="人员管理"
+        description="维护用户账号、角色和访问权限"
+        actions={
+          activeTab === 'users' ? (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              aria-label="添加用户"
+              onClick={() => setDrawerOpen(true)}
+            >
+              添加用户
+            </Button>
+          ) : null
+        }
+      />
+
+      <Tabs
+        className="personnel-tabs"
+        activeKey={activeTab}
+        items={[
+          { key: 'users', label: '用户列表' },
+          { key: 'permissions', label: '角色与权限' },
+        ]}
+        onChange={setActiveTab}
+      />
+
+      {activeTab === 'users' ? (
+        <section className="personnel-panel" role="region" aria-label="用户列表">
+          <div className="personnel-toolbar">
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="搜索姓名或邮箱"
+              allowClear
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+            <Select
+              id="personnel-role-filter"
+              aria-label="筛选角色"
+              placeholder="全部角色"
+              allowClear
+              value={role}
+              options={roleOptions.map((value) => ({ value, label: value }))}
+              onChange={setRole}
+            />
+            <Select
+              id="personnel-status-filter"
+              aria-label="筛选状态"
+              placeholder="全部状态"
+              allowClear
+              value={status}
+              options={[
+                { value: 'enabled', label: '已启用' },
+                { value: 'disabled', label: '已停用' },
+              ]}
+              onChange={setStatus}
+            />
+          </div>
+
+          <div className="personnel-table-scroll">
+            {filteredUsers ? (
+              filteredUsers.length ? (
+                <Table
+                  rowKey="id"
+                  columns={columns}
+                  dataSource={filteredUsers}
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: 824 }}
+                />
+              ) : (
+                <Empty description="没有符合条件的用户" />
+              )
+            ) : (
+              <Skeleton active paragraph={{ rows: 6 }} />
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="personnel-panel personnel-panel--permissions">
+          <PermissionMatrix />
+        </section>
+      )}
+
+      <UserDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSubmit={addUser} />
+    </section>
+  );
+}

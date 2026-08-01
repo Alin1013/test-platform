@@ -1,4 +1,4 @@
-import type { TestCaseRecord, UserRecord } from '../services/contracts';
+import type { PermissionRole, TestCaseRecord, UserRecord } from '../services/contracts';
 
 export const initialTestCases: TestCaseRecord[] = [
   {
@@ -105,5 +105,38 @@ export const initialUsers: UserRecord[] = [
     department: '研发部',
     role: '开发人员',
     enabled: true,
+  },
+];
+
+export const initialRoles: PermissionRole[] = [
+  {
+    name: '测试负责人',
+    permissions: {
+      caseView: true,
+      caseEdit: true,
+      xmindConvert: true,
+      personnelManage: true,
+      systemSettings: true,
+    },
+  },
+  {
+    name: '测试工程师',
+    permissions: {
+      caseView: true,
+      caseEdit: true,
+      xmindConvert: true,
+      personnelManage: false,
+      systemSettings: false,
+    },
+  },
+  {
+    name: '开发人员',
+    permissions: {
+      caseView: true,
+      caseEdit: false,
+      xmindConvert: false,
+      personnelManage: false,
+      systemSettings: false,
+    },
   },
 ];
