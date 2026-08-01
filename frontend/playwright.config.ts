@@ -26,7 +26,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:56789',
     browserName: 'chromium',
     locale: 'zh-CN',
     launchOptions: chromiumExecutable ? { executablePath: chromiumExecutable } : undefined,
@@ -44,8 +44,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173',
+    command: 'npm run dev -- --host 127.0.0.1',
+    url: 'http://127.0.0.1:56789',
     reuseExistingServer: !process.env.CI,
   },
 });
