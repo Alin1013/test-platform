@@ -1,0 +1,17 @@
+:root {
+  --nav-bg: #132b48;
+  --nav-active: #1f446d;
+  --nav-text: #c8d7e8;
+  --workspace: #f3f6fa;
+  --surface: #ffffff;
+  --border: #dfe6ee;
+  --text: #1b2b3d;
+  --muted: #6c7c8f;
+  --primary: #1677ff;
+  --success: #2f9b83;
+  --warning: #d89a25;
+  --danger: #d94b55;
+  --shadow: 0 8px 24px rgba(26, 47, 73, 0.08);
+  --sidebar-width: 224px;
+  --topbar-height: 64px;
+}

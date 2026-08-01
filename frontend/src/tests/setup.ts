@@ -29,3 +29,6 @@ Object.defineProperty(window, 'scrollTo', {
   configurable: true,
   value: () => undefined,
 });
+
+const browserGetComputedStyle = window.getComputedStyle;
+window.getComputedStyle = (element: Element) => browserGetComputedStyle(element);
