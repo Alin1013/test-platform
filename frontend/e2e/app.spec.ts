@@ -174,6 +174,37 @@ test('移动端可打开主导航并在页面间导航且内容不溢出或重�
   expect(browserErrors).toEqual([]);
 });
 
+test('移动端长按钮文案在受限宽度内换行且不溢出', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+
+  await page.goto('/dashboard');
+  const button = page.getByRole('button', { name: '从 XMind 生成用例' });
+  await expect(button).toBeVisible();
+  const geometry = await button.evaluate((element) => {
+    element.style.width = '120px';
+    element.style.maxWidth = '120px';
+    const label = Array.from(element.querySelectorAll('span')).find((span) =>
+      span.textContent?.includes('从 XMind 生成用例'),
+    );
+    const buttonBox = element.getBoundingClientRect();
+    const labelBox = label?.getBoundingClientRect();
+
+    return {
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      button: buttonBox.toJSON(),
+      label: labelBox?.toJSON(),
+    };
+  });
+
+  expect(geometry.label).toBeDefined();
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.label!.left).toBeGreaterThanOrEqual(geometry.button.left);
+  expect(geometry.label!.right).toBeLessThanOrEqual(geometry.button.right);
+  expect(geometry.label!.top).toBeGreaterThanOrEqual(geometry.button.top);
+  expect(geometry.label!.bottom).toBeLessThanOrEqual(geometry.button.bottom);
+});
+
 test('桌面和移动端均可访问核心页面与设置并保存核心页面截图', async ({ page }, testInfo) => {
   const browserErrors = collectBrowserErrors(page);
 
