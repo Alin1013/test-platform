@@ -39,3 +39,26 @@ it('返回角色与权限列表', async () => {
 
   expect(roles.map((role) => role.name)).toEqual(['测试负责人', '测试工程师', '开发人员']);
 });
+
+it('保存系统设置后再次读取时返回最新配置', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const settings = await service.getSystemSettings();
+
+  await service.updateSystemSettings({
+    ...settings,
+    general: {
+      ...settings.general,
+      platformName: '质量保障中心',
+      caseNumberPrefix: 'QA-',
+    },
+    execution: {
+      ...settings.execution,
+      retryCount: 3,
+    },
+  });
+
+  await expect(service.getSystemSettings()).resolves.toMatchObject({
+    general: { platformName: '质量保障中心', caseNumberPrefix: 'QA-' },
+    execution: { retryCount: 3 },
+  });
+});

@@ -72,6 +72,37 @@ export interface DashboardData {
   recentCases: TestCaseRecord[];
 }
 
+export type NotificationChannel = 'wechatWork' | 'feishu' | 'dingtalk';
+
+export interface SystemSettings {
+  general: {
+    platformName: string;
+    announcement: string;
+    caseNumberPrefix: string;
+  };
+  execution: {
+    baseUrl: string;
+    retryCount: number;
+    apiTimeoutMs: number;
+  };
+  notifications: Record<NotificationChannel, string>;
+  ai: {
+    apiKey: string;
+    baseUrl: string;
+    defaultModel: string;
+  };
+}
+
+export interface TestWebhookConnectionInput {
+  channel: NotificationChannel;
+  webhookUrl: string;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+}
+
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
@@ -80,4 +111,7 @@ export interface PlatformService {
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
   listRoles(): Promise<PermissionRole[]>;
+  getSystemSettings(): Promise<SystemSettings>;
+  updateSystemSettings(settings: SystemSettings): Promise<SystemSettings>;
+  testWebhookConnection(input: TestWebhookConnectionInput): Promise<TestConnectionResult>;
 }
