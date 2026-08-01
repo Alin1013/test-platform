@@ -1,0 +1,88 @@
+import { initialTestCases, initialUsers } from '../mocks/fixtures';
+import type {
+  CreateTestCaseInput,
+  CreateUserInput,
+  PlatformService,
+  TestCaseQuery,
+  TestCaseRecord,
+  UserRecord,
+} from './contracts';
+
+interface MockServiceOptions {
+  delay?: number;
+}
+
+const copy = <T,>(value: T): T => {
+  if (value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as T;
+};
+
+export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
+  let testCases = copy(initialTestCases);
+  let users = copy(initialUsers);
+  let caseSequence = 260000;
+  let userSequence = 2000;
+
+  const respond = async <T,>(value: T): Promise<T> => {
+    if (delay > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+    }
+    return copy(value);
+  };
+
+  return {
+    async listTestCases(query: TestCaseQuery = {}) {
+      const keyword = query.keyword?.trim().toLowerCase();
+      const rows = testCases.filter((testCase) => {
+        const matchesKeyword =
+          !keyword ||
+          testCase.name.toLowerCase().includes(keyword) ||
+          testCase.id.toLowerCase().includes(keyword) ||
+          testCase.endpoint?.toLowerCase().includes(keyword);
+
+        return (
+          matchesKeyword &&
+          (!query.type || testCase.type === query.type) &&
+          (!query.moduleId || testCase.moduleId === query.moduleId) &&
+          (!query.priority || testCase.priority === query.priority) &&
+          (!query.status || testCase.status === query.status)
+        );
+      });
+      return respond(rows);
+    },
+
+    async createTestCase(input: CreateTestCaseInput) {
+      const created: TestCaseRecord = {
+        ...input,
+        id: `${input.type.toUpperCase()}-${caseSequence++}`,
+        creator: '江珊',
+        maintainer: '江珊',
+        updatedAt: '刚刚',
+      };
+      testCases = [created, ...testCases];
+      return respond(created);
+    },
+
+    async listUsers() {
+      return respond(users);
+    },
+
+    async addUser(input: CreateUserInput) {
+      const created: UserRecord = {
+        id: `USR-${userSequence++}`,
+        name: input.name,
+        email: input.email,
+        department: input.department,
+        role: input.role,
+        enabled: true,
+      };
+      users = [created, ...users];
+      return respond(created);
+    },
+
+    async setUserEnabled(id: string, enabled: boolean) {
+      users = users.map((user) => (user.id === id ? { ...user, enabled } : user));
+      await respond(undefined);
+    },
+  };
+}

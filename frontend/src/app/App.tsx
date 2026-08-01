@@ -1,4 +1,5 @@
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { PlatformServiceProvider } from '../services/PlatformServiceContext';
 
 interface AppProps {
   router?: 'browser' | 'memory';
@@ -19,15 +20,19 @@ export function App({ router = 'browser', initialEntries = ['/'] }: AppProps) {
 
   if (router === 'memory') {
     return (
-      <MemoryRouter initialEntries={initialEntries} future={future}>
-        <AppRoutes />
-      </MemoryRouter>
+      <PlatformServiceProvider>
+        <MemoryRouter initialEntries={initialEntries} future={future}>
+          <AppRoutes />
+        </MemoryRouter>
+      </PlatformServiceProvider>
     );
   }
 
   return (
-    <BrowserRouter future={future}>
-      <AppRoutes />
-    </BrowserRouter>
+    <PlatformServiceProvider>
+      <BrowserRouter future={future}>
+        <AppRoutes />
+      </BrowserRouter>
+    </PlatformServiceProvider>
   );
 }
