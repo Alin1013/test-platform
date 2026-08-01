@@ -31,6 +31,19 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   };
 
   return {
+    async getDashboard() {
+      const counts = {
+        functional: testCases.filter((testCase) => testCase.type === 'functional').length,
+        api: testCases.filter((testCase) => testCase.type === 'api').length,
+        ui: testCases.filter((testCase) => testCase.type === 'ui').length,
+      };
+      return respond({
+        counts,
+        total: counts.functional + counts.api + counts.ui,
+        recentCases: testCases.slice(0, 6),
+      });
+    },
+
     async listTestCases(query: TestCaseQuery = {}) {
       const keyword = query.keyword?.trim().toLowerCase();
       const rows = testCases.filter((testCase) => {

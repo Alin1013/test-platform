@@ -4,6 +4,7 @@ import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-rout
 import { PageHeader } from '../components/PageHeader';
 import { PlatformServiceProvider } from '../services/PlatformServiceContext';
 import { AppShell } from './AppShell';
+import { DashboardPage } from '../pages/dashboard/DashboardPage';
 
 interface AppProps {
   router?: 'browser' | 'memory';
@@ -15,7 +16,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route element={<AppShell />}>
-        <Route path="/dashboard" element={<PlaceholderPage title="仪表盘" />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/test-cases/:type" element={<PlaceholderPage title="测试用例" />} />
         <Route path="/xmind" element={<PlaceholderPage title="XMind 转换器" />} />
         <Route path="/personnel" element={<PlaceholderPage title="人员管理" />} />

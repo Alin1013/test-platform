@@ -55,7 +55,14 @@ export interface CreateUserInput {
   password: string;
 }
 
+export interface DashboardData {
+  counts: Record<TestCaseType, number>;
+  total: number;
+  recentCases: TestCaseRecord[];
+}
+
 export interface PlatformService {
+  getDashboard(): Promise<DashboardData>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   listUsers(): Promise<UserRecord[]>;

@@ -1,0 +1,189 @@
+import {
+  ArrowRightOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
+  FileTextOutlined,
+  PlusOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
+import { Button, Card, message, Skeleton, Table, Tag } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { useEffect, useState } from 'react';
+import { Cell, Pie, PieChart } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../../components/PageHeader';
+import { PersonAvatar } from '../../components/PersonAvatar';
+import { StatusBadge } from '../../components/StatusBadge';
+import { usePlatformService } from '../../services/PlatformServiceContext';
+import type { DashboardData, TestCaseRecord, TestCaseType } from '../../services/contracts';
+import './dashboard.css';
+
+const typeLabels: Record<TestCaseType, string> = {
+  functional: '功能',
+  api: '接口',
+  ui: '界面自动化',
+};
+
+const chartColors: Record<TestCaseType, string> = {
+  functional: '#2b8cc9',
+  api: '#43b398',
+  ui: '#efb94d',
+};
+
+const columns: ColumnsType<TestCaseRecord> = [
+  { title: '编号', dataIndex: 'id', width: 120 },
+  { title: '用例名称', dataIndex: 'name', ellipsis: true },
+  {
+    title: '类型',
+    dataIndex: 'type',
+    width: 110,
+    render: (type: TestCaseType) => <Tag>{typeLabels[type]}</Tag>,
+  },
+  {
+    title: '优先级',
+    dataIndex: 'priority',
+    width: 88,
+    render: (priority: string) => <Tag color={priority === 'P0' ? 'error' : 'gold'}>{priority}</Tag>,
+  },
+  {
+    title: '维护人',
+    dataIndex: 'maintainer',
+    width: 120,
+    render: (name: string) => (
+      <span className="dashboard-person">
+        <PersonAvatar name={name} size={24} />
+        {name}
+      </span>
+    ),
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    width: 100,
+    render: (status: TestCaseRecord['status']) => <StatusBadge status={status} />,
+  },
+  { title: '更新时间', dataIndex: 'updatedAt', width: 110 },
+];
+
+export function DashboardPage() {
+  const service = usePlatformService();
+  const navigate = useNavigate();
+  const [data, setData] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    void service.getDashboard().then(setData);
+  }, [service]);
+
+  const openCreate = (type: TestCaseType) => navigate(`/test-cases/${type}?create=1`);
+
+  const exportCases = () => {
+    if (!data) return;
+    const rows = ['编号,用例名称,类型,优先级,状态'];
+    data.recentCases.forEach((item) => {
+      rows.push([item.id, item.name, typeLabels[item.type], item.priority, item.status].join(','));
+    });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' }));
+    link.download = '测试用例.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    void message.success('电子表格已导出');
+  };
+
+  if (!data) {
+    return (
+      <section className="page-section">
+        <PageHeader title="仪表盘" description="测试资产与协作进度总览" />
+        <Skeleton active paragraph={{ rows: 9 }} />
+      </section>
+    );
+  }
+
+  const chartData = (Object.keys(data.counts) as TestCaseType[]).map((type) => ({
+    name: typeLabels[type],
+    type,
+    value: data.counts[type],
+  }));
+
+  return (
+    <section className="page-section dashboard-page">
+      <PageHeader title="仪表盘" description="测试资产与协作进度总览" />
+
+      <div className="dashboard-overview-grid">
+        <Card className="dashboard-card dashboard-card--overview" title="用例概览">
+          <div className="dashboard-overview">
+            <div className="dashboard-chart" aria-label="用例类型分布">
+              <PieChart width={148} height={148}>
+                <Pie data={chartData} dataKey="value" innerRadius={45} outerRadius={66} paddingAngle={2}>
+                  {chartData.map((item) => (
+                    <Cell key={item.type} fill={chartColors[item.type]} />
+                  ))}
+                </Pie>
+              </PieChart>
+              <div className="dashboard-chart__total">
+                <strong>{data.total}</strong>
+                <span>用例总数</span>
+              </div>
+            </div>
+            <div className="dashboard-legend">
+              {chartData.map((item) => (
+                <div key={item.type}>
+                  <span style={{ background: chartColors[item.type] }} />
+                  <p>{item.name}</p>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="dashboard-card" title="导入导出中心">
+          <div className="dashboard-action-stack">
+            <Button icon={<FileExcelOutlined />} onClick={exportCases}>
+              导出电子表格
+            </Button>
+            <Button icon={<DownloadOutlined />}>导入用例文件</Button>
+            <Button icon={<RobotOutlined />} onClick={() => navigate('/xmind')}>
+              从 XMind 生成用例
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="dashboard-card" title="快捷操作">
+          <div className="dashboard-action-stack dashboard-action-stack--quick">
+            <Button aria-label="新建功能用例" type="primary" icon={<PlusOutlined />} onClick={() => openCreate('functional')}>
+              新建功能用例
+            </Button>
+            <Button aria-label="新建接口用例" icon={<PlusOutlined />} onClick={() => openCreate('api')}>
+              新建接口用例
+            </Button>
+            <Button aria-label="新建界面自动化" icon={<PlusOutlined />} onClick={() => openCreate('ui')}>
+              新建界面自动化
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      <Card
+        className="dashboard-card dashboard-recent"
+        title="最近用例"
+        extra={
+          <Button type="link" icon={<ArrowRightOutlined />} iconPlacement="end" onClick={() => navigate('/test-cases/api')}>
+            查看全部
+          </Button>
+        }
+      >
+        <div role="region" aria-label="最近用例" className="dashboard-table-wrap">
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={data.recentCases}
+            pagination={false}
+            size="small"
+            scroll={{ x: 900 }}
+          />
+        </div>
+      </Card>
+    </section>
+  );
+}

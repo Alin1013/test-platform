@@ -1,0 +1,144 @@
+.dashboard-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 1.35fr) minmax(240px, 0.9fr) minmax(240px, 0.9fr);
+  gap: 16px;
+}
+
+.dashboard-card {
+  border-color: var(--border);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.dashboard-card .ant-card-head {
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.dashboard-card .ant-card-body {
+  padding: 18px;
+}
+
+.dashboard-overview {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  gap: 24px;
+}
+
+.dashboard-chart {
+  position: relative;
+  flex: 0 0 148px;
+  width: 148px;
+  height: 148px;
+}
+
+.dashboard-chart__total {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.dashboard-chart__total strong {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.dashboard-chart__total span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dashboard-legend {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-legend > div {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.dashboard-legend > div:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-legend span {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.dashboard-legend p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.dashboard-action-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-action-stack .ant-btn {
+  min-height: 38px;
+  justify-content: flex-start;
+}
+
+.dashboard-action-stack--quick .ant-btn {
+  min-height: 42px;
+}
+
+.dashboard-recent {
+  margin-top: 16px;
+}
+
+.dashboard-table-wrap {
+  overflow-x: auto;
+}
+
+.dashboard-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-overview-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+
+  .dashboard-card--overview {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-card--overview {
+    grid-column: auto;
+  }
+
+  .dashboard-overview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-chart {
+    align-self: center;
+  }
+}
