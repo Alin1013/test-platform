@@ -27,11 +27,11 @@ it('账号密码错误时停留在登录页并提示错误', async () => {
 
 async function fillRegistrationForm(
   user: ReturnType<typeof userEvent.setup>,
-  values: { account?: string; email?: string; confirmPassword?: string } = {},
+  values: { account?: string; name?: string; email?: string; confirmPassword?: string } = {},
 ) {
   const dialog = screen.getByRole('dialog', { name: '注册账号' });
   await user.type(within(dialog).getByLabelText('账号'), values.account ?? 'newtester');
-  await user.type(within(dialog).getByLabelText('姓名'), '新测试员');
+  await user.type(within(dialog).getByLabelText('姓名'), values.name ?? '新测试员');
   await user.type(
     within(dialog).getByLabelText('邮箱'),
     values.email ?? 'newtester@example.com',
@@ -62,6 +62,18 @@ it('注册时要求两次输入的密码一致', async () => {
   await user.click(within(dialog).getByRole('button', { name: '创建账号' }));
 
   expect(await within(dialog).findByText('两次输入的密码不一致')).toBeInTheDocument();
+});
+
+it('注册时阻止只包含空格的姓名', async () => {
+  const user = userEvent.setup();
+  renderApp('/login');
+
+  await user.click(screen.getByRole('button', { name: '立即注册' }));
+  const dialog = await fillRegistrationForm(user, { name: '   ' });
+  await user.click(within(dialog).getByRole('button', { name: '创建账号' }));
+
+  expect(await within(dialog).findByText('请输入姓名')).toBeInTheDocument();
+  expect(dialog).toBeInTheDocument();
 });
 
 it('注册成功后关闭弹窗并回填登录账号', async () => {

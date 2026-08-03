@@ -182,7 +182,11 @@ export function LoginPage() {
           >
             <Input autoComplete="username" placeholder="请输入账号" />
           </Form.Item>
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
+          <Form.Item
+            name="name"
+            label="姓名"
+            rules={[{ required: true, whitespace: true, message: '请输入姓名' }]}
+          >
             <Input autoComplete="name" placeholder="请输入姓名" />
           </Form.Item>
           <Form.Item
