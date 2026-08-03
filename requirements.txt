@@ -1,3 +1,9 @@
-# 当前已实现部分为 React 前端，不包含 Python 运行时依赖。
-# 前端依赖由 frontend/package.json 和 frontend/package-lock.json 管理。
-# 后端技术栈确定后，在此文件中添加经过验证并锁定版本的 Python 依赖。
+alembic==1.16.4
+email-validator==2.2.0
+fastapi==0.116.1
+httpx==0.28.1
+openpyxl==3.1.5
+pytest==8.4.1
+python-multipart==0.0.20
+SQLAlchemy==2.0.42
+uvicorn[standard]==0.35.0

@@ -7,3 +7,7 @@
 /.playwright-cli
 /frontend/output
 /.venv/
+/backend/test_platform.db
+__pycache__/
+*.py[cod]
+.pytest_cache/
