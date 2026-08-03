@@ -23,7 +23,7 @@ export const initialSystemSettings: SystemSettings = {
   ai: {
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4.1-mini',
+    defaultModel: 'gpt-5.6',
   },
 };
 

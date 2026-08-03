@@ -64,6 +64,7 @@ it('选择默认模型并保存 AI 配置', async () => {
 
   await screen.findByDisplayValue('测试平台');
   await user.click(screen.getByRole('tab', { name: 'AI 模型配置' }));
+  expect(screen.getByText('GPT-5.6（最新 ChatGPT）')).toBeInTheDocument();
   await user.type(screen.getByLabelText('LLM API Key'), 'sk-test-key');
   await user.click(screen.getByLabelText('默认模型'));
   await user.click(await screen.findByText('DeepSeek Chat'));

@@ -15,6 +15,7 @@ const notificationChannels: Array<{ key: NotificationChannel; label: string }> =
 ];
 
 const modelOptions = [
+  { value: 'gpt-5.6', label: 'GPT-5.6（最新 ChatGPT）' },
   { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
   { value: 'gpt-4.1', label: 'GPT-4.1' },
   { value: 'deepseek-chat', label: 'DeepSeek Chat' },

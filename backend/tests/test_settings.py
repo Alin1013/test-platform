@@ -8,6 +8,7 @@ def test_system_settings_can_be_read_and_replaced(client: TestClient) -> None:
     settings = current.json()
     assert settings["general"]["platformName"] == "测试平台"
     assert settings["execution"]["apiTimeoutMs"] == 30000
+    assert settings["ai"]["defaultModel"] == "gpt-5.6"
 
     settings["general"]["platformName"] = "质量中心"
     settings["execution"]["retryCount"] = 2
