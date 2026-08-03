@@ -1,8 +1,8 @@
-"""add domain value constraints
+"""增加领域字段取值约束。
 
-Revision ID: a41b892e7c10
-Revises: ec4691e0b496
-Create Date: 2026-08-03 10:08:00
+修订版本：a41b892e7c10
+前置版本：ec4691e0b496
+创建时间：2026-08-03 10:08:00
 
 """
 from collections.abc import Sequence
@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """限制用户状态、用例枚举和接口详情字段的合法取值。"""
     with op.batch_alter_table("users") as batch_op:
         batch_op.create_check_constraint(
             "ck_users_status", "status IN ('enabled', 'disabled')"
@@ -46,6 +47,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """移除本次增加的领域字段取值约束。"""
     with op.batch_alter_table("api_case_details") as batch_op:
         batch_op.drop_constraint(
             "ck_api_case_details_expected_code", type_="check"

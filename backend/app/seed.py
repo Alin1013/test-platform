@@ -54,6 +54,7 @@ DEFAULT_SETTINGS = {
 
 
 def seed_database(session: Session) -> None:
+    # 角色是整组种子数据的哨兵，已存在时不重复写入任何演示记录。
     if session.scalar(select(Role.id).limit(1)) is not None:
         return
 

@@ -1,3 +1,5 @@
+"""处理用例文件导入导出，并保证批量导入的事务一致性。"""
+
 import csv
 import io
 import json
@@ -102,6 +104,7 @@ def export_cases(
         writer.writerow(EXPORT_HEADERS)
         writer.writerows(exported_rows)
         return ExportedFile(
+            # 添加 UTF-8 BOM，避免常见桌面版 Excel 将中文按本地编码解析。
             content=("\ufeff" + output.getvalue()).encode("utf-8"),
             media_type="text/csv; charset=utf-8",
             filename="test-cases.csv",
@@ -195,6 +198,7 @@ def import_cases(session: Session, filename: str, content: bytes) -> dict:
     if not rows:
         raise HTTPException(status_code=422, detail="Import file has no data rows")
 
+    # 所有行共用一个事务；任意一行失败时，前面已 flush 的记录也会回滚。
     created = []
     for index, row in enumerate(rows, start=2):
         try:

@@ -1,3 +1,5 @@
+"""解析 XMind 节点树，并按需将预览结果原子保存为正式用例。"""
+
 import io
 import json
 import xml.etree.ElementTree as ET
@@ -80,9 +82,11 @@ def parse_xmind(content: bytes) -> list[dict]:
         raise XMindParseError("XMind file exceeds the 10 MB limit")
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            # 同时限制上传体积和声明的解压体积，降低压缩炸弹占满内存的风险。
             if sum(member.file_size for member in archive.infolist()) > MAX_UNCOMPRESSED_BYTES:
                 raise XMindParseError("XMind archive expands beyond the 25 MB limit")
             names = set(archive.namelist())
+            # 新版 XMind 使用 JSON，XMind 8 使用 XML，统一转换为同一种节点结构。
             if "content.json" in names:
                 return _parse_json(archive.read("content.json"))
             if "content.xml" in names:
@@ -110,6 +114,7 @@ def case_preview(tree: list[dict]) -> list[dict]:
         for child in children:
             add_leaves(child, module_name, [*path, node["title"]])
 
+    # 每个根节点的第一层作为模块，后续路径中的叶子节点转换为用例。
     for root in tree:
         modules = root["children"] or [root]
         for module in modules:
@@ -164,6 +169,7 @@ def save_upload(
     )
     session.add(record)
     saved_cases = []
+    # 文件、上传记录和可选的正式用例视为一个整体，任一步失败都清理现场。
     try:
         if module_mapping is not None:
             for preview in cases:

@@ -23,6 +23,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         resolved_upload_dir.mkdir(parents=True, exist_ok=True)
+        # 初始化演示数据是幂等操作，测试和首次本地启动共用这一入口。
         with session_factory() as session:
             seed_database(session)
         yield

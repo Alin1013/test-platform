@@ -1,1 +1,1 @@
-"""Backend integration tests."""
+"""后端集成测试。"""

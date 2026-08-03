@@ -1,1 +1,1 @@
-"""Test platform backend package."""
+"""测试平台后端包。"""

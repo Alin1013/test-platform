@@ -12,6 +12,7 @@ def module_tree(session: Session, project_id: int) -> list[dict]:
     modules = session.scalars(
         select(Module).where(Module.project_id == project_id).order_by(Module.id)
     ).all()
+    # 先建立索引再挂载父子关系，避免递归查询数据库。
     nodes = {
         module.id: {
             "id": module.id,
@@ -62,6 +63,7 @@ def serialize_case(test_case: TestCase) -> dict:
 
 
 def _case_query():
+    # 列表序列化会访问作者和两类扩展详情，预加载可避免逐行查询。
     return select(TestCase).options(
         selectinload(TestCase.author),
         selectinload(TestCase.api_details),
@@ -133,6 +135,7 @@ def list_cases(
 
 
 def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
+    # 此函数只 flush、不 commit，调用方可将单条创建组合进导入或 XMind 批量事务。
     if session.get(Module, payload.module_id) is None:
         raise HTTPException(status_code=404, detail="Module not found")
     if session.get(User, payload.author_id) is None:

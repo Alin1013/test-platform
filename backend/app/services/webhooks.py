@@ -1,3 +1,5 @@
+"""验证并测试通知 Webhook，同时拦截明显的内网访问目标。"""
+
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -12,6 +14,7 @@ def _validate_public_https_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise HTTPException(status_code=422, detail="Webhook must use a public HTTPS URL")
+    # 发送请求前解析全部地址，任一结果指向非公网网段都拒绝访问。
     try:
         addresses = socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
     except socket.gaierror as error:
@@ -25,6 +28,7 @@ def _validate_public_https_url(url: str) -> None:
 def test_connection(payload: WebhookTestRequest) -> dict:
     _validate_public_https_url(payload.webhookUrl)
     message = "测试平台 Webhook 连接测试"
+    # 飞书与企微/钉钉的文本消息结构不同，在边界处统一适配。
     body = (
         {"msg_type": "text", "content": {"text": message}}
         if payload.channel == "feishu"

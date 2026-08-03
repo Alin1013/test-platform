@@ -17,6 +17,7 @@ def create_session_factory(database_url: str = DEFAULT_DATABASE_URL) -> sessionm
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, connect_args=connect_args)
     if database_url.startswith("sqlite"):
+        # SQLite 默认不执行外键约束，每条新连接都必须显式开启。
         @event.listens_for(engine, "connect")
         def enable_sqlite_foreign_keys(dbapi_connection, _) -> None:
             cursor = dbapi_connection.cursor()

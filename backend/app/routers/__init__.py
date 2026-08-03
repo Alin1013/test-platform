@@ -1,1 +1,1 @@
-"""HTTP route controllers."""
+"""HTTP 路由控制器。"""

@@ -27,6 +27,7 @@ def _serialize_user(user: User) -> dict:
 
 
 def _hash_password(password: str) -> str:
+    # 每个密码使用独立随机盐；结果保留算法和迭代次数，便于后续升级校验策略。
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600_000)
     return "pbkdf2_sha256$600000${}${}".format(

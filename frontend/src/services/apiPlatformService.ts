@@ -57,6 +57,7 @@ interface ApiRole extends PermissionRole {
 }
 
 function mapCase(testCase: ApiTestCase): TestCaseRecord {
+  // 传输层使用蛇形字段，页面层继续消费既有的驼峰领域对象。
   const updatedDate = new Date(testCase.updated_at);
   return {
     id: testCase.code,
@@ -100,6 +101,7 @@ export function createApiPlatformService({
     }
     const response = await fetcher(`${normalizedBaseUrl}${path}`, { ...init, headers });
     if (!response.ok) {
+      // FastAPI 的 detail 既可能是文本，也可能是结构化校验错误，统一转换为异常消息。
       const errorBody = (await response.json().catch(() => null)) as { detail?: unknown } | null;
       const detail =
         typeof errorBody?.detail === 'string'
