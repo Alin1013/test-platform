@@ -73,7 +73,7 @@ def _form_payload(raw: bytes) -> dict[str, str | list[str]]:
     return result
 
 
-def _is_binary_media_type(
+def _should_log_body_as_binary(
     media_type: str, content_disposition: str | None = None
 ) -> bool:
     disposition = (
@@ -115,12 +115,12 @@ class _BodyCapture:
                 "size_bytes": self.size_bytes,
                 "truncated": True,
             }
-            if _is_binary_media_type(media_type, self.content_disposition):
+            if _should_log_body_as_binary(media_type, self.content_disposition):
                 metadata["binary"] = True
             return metadata
 
         raw = bytes(self.content)
-        if _is_binary_media_type(media_type, self.content_disposition):
+        if _should_log_body_as_binary(media_type, self.content_disposition):
             return {
                 "content_type": self.content_type,
                 "size_bytes": self.size_bytes,
