@@ -1,0 +1,142 @@
+.settings-page {
+  max-width: 1280px;
+}
+
+.settings-panel {
+  min-height: 440px;
+  padding: 0 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.settings-panel > .ant-skeleton {
+  padding-top: 28px;
+}
+
+.settings-panel .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  max-width: 880px;
+}
+
+.settings-form-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.settings-form-grid .ant-input-number {
+  width: 100%;
+}
+
+.settings-execution-content {
+  max-width: 1000px;
+}
+
+.settings-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.settings-section-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.settings-environment-list {
+  border-top: 1px solid var(--border);
+}
+
+.settings-environment-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.35fr) minmax(260px, 1fr) 40px;
+  align-items: end;
+  gap: 16px;
+  padding: 18px 0 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-environment-row .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.settings-environment-row > .ant-btn {
+  width: 32px;
+  margin-bottom: 16px;
+}
+
+.settings-default-environment {
+  max-width: 360px;
+  margin-top: 20px;
+}
+
+.settings-webhook-list {
+  max-width: 880px;
+}
+
+.settings-webhook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: end;
+  gap: 12px;
+  padding: 2px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-webhook-row + .settings-webhook-row {
+  padding-top: 18px;
+}
+
+.settings-webhook-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-webhook-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .settings-panel {
+    padding: 0 16px 18px;
+  }
+
+  .settings-panel .ant-tabs-nav-wrap {
+    overflow-x: auto;
+  }
+
+  .settings-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-form-grid__wide {
+    grid-column: auto;
+  }
+
+  .settings-environment-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .settings-environment-row > .ant-btn {
+    margin: -4px 0 12px;
+  }
+
+  .settings-webhook-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .settings-webhook-row .ant-btn {
+    justify-self: start;
+  }
+}

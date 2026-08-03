@@ -36,7 +36,11 @@ DEFAULT_SETTINGS = {
         "caseNumberPrefix": "TC-",
     },
     "execution": {
-        "baseUrl": "https://test-api.example.com",
+        "environments": [
+            {"id": "dev", "name": "DEV", "baseUrl": "https://dev-api.example.com"},
+            {"id": "test", "name": "TEST", "baseUrl": "https://test-api.example.com"},
+        ],
+        "defaultEnvironmentId": "test",
         "retryCount": 1,
         "apiTimeoutMs": 30000,
     },

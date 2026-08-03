@@ -74,6 +74,12 @@ export interface DashboardData {
 
 export type NotificationChannel = 'wechatWork' | 'feishu' | 'dingtalk';
 
+export interface TestEnvironment {
+  id: string;
+  name: string;
+  baseUrl: string;
+}
+
 export interface SystemSettings {
   general: {
     platformName: string;
@@ -81,7 +87,8 @@ export interface SystemSettings {
     caseNumberPrefix: string;
   };
   execution: {
-    baseUrl: string;
+    environments: TestEnvironment[];
+    defaultEnvironmentId: string;
     retryCount: number;
     apiTimeoutMs: number;
   };

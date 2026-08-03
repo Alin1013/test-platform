@@ -1,4 +1,4 @@
-import { initialRoles, initialTestCases, initialUsers } from '../mocks/fixtures';
+import { initialRoles, initialSystemSettings, initialTestCases, initialUsers } from '../mocks/fixtures';
 import type {
   CreateTestCaseInput,
   CreateUserInput,
@@ -23,28 +23,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let users = copy(initialUsers);
   let caseSequence = 260000;
   let userSequence = 2000;
-  let systemSettings: SystemSettings = {
-    general: {
-      platformName: '测试平台',
-      announcement: '',
-      caseNumberPrefix: 'TC-',
-    },
-    execution: {
-      baseUrl: 'https://test-api.example.com',
-      retryCount: 1,
-      apiTimeoutMs: 30000,
-    },
-    notifications: {
-      wechatWork: '',
-      feishu: '',
-      dingtalk: '',
-    },
-    ai: {
-      apiKey: '',
-      baseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4.1-mini',
-    },
-  };
+  let systemSettings = copy(initialSystemSettings);
 
   const respond = async <T,>(value: T): Promise<T> => {
     if (delay > 0) {

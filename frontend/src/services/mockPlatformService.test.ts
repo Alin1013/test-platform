@@ -62,3 +62,29 @@ it('保存系统设置后再次读取时返回最新配置', async () => {
     execution: { retryCount: 3 },
   });
 });
+
+it('保存测试环境列表后再次读取时保留环境名称与 Base URL', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const settings = await service.getSystemSettings();
+
+  await service.updateSystemSettings({
+    ...settings,
+    execution: {
+      ...settings.execution,
+      environments: [
+        ...settings.execution.environments,
+        { id: 'staging', name: 'STAG', baseUrl: 'https://staging.example.com' },
+      ],
+      defaultEnvironmentId: 'staging',
+    },
+  });
+
+  await expect(service.getSystemSettings()).resolves.toMatchObject({
+    execution: {
+      defaultEnvironmentId: 'staging',
+      environments: expect.arrayContaining([
+        { id: 'staging', name: 'STAG', baseUrl: 'https://staging.example.com' },
+      ]),
+    },
+  });
+});

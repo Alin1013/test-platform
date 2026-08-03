@@ -1,4 +1,31 @@
-import type { PermissionRole, TestCaseRecord, UserRecord } from '../services/contracts';
+import type { PermissionRole, SystemSettings, TestCaseRecord, UserRecord } from '../services/contracts';
+
+export const initialSystemSettings: SystemSettings = {
+  general: {
+    platformName: '测试平台',
+    announcement: '',
+    caseNumberPrefix: 'TC-',
+  },
+  execution: {
+    environments: [
+      { id: 'dev', name: 'DEV', baseUrl: 'https://dev-api.example.com' },
+      { id: 'test', name: 'TEST', baseUrl: 'https://test-api.example.com' },
+    ],
+    defaultEnvironmentId: 'test',
+    retryCount: 1,
+    apiTimeoutMs: 30000,
+  },
+  notifications: {
+    wechatWork: '',
+    feishu: '',
+    dingtalk: '',
+  },
+  ai: {
+    apiKey: '',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4.1-mini',
+  },
+};
 
 export const initialTestCases: TestCaseRecord[] = [
   {

@@ -95,21 +95,50 @@ class GeneralSettings(SettingsModel):
     caseNumberPrefix: str = Field(pattern=r"^[A-Za-z0-9_-]+$", max_length=16)
 
 
+class TestEnvironment(SettingsModel):
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=32)
+    baseUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
+
+
 class ExecutionSettings(SettingsModel):
-    baseUrl: str = Field(min_length=1, max_length=2048)
+    environments: list[TestEnvironment] = Field(min_length=1, max_length=32)
+    defaultEnvironmentId: str = Field(min_length=1, max_length=64)
     retryCount: int = Field(ge=0, le=3)
     apiTimeoutMs: int = Field(ge=1000, le=300000)
 
+    @model_validator(mode="after")
+    def default_environment_exists(self) -> "ExecutionSettings":
+        environment_ids = [environment.id for environment in self.environments]
+        if len(environment_ids) != len(set(environment_ids)):
+            raise ValueError("environment ids must be unique")
+        environment_names = [environment.name.casefold() for environment in self.environments]
+        if len(environment_names) != len(set(environment_names)):
+            raise ValueError("environment names must be unique")
+        if self.defaultEnvironmentId not in environment_ids:
+            raise ValueError("defaultEnvironmentId must reference an environment")
+        return self
+
 
 class NotificationSettings(SettingsModel):
-    wechatWork: str = Field(max_length=2048)
-    feishu: str = Field(max_length=2048)
-    dingtalk: str = Field(max_length=2048)
+    wechatWork: str = Field(max_length=2048, pattern=r"^$|^https?://")
+    feishu: str = Field(max_length=2048, pattern=r"^$|^https?://")
+    dingtalk: str = Field(max_length=2048, pattern=r"^$|^https?://")
+
+
+class WebhookTestRequest(SettingsModel):
+    channel: Literal["wechatWork", "feishu", "dingtalk"]
+    webhookUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
+
+
+class WebhookTestResponse(SettingsModel):
+    success: bool
+    message: str
 
 
 class AiSettings(SettingsModel):
     apiKey: str = Field(max_length=4096)
-    baseUrl: str = Field(min_length=1, max_length=2048)
+    baseUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
     defaultModel: str = Field(min_length=1, max_length=128)
 
 
