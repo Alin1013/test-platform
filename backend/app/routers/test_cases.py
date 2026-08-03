@@ -1,11 +1,19 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from ..case_file_schemas import TestCaseExportRequest
 from ..dependencies import get_session
-from ..schemas import CaseStatus, CaseType, Priority, TestCaseCreate, TestCaseUpdate
-from ..services import test_cases
+from ..schemas import (
+    CaseStatus,
+    CaseType,
+    Priority,
+    TestCaseCreate,
+    TestCaseUpdate,
+)
+from ..services import case_files, test_cases
 
 router = APIRouter(prefix="/api/v1", tags=["test cases"])
 
@@ -45,6 +53,28 @@ def create_test_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
     return test_cases.create_case(session, payload)
+
+
+@router.post("/test-cases/export")
+def export_test_cases(
+    payload: TestCaseExportRequest,
+    session: Annotated[Session, Depends(get_session)],
+) -> StreamingResponse:
+    exported = case_files.export_cases(session, payload)
+    return StreamingResponse(
+        iter([exported.content]),
+        media_type=exported.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{exported.filename}"'},
+    )
+
+
+@router.post("/test-cases/import", status_code=status.HTTP_201_CREATED)
+async def import_test_cases(
+    file: Annotated[UploadFile, File()],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    content = await file.read(case_files.MAX_IMPORT_BYTES + 1)
+    return case_files.import_cases(session, file.filename or "upload", content)
 
 
 @router.put("/test-cases/{case_id}")

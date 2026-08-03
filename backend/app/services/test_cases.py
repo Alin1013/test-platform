@@ -69,17 +69,14 @@ def _case_query():
     )
 
 
-def list_cases(
-    session: Session,
+def filtered_case_query(
     *,
     case_type: str | None,
     module_id: str | None,
     priority: str | None,
     status: str | None,
     keyword: str | None,
-    page: int,
-    page_size: int,
-) -> dict:
+):
     query = _case_query().outerjoin(ApiCaseDetails)
     if case_type:
         query = query.where(TestCase.type == case_type)
@@ -99,6 +96,27 @@ def list_cases(
             )
         )
 
+    return query
+
+
+def list_cases(
+    session: Session,
+    *,
+    case_type: str | None,
+    module_id: str | None,
+    priority: str | None,
+    status: str | None,
+    keyword: str | None,
+    page: int,
+    page_size: int,
+) -> dict:
+    query = filtered_case_query(
+        case_type=case_type,
+        module_id=module_id,
+        priority=priority,
+        status=status,
+        keyword=keyword,
+    )
     count_query = select(func.count()).select_from(query.order_by(None).subquery())
     total = session.scalar(count_query) or 0
     rows = session.scalars(
@@ -114,7 +132,7 @@ def list_cases(
     }
 
 
-def create_case(session: Session, payload: TestCaseCreate) -> dict:
+def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
     if session.get(Module, payload.module_id) is None:
         raise HTTPException(status_code=404, detail="Module not found")
     if session.get(User, payload.author_id) is None:
@@ -139,6 +157,11 @@ def create_case(session: Session, payload: TestCaseCreate) -> dict:
         test_case.ui_details = (
             details if isinstance(details, UiCaseDetails) else UiCaseDetails(**details.model_dump())
         )
+    return test_case
+
+
+def create_case(session: Session, payload: TestCaseCreate) -> dict:
+    test_case = add_case(session, payload)
     session.commit()
     return serialize_case(test_case)
 
