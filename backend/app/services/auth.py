@@ -8,15 +8,24 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth_schemas import LoginRequest, ProfileUpdate, RegisterRequest
-from ..models import AuthSession, Role, User
+from ..models import AuthSession, User
+from .accounts import (
+    AccountConflictError,
+    AccountCreateInput,
+    AccountRoleNotFoundError,
+    create_account,
+)
 
 
 PASSWORD_ITERATIONS = 600_000
 SESSION_TTL = timedelta(hours=8)
+ACCOUNT_CONFLICT_DETAIL = {
+    "code": "account_or_email_already_exists",
+    "message": "Account or email already exists",
+}
 
 
 def hash_password(password: str) -> str:
@@ -103,25 +112,22 @@ def login(session: Session, payload: LoginRequest) -> dict:
 
 
 def register(session: Session, payload: RegisterRequest) -> dict:
-    role = session.scalar(select(Role).where(Role.name == "测试工程师"))
-    if role is None:
-        raise HTTPException(status_code=500, detail="Default registration role is unavailable")
-
-    user = User(
-        account=payload.account.casefold(),
-        name=payload.name.strip(),
-        email=str(payload.email).casefold(),
-        department="质量保障部",
-        role=role,
-        status="enabled",
-        password_hash=hash_password(payload.password),
-    )
-    session.add(user)
     try:
-        session.commit()
-    except IntegrityError as error:
-        session.rollback()
-        raise HTTPException(status_code=409, detail="Account or email already exists") from error
+        user = create_account(
+            session,
+            AccountCreateInput(
+                account=payload.account.casefold(),
+                name=payload.name,
+                email=str(payload.email).casefold(),
+                department="质量保障部",
+                role_name="测试工程师",
+                password_hash=hash_password(payload.password),
+            ),
+        )
+    except AccountRoleNotFoundError as error:
+        raise HTTPException(status_code=500, detail="Default registration role is unavailable")
+    except AccountConflictError as error:
+        raise HTTPException(status_code=409, detail=ACCOUNT_CONFLICT_DETAIL) from error
     return {"user": serialize_user(user)}
 
 

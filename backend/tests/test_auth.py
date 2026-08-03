@@ -217,7 +217,10 @@ def test_registration_rejects_duplicate_account_or_email(client: TestClient) -> 
     )
     assert duplicate_account.status_code == 409
     assert duplicate_email.status_code == 409
-    assert duplicate_account.json()["detail"] == "Account or email already exists"
+    assert duplicate_account.json()["detail"] == {
+        "code": "account_or_email_already_exists",
+        "message": "Account or email already exists",
+    }
 
 
 def test_registration_rejects_invalid_fields(client: TestClient) -> None:

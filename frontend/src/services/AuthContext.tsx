@@ -1,13 +1,14 @@
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 import {
-  createApiAuthClient,
-  createMemoryAuthClient,
+  createConfiguredAuthClient,
+  AuthClientError,
   type AuthClient,
   type AuthUser,
   type RegisterInput,
   type UpdateProfileInput,
 } from './authClient';
 
+export { AuthClientError } from './authClient';
 export type { AuthUser, RegisterInput, UpdateProfileInput } from './authClient';
 
 interface AuthContextValue {
@@ -26,8 +27,10 @@ interface AuthProviderProps {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function createDefaultClient() {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  return baseUrl ? createApiAuthClient({ baseUrl }) : createMemoryAuthClient();
+  return createConfiguredAuthClient({
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+    mode: import.meta.env.MODE,
+  });
 }
 
 export function AuthProvider({ children, client }: AuthProviderProps) {

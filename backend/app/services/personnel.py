@@ -1,10 +1,15 @@
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Role, User
 from ..schemas import RolePermissionsUpdate, UserCreate
+from .accounts import (
+    AccountConflictError,
+    AccountCreateInput,
+    AccountRoleNotFoundError,
+    create_account,
+)
 from .auth import hash_password
 
 
@@ -57,24 +62,21 @@ def list_users(
 
 
 def create_user(session: Session, payload: UserCreate) -> dict:
-    role = session.scalar(select(Role).where(Role.name == payload.role))
-    if role is None:
-        raise HTTPException(status_code=404, detail="Role not found")
-
-    user = User(
-        account=str(payload.email).partition("@")[0].casefold(),
-        name=payload.name,
-        email=str(payload.email).lower(),
-        department=payload.department,
-        role=role,
-        status="enabled",
-        password_hash=hash_password(payload.password),
-    )
-    session.add(user)
     try:
-        session.commit()
-    except IntegrityError as error:
-        session.rollback()
+        user = create_account(
+            session,
+            AccountCreateInput(
+                account=str(payload.email).partition("@")[0].casefold(),
+                name=payload.name,
+                email=str(payload.email).lower(),
+                department=payload.department,
+                role_name=payload.role,
+                password_hash=hash_password(payload.password),
+            ),
+        )
+    except AccountRoleNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Role not found")
+    except AccountConflictError as error:
         raise HTTPException(status_code=409, detail="Account or email already exists") from error
     return _serialize_user(user)
 

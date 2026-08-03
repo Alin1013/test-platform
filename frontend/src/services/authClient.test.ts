@@ -1,4 +1,7 @@
-import { createApiAuthClient } from './authClient';
+import {
+  createApiAuthClient,
+  createConfiguredAuthClient,
+} from './authClient';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -53,7 +56,17 @@ test('register sends the auth request and maps the created user', async () => {
 test('register surfaces backend conflict details', async () => {
   const client = createApiAuthClient({
     baseUrl: '/api/v1',
-    fetcher: vi.fn(async () => jsonResponse({ detail: 'Account or email already exists' }, 409)),
+    fetcher: vi.fn(async () =>
+      jsonResponse(
+        {
+          detail: {
+            code: 'account_or_email_already_exists',
+            message: 'Account or email already exists',
+          },
+        },
+        409,
+      ),
+    ),
   });
 
   await expect(
@@ -63,5 +76,31 @@ test('register surfaces backend conflict details', async () => {
       email: 'newtester@example.com',
       password: 'Register123',
     }),
-  ).rejects.toThrow('Account or email already exists');
+  ).rejects.toMatchObject({
+    name: 'AuthClientError',
+    code: 'account_or_email_already_exists',
+    status: 409,
+    message: 'Account or email already exists',
+  });
+});
+
+test('development uses the persistent API when no base URL is configured', async () => {
+  const fetcher = vi.fn(async () => jsonResponse({ user: apiUser }, 201));
+  const client = createConfiguredAuthClient({
+    apiBaseUrl: '',
+    mode: 'development',
+    fetcher,
+  });
+
+  await client.register({
+    account: 'newtester',
+    name: '新测试员',
+    email: 'newtester@example.com',
+    password: 'Register123',
+  });
+
+  expect(fetcher).toHaveBeenCalledWith(
+    'http://127.0.0.1:8000/api/v1/auth/register',
+    expect.any(Object),
+  );
 });

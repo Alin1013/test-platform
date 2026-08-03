@@ -2,7 +2,7 @@ import { LoginOutlined, UserAddOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Modal } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../services/AuthContext';
+import { AuthClientError, useAuth } from '../../services/AuthContext';
 import './login.css';
 
 interface LoginFormValues {
@@ -74,8 +74,8 @@ export function LoginPage() {
       setRegistrationSuccess('注册成功，请登录');
     } catch (registrationError) {
       setRegisterError(
-        registrationError instanceof Error &&
-          registrationError.message === 'Account or email already exists'
+        registrationError instanceof AuthClientError &&
+          registrationError.code === 'account_or_email_already_exists'
           ? '账号或邮箱已存在'
           : '注册失败，请稍后重试',
       );

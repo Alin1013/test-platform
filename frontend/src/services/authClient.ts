@@ -1,3 +1,5 @@
+import { initialAuthProfile } from '../mocks/authFixtures';
+
 export interface AuthUser {
   account: string;
   name: string;
@@ -35,6 +37,18 @@ export interface AuthClient {
   updateProfile(token: string | null, input: UpdateProfileInput): Promise<ProfileUpdateResult>;
 }
 
+export class AuthClientError extends Error {
+  readonly code?: string;
+  readonly status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'AuthClientError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 interface ApiUser {
   id: number;
   account: string;
@@ -68,6 +82,19 @@ interface ApiAuthClientOptions {
   fetcher?: Fetcher;
 }
 
+interface ConfiguredAuthClientOptions {
+  apiBaseUrl?: string;
+  mode: string;
+  fetcher?: Fetcher;
+}
+
+interface ApiErrorDetail {
+  code?: unknown;
+  message?: unknown;
+}
+
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+
 function mapUser(user: ApiUser): AuthUser {
   return {
     account: user.account,
@@ -98,13 +125,20 @@ export function createApiAuthClient({
     });
     if (!response.ok) {
       const errorBody = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-      const detail =
-        typeof errorBody?.detail === 'string'
-          ? errorBody.detail
-          : errorBody?.detail
-            ? JSON.stringify(errorBody.detail)
-            : `HTTP ${response.status}`;
-      throw new Error(detail);
+      const detail = errorBody?.detail;
+      const structuredDetail =
+        detail && typeof detail === 'object' ? (detail as ApiErrorDetail) : null;
+      const code =
+        typeof structuredDetail?.code === 'string' ? structuredDetail.code : undefined;
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : typeof structuredDetail?.message === 'string'
+            ? structuredDetail.message
+            : detail
+              ? JSON.stringify(detail)
+              : `HTTP ${response.status}`;
+      throw new AuthClientError(message, response.status, code);
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
@@ -148,20 +182,25 @@ export function createApiAuthClient({
   };
 }
 
+export function createConfiguredAuthClient({
+  apiBaseUrl,
+  mode,
+  fetcher,
+}: ConfiguredAuthClientOptions): AuthClient {
+  if (mode === 'test') return createMemoryAuthClient();
+  return createApiAuthClient({
+    baseUrl: apiBaseUrl?.trim() || DEFAULT_API_BASE_URL,
+    fetcher,
+  });
+}
+
 interface MemoryProfile extends AuthUser {
   email: string;
   password: string;
 }
 
-const initialMemoryProfile: MemoryProfile = {
-  account: 'jiangshan',
-  name: '江珊',
-  email: 'jiangshan@example.com',
-  password: 'Test1234',
-};
-
 export function createMemoryAuthClient(): AuthClient {
-  const profiles: MemoryProfile[] = [{ ...initialMemoryProfile }];
+  const profiles: MemoryProfile[] = [{ ...initialAuthProfile }];
 
   const publicUser = (profile: MemoryProfile): AuthUser => ({
     account: profile.account,
@@ -170,7 +209,7 @@ export function createMemoryAuthClient(): AuthClient {
   });
 
   return {
-    initialUser: publicUser(initialMemoryProfile),
+    initialUser: publicUser(initialAuthProfile),
 
     async login(account, password) {
       const profile = profiles.find(
@@ -188,7 +227,11 @@ export function createMemoryAuthClient(): AuthClient {
           (profile) => profile.account === account || profile.email === email,
         )
       ) {
-        throw new Error('Account or email already exists');
+        throw new AuthClientError(
+          'Account or email already exists',
+          409,
+          'account_or_email_already_exists',
+        );
       }
       const profile: MemoryProfile = {
         account,
@@ -205,7 +248,7 @@ export function createMemoryAuthClient(): AuthClient {
     },
 
     async updateProfile(token, input) {
-      const account = token?.replace(/^memory-/, '') || initialMemoryProfile.account;
+      const account = token?.replace(/^memory-/, '') || initialAuthProfile.account;
       const profile = profiles.find((candidate) => candidate.account === account);
       if (!profile) throw new Error('Invalid or expired access token');
       profile.name = input.name.trim();
