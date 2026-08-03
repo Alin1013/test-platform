@@ -1,7 +1,7 @@
 # 测试管理平台项目结构与功能说明
 
-> 更新日期：2026-08-01  
-> 当前阶段：React 前端原型已实现，业务数据由内存 Mock 服务提供；真实后端、数据持久化及真实 XMind 解析尚未实现。
+> 更新日期：2026-08-03
+> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、XMind 解析及 CSV/XLSX 导入导出。
 
 ## 1. 项目定位
 
@@ -10,22 +10,25 @@
 当前采用前后端分离结构：
 
 - `frontend/`：可运行的 React 前端应用。
-- `backend/`：预留的后端工程目录，目前为空。
+- `backend/`：FastAPI、SQLAlchemy、Alembic 后端服务及 HTTP 集成测试。
 - `docs/`：设计说明和实施计划等项目文档。
-- `requirements.txt`：预留的 Python 后端依赖入口，当前没有运行时依赖。
+- `requirements.txt`：锁定的 Python 后端运行与测试依赖。
 
 ## 2. 根目录层级
 
 ```text
 test-platform/
-├── backend/                       # 后端工程预留目录，当前尚未实现
+├── backend/
+│   ├── app/                       # 模型、路由、服务与应用工厂
+│   ├── migrations/                # Alembic 数据库迁移
+│   └── tests/                     # 后端 HTTP/数据库集成测试
 ├── docs/
 │   └── superpowers/
 │       ├── plans/                 # 分阶段实施计划
 │       └── specs/                 # 产品与技术设计说明
 ├── frontend/                      # React 前端应用
-├── requirements.txt              # 后端 Python 依赖预留文件
-└── PROJECT_STRUCTURE.md           # 本文档：目录层级与功能定义
+├── requirements.txt              # 锁定的 Python 后端依赖
+└── README.md                      # 项目结构、运行与验证说明
 ```
 
 本地开发时可能出现以下生成目录，它们不属于业务源码：
@@ -93,13 +96,13 @@ frontend/
 | 模块 | 路由 | 功能定义 | 当前状态 |
 | --- | --- | --- | --- |
 | 应用框架 | 全局 | 桌面侧栏、顶部项目选择器、通知入口、用户头像及移动端抽屉导航 | 已实现；全局搜索和通知仅有界面入口 |
-| 仪表盘 | `/dashboard` | 展示用例总数和类型分布、最近用例、快捷创建入口，并支持将最近用例导出为 CSV/XLSX | 已实现；导入用例文件仅有界面入口 |
-| 功能用例 | `/test-cases/functional` | 按模块、关键字、优先级和状态筛选；创建时填写前置条件、测试步骤和预期结果 | 原型已实现；创建结果仅保留当前会话 |
-| 接口用例 | `/test-cases/api` | 筛选和展示接口地址、HTTP 方法、预期状态；创建时支持请求头、JSON 请求体校验和断言输入 | 原型已实现；尚未执行真实接口请求 |
-| UI自动化 | `/test-cases/ui` | 筛选 UI 用例；创建时配置页面地址、定位方式和执行环境 | 原型已实现；尚未连接自动化执行引擎 |
-| 用例生成器 | `/xmind` | 完成文件选择、上传进度、节点预览、模块映射和生成结果的线性流程 | 交互演示已实现；未解析真实 XMind 内容，也未持久化生成结果 |
-| 人员管理 | `/personnel` | 查询和筛选用户、新增用户、启用或停用用户；查看角色权限矩阵 | 原型已实现；数据仅保留当前会话，权限矩阵只读 |
-| 系统设置 | `/settings` | 预留平台级配置入口 | 占位页面，配置编辑尚未实现 |
+| 仪表盘 | `/dashboard` | 展示用例总数和类型分布、最近用例、快捷创建入口 | 前后端接口已实现 |
+| 功能用例 | `/test-cases/functional` | 按模块、关键字、优先级和状态筛选及维护功能用例 | CRUD 与文件导入导出已持久化 |
+| 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求及预期响应 | 主表与接口详情扩展表已持久化 |
+| UI自动化 | `/test-cases/ui` | 管理 UI 自动化步骤配置 | 主表与 UI 详情扩展表已持久化；执行引擎未接入 |
+| 用例生成器 | `/xmind` | 上传并解析 XMind 节点树，生成结构化用例预览 | 支持新版 JSON 与 XMind 8 XML 格式 |
+| 人员管理 | `/personnel` | 查询、新增、启停用户并维护角色权限 | 后端筛选、密码哈希和权限更新已实现 |
+| 系统设置 | `/settings` | 维护平台、环境、通知和 AI 配置 | 结构化配置持久化已实现 |
 
 根路径 `/` 会自动重定向到 `/dashboard`。无法识别的测试用例类型在页面内部按接口用例视图处理，但正式导航只生成 `functional`、`api` 和 `ui` 三种类型。
 
@@ -117,7 +120,7 @@ frontend/
 | `setUserEnabled(id, enabled)` | 启用或停用用户 |
 | `listRoles()` | 获取角色及权限矩阵 |
 
-`PlatformServiceContext` 负责向页面注入具体服务。默认实现为 `mockPlatformService`，数据保存在浏览器内存中，刷新页面后会恢复为 `fixtures.ts` 中的初始数据。后续接入后端时，应新增真实 API 服务实现并保持 `PlatformService` 契约稳定，使页面层不依赖具体传输协议。
+`PlatformServiceContext` 负责向页面注入具体服务。未配置环境变量时使用内存 Mock；设置 `VITE_API_BASE_URL` 后使用 `apiPlatformService` 调用真实后端，页面层不依赖具体传输协议。
 
 当前核心领域类型包括：
 
@@ -135,11 +138,21 @@ frontend/
 - 初始演示数据统一放在 `src/mocks/`，不要在页面组件中散落固定业务数据。
 - 全局视觉变量放在 `src/styles/tokens.css`，页面专用样式与页面文件就近存放。
 - 单元测试与被测模块同目录，跨页面测试工具放在 `src/tests/`，真实浏览器流程放在 `e2e/`。
-- 未来后端代码统一放在 `backend/`；后端技术栈确定后，再补充其内部结构和依赖锁定方式。
+- 后端路由放在 `backend/app/routers/`，业务逻辑放在 `backend/app/services/`，数据库模型集中在 `backend/app/models.py`。
+- 数据库结构变化必须同时新增 Alembic 迁移；后端行为通过 `backend/tests/` 的公共 HTTP 或数据库边界测试。
 
 ## 7. 本地开发与验证
 
-在 `frontend/` 目录执行：
+首次启动后端：
+
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/alembic upgrade head
+./.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+```
+
+后端 API 文档位于 `http://localhost:8000/docs`。前端复制 `frontend/.env.example` 中的变量到本地 `.env` 后，在 `frontend/` 目录执行：
 
 ```bash
 npm install          # 安装依赖
@@ -151,3 +164,5 @@ npm run e2e          # 运行 Playwright 端到端测试
 ```
 
 当前技术栈为 React 18、TypeScript、Vite、Ant Design、React Router、Recharts、Vitest、Testing Library 和 Playwright。
+
+后端技术栈为 Python 3.12、FastAPI、SQLAlchemy 2、Alembic、SQLite、Pydantic、OpenPyXL 和 Pytest。后端验证命令为 `./.venv/bin/pytest`。
