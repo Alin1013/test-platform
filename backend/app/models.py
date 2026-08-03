@@ -42,6 +42,7 @@ class User(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     account: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64), index=True)
+    avatar: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     department: Mapped[str] = mapped_column(String(128))
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)

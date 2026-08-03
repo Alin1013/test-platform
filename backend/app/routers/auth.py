@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from ..auth_schemas import AuthUserResponse, LoginRequest, LoginResponse
+from ..auth_schemas import (
+    AuthUserResponse,
+    LoginRequest,
+    LoginResponse,
+    ProfileUpdate,
+    ProfileUpdateResponse,
+)
 from ..dependencies import get_session
 from ..services import auth
 
@@ -41,6 +47,16 @@ def current_user(
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
     return auth.serialize_user(auth.authenticated_user(session, token))
+
+
+@router.patch("/me", response_model=ProfileUpdateResponse)
+def update_current_user(
+    payload: ProfileUpdate,
+    token: Annotated[str, Depends(_access_token)],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    user = auth.authenticated_user(session, token)
+    return auth.update_profile(session, user, payload)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

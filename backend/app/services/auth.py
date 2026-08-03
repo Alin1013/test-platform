@@ -7,10 +7,10 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
-from ..auth_schemas import LoginRequest
+from ..auth_schemas import LoginRequest, ProfileUpdate
 from ..models import AuthSession, User
 
 
@@ -52,6 +52,7 @@ def serialize_user(user: User) -> dict:
         "id": user.id,
         "account": user.account,
         "name": user.name,
+        "avatar": user.avatar,
         "email": user.email,
         "department": user.department,
         "role": user.role.name,
@@ -129,3 +130,23 @@ def logout(session: Session, token: str) -> None:
     auth_session = _authenticated_session(session, token)
     session.delete(auth_session)
     session.commit()
+
+
+def _apply_profile_changes(user: User, payload: ProfileUpdate) -> None:
+    changes = payload.model_dump(exclude_unset=True, exclude={"password"})
+    for field, value in changes.items():
+        setattr(user, field, value)
+
+
+def _replace_password(session: Session, user: User, password: str) -> None:
+    user.password_hash = hash_password(password)
+    session.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
+
+
+def update_profile(session: Session, user: User, payload: ProfileUpdate) -> dict:
+    _apply_profile_changes(user, payload)
+    password_changed = payload.password is not None
+    if password_changed:
+        _replace_password(session, user, payload.password)
+    session.commit()
+    return {"user": serialize_user(user), "password_changed": password_changed}
