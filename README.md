@@ -142,6 +142,7 @@ frontend/
 - 单元测试与被测模块同目录，跨页面测试工具放在 `src/tests/`，真实浏览器流程放在 `e2e/`。
 - 后端路由放在 `backend/app/routers/`，业务逻辑放在 `backend/app/services/`，数据库模型集中在 `backend/app/models.py`。
 - 数据库结构变化必须同时新增 Alembic 迁移；后端行为通过 `backend/tests/` 的公共 HTTP 或数据库边界测试。
+- 新增业务表必须配置准确的中文表 `comment`，并同步注释迁移、数据库文档和全表注释测试；缺少注释的表不得合入。
 
 ## 7. 本地开发与验证
 

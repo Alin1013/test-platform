@@ -183,3 +183,14 @@ SELECT id, account, name, email, status FROM users;
 9 张应用业务表已在 SQLAlchemy 元数据中配置中文 `comment`，迁移也会在支持原生表注释的数据库中写入这些说明。`alembic_version` 由 Alembic 内部管理，不添加应用注释。
 
 SQLite 不支持 `COMMENT ON TABLE`，也不会在数据库文件中持久化表注释。因此 DataGrip 连接当前 `backend/test_platform.db` 时无法从数据库读取原生 Comment；表含义以本文档“数据表总览”和 ORM 元数据为准。切换到 PostgreSQL、MySQL 等支持表注释的数据库并执行迁移后，DataGrip 才能直接显示这些 Comment。
+
+## 7. 新增业务表约定
+
+后续新增任何应用业务表时，必须同时完成以下事项：
+
+1. 在 `backend/app/models.py` 的表定义中配置准确的中文 `comment`。
+2. 新增 Alembic 迁移；对于支持原生表注释的数据库，迁移必须写入并可回滚该注释。
+3. 在本文档中补充表用途、字段和关联关系，并更新仓库最新迁移版本。
+4. 更新 `backend/tests/test_database.py` 的全表注释期望值，确保 ORM 表集合与注释集合完全一致。
+
+`alembic_version` 等第三方工具内部表不属于应用业务表，不受此约定约束。
