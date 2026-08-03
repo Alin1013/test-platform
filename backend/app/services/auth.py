@@ -8,10 +8,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from ..auth_schemas import LoginRequest, ProfileUpdate
-from ..models import AuthSession, User
+from ..auth_schemas import LoginRequest, ProfileUpdate, RegisterRequest
+from ..models import AuthSession, Role, User
 
 
 PASSWORD_ITERATIONS = 600_000
@@ -99,6 +100,29 @@ def login(session: Session, payload: LoginRequest) -> dict:
         "expires_at": expires_at,
         "user": serialize_user(user),
     }
+
+
+def register(session: Session, payload: RegisterRequest) -> dict:
+    role = session.scalar(select(Role).where(Role.name == "测试工程师"))
+    if role is None:
+        raise HTTPException(status_code=500, detail="Default registration role is unavailable")
+
+    user = User(
+        account=payload.account.casefold(),
+        name=payload.name.strip(),
+        email=str(payload.email).casefold(),
+        department="质量保障部",
+        role=role,
+        status="enabled",
+        password_hash=hash_password(payload.password),
+    )
+    session.add(user)
+    try:
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Account or email already exists") from error
+    return {"user": serialize_user(user)}
 
 
 def _authenticated_session(session: Session, token: str) -> AuthSession:

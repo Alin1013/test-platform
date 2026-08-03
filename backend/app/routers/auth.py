@@ -10,6 +10,8 @@ from ..auth_schemas import (
     LoginResponse,
     ProfileUpdate,
     ProfileUpdateResponse,
+    RegisterRequest,
+    RegisterResponse,
 )
 from ..dependencies import get_session
 from ..services import auth
@@ -39,6 +41,14 @@ def login(
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
     return auth.login(session, payload)
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
+def register(
+    payload: RegisterRequest,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    return auth.register(session, payload)
 
 
 @router.get("/me", response_model=AuthUserResponse)

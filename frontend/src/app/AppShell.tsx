@@ -82,14 +82,14 @@ export function AppShell() {
     { key: 'logout', icon: <LogoutOutlined aria-hidden="true" />, label: '退出登录', danger: true },
   ];
 
-  const handleAccountMenuClick = ({ key }: { key: string }) => {
+  const handleAccountMenuClick = async ({ key }: { key: string }) => {
     if (key === 'profile') {
       navigate('/settings?tab=profile');
       return;
     }
 
     if (key === 'switch' || key === 'logout') {
-      logout();
+      await logout();
       navigate('/login', { replace: true });
     }
   };

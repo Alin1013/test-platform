@@ -172,3 +172,76 @@ def test_profile_update_rejects_unsupported_avatar_data(client: TestClient) -> N
 
     assert remote_image.status_code == 422
     assert svg_image.status_code == 422
+
+
+def test_user_can_register_and_login(client: TestClient) -> None:
+    registered = client.post(
+        "/api/v1/auth/register",
+        json={
+            "account": "  new.tester ",
+            "name": "新测试员",
+            "email": "New.Tester@Example.com",
+            "password": "Register123",
+        },
+    )
+
+    assert registered.status_code == 201
+    assert registered.json()["user"]["account"] == "new.tester"
+    assert registered.json()["user"]["email"] == "new.tester@example.com"
+    assert registered.json()["user"]["role"] == "测试工程师"
+    assert registered.json()["user"]["department"] == "质量保障部"
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"account": "new.tester", "password": "Register123"},
+    )
+    assert login.status_code == 200
+
+
+def test_registration_rejects_duplicate_account_or_email(client: TestClient) -> None:
+    payload = {
+        "account": "newtester",
+        "name": "新测试员",
+        "email": "newtester@example.com",
+        "password": "Register123",
+    }
+    assert client.post("/api/v1/auth/register", json=payload).status_code == 201
+
+    duplicate_account = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "email": "another@example.com"},
+    )
+    duplicate_email = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "account": "another"},
+    )
+    assert duplicate_account.status_code == 409
+    assert duplicate_email.status_code == 409
+    assert duplicate_account.json()["detail"] == "Account or email already exists"
+
+
+def test_registration_rejects_invalid_fields(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "account": "bad account",
+            "name": "测试员",
+            "email": "not-an-email",
+            "password": "short",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_registration_rejects_blank_name(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "account": "blankname",
+            "name": "   ",
+            "email": "blankname@example.com",
+            "password": "Register123",
+        },
+    )
+
+    assert response.status_code == 422

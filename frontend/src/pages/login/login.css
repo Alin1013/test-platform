@@ -72,6 +72,44 @@
   margin-top: 4px;
 }
 
+.login-card__register {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-card__register .ant-btn {
+  height: 32px;
+  padding-inline: 6px;
+}
+
+.register-modal {
+  max-width: calc(100vw - 24px);
+}
+
+.register-modal .ant-modal-body {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-inline: 2px;
+}
+
+.register-modal__error {
+  margin-bottom: 16px;
+}
+
+.register-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 @media (max-width: 480px) {
   .login-page {
     padding: 12px;
@@ -79,5 +117,9 @@
 
   .login-card .ant-card-body {
     padding: 28px 22px;
+  }
+
+  .register-modal .ant-modal-body {
+    max-height: calc(100vh - 140px);
   }
 }

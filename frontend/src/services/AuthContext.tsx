@@ -1,66 +1,72 @@
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
+import {
+  createApiAuthClient,
+  createMemoryAuthClient,
+  type AuthClient,
+  type AuthUser,
+  type RegisterInput,
+  type UpdateProfileInput,
+} from './authClient';
 
-export interface AuthUser {
-  account: string;
-  name: string;
-  avatar?: string;
-}
-
-interface AuthProfile extends AuthUser {
-  password: string;
-}
-
-export interface UpdateProfileInput {
-  name: string;
-  avatar?: string;
-  password?: string;
-}
+export type { AuthUser, RegisterInput, UpdateProfileInput } from './authClient';
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (account: string, password: string) => boolean;
-  logout: () => void;
-  updateProfile: (input: UpdateProfileInput) => boolean;
+  login: (account: string, password: string) => Promise<boolean>;
+  register: (input: RegisterInput) => Promise<AuthUser>;
+  logout: () => Promise<void>;
+  updateProfile: (input: UpdateProfileInput) => Promise<boolean>;
 }
 
-const initialProfile: AuthProfile = {
-  account: 'jiangshan',
-  name: '江珊',
-  password: 'Test1234',
-};
+interface AuthProviderProps {
+  children: ReactNode;
+  client?: AuthClient;
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<AuthProfile>(initialProfile);
-  const [user, setUser] = useState<AuthUser | null>(initialProfile);
+function createDefaultClient() {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  return baseUrl ? createApiAuthClient({ baseUrl }) : createMemoryAuthClient();
+}
+
+export function AuthProvider({ children, client }: AuthProviderProps) {
+  const [authClient] = useState(() => client ?? createDefaultClient());
+  const [user, setUser] = useState<AuthUser | null>(authClient.initialUser);
+  const [token, setToken] = useState<string | null>(null);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      login(account, password) {
-        if (account.trim() !== profile.account || password !== profile.password) return false;
-        setUser({ account: profile.account, name: profile.name, avatar: profile.avatar });
-        return true;
-      },
-      logout() {
-        setUser(null);
-      },
-      updateProfile(input) {
-        const nextProfile: AuthProfile = {
-          ...profile,
-          name: input.name.trim(),
-          avatar: input.avatar ?? profile.avatar,
-          password: input.password || profile.password,
-        };
-        setProfile(nextProfile);
-        if (user) {
-          setUser({ account: nextProfile.account, name: nextProfile.name, avatar: nextProfile.avatar });
+      async login(account, password) {
+        try {
+          const session = await authClient.login(account, password);
+          setToken(session.token);
+          setUser(session.user);
+          return true;
+        } catch {
+          return false;
         }
-        return Boolean(input.password);
+      },
+      register(input) {
+        return authClient.register(input);
+      },
+      async logout() {
+        try {
+          await authClient.logout(token);
+        } finally {
+          setToken(null);
+          setUser(null);
+        }
+      },
+      async updateProfile(input) {
+        const result = await authClient.updateProfile(token, input);
+        setUser(result.user);
+        if (result.passwordChanged) setToken(null);
+        return result.passwordChanged;
       },
     }),
-    [profile, user],
+    [authClient, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

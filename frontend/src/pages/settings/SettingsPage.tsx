@@ -93,7 +93,7 @@ export function SettingsPage() {
     }
   };
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     setProfileError('');
     if (!profileName.trim()) {
       setProfileError('请输入用户名');
@@ -105,22 +105,27 @@ export function SettingsPage() {
     }
 
     setSaving(true);
-    const passwordChanged = updateProfile({
-      name: profileName,
-      avatar: profileAvatar,
-      password: newPassword || undefined,
-    });
-    setSaving(false);
+    try {
+      const passwordChanged = await updateProfile({
+        name: profileName,
+        avatar: profileAvatar,
+        password: newPassword || undefined,
+      });
 
-    if (passwordChanged) {
-      logout();
-      navigate('/login', { replace: true });
-      return;
+      if (passwordChanged) {
+        await logout();
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      setNewPassword('');
+      setConfirmPassword('');
+      void message.success('个人信息已保存');
+    } catch {
+      setProfileError('个人信息保存失败');
+    } finally {
+      setSaving(false);
     }
-
-    setNewPassword('');
-    setConfirmPassword('');
-    void message.success('个人信息已保存');
   };
 
   const handleAvatarUpload = (file: File) => {
