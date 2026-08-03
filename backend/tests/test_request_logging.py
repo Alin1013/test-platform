@@ -1,9 +1,10 @@
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.database import Base
@@ -11,7 +12,9 @@ from backend.app.main import create_app
 
 
 @contextmanager
-def logging_client(tmp_path: Path) -> Iterator[tuple[TestClient, Path]]:
+def logging_client(
+    tmp_path: Path, *, raise_server_exceptions: bool = False
+) -> Iterator[tuple[TestClient, Path]]:
     log_path = tmp_path / "logs" / "requests.log"
     app = create_app(
         f"sqlite:///{tmp_path / 'test.db'}",
@@ -26,7 +29,7 @@ def logging_client(tmp_path: Path) -> Iterator[tuple[TestClient, Path]]:
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
     try:
-        with TestClient(app, raise_server_exceptions=False) as test_client:
+        with TestClient(app, raise_server_exceptions=raise_server_exceptions) as test_client:
             yield test_client, log_path
     finally:
         Base.metadata.drop_all(engine)
@@ -38,7 +41,13 @@ def read_records(log_path: Path) -> list[dict[str, object]]:
 
 def test_each_http_request_writes_one_structured_record(tmp_path: Path) -> None:
     with logging_client(tmp_path) as (client, log_path):
-        assert client.get("/health").status_code == 200
+        assert (
+            client.get(
+                "/health?probe=ready",
+                headers={"content-type": "application/test"},
+            ).status_code
+            == 200
+        )
         assert client.get("/missing").status_code == 404
         assert client.get("/__test/error").status_code == 500
 
@@ -49,9 +58,33 @@ def test_each_http_request_writes_one_structured_record(tmp_path: Path) -> None:
         ("GET", "/missing", 404),
         ("GET", "/__test/error", 500),
     ]
+    assert [record["request_content_type"] for record in records] == [
+        "application/test",
+        None,
+        None,
+    ]
+    assert [record["response_content_type"] for record in records] == [
+        "application/json",
+        "application/json",
+        None,
+    ]
     for record in records:
-        datetime.fromisoformat(str(record["timestamp"]))
+        timestamp = datetime.fromisoformat(str(record["timestamp"]))
+        assert timestamp.tzinfo is not None
+        assert timestamp.utcoffset() == timedelta(0)
         assert record["client_ip"] == "testclient"
         assert float(record["duration_ms"]) >= 0
-        assert "request_body" in record
-        assert "response_body" in record
+        assert record["request_body"] is None
+        assert record["response_body"] is None
+
+
+def test_unhandled_error_is_logged_then_reraised(tmp_path: Path) -> None:
+    with logging_client(tmp_path, raise_server_exceptions=True) as (client, log_path):
+        with pytest.raises(RuntimeError, match="test error"):
+            client.get("/__test/error")
+
+    records = read_records(log_path)
+
+    assert [(record["path"], record["status_code"]) for record in records] == [
+        ("/__test/error", 500)
+    ]
