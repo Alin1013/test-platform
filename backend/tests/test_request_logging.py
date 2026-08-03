@@ -118,6 +118,26 @@ def test_json_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -
     assert access_token not in raw_log
 
 
+def test_form_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/api/v1/auth/login",
+            data={"account": "jiangshan", "password": "Test1234"},
+        )
+        assert response.status_code == 422
+
+    record = read_records(log_path)[-1]
+    raw_log = log_path.read_text(encoding="utf-8")
+
+    assert record["request_body"] == {"account": "jiangshan", "password": "***"}
+    response_body = record["response_body"]
+    assert isinstance(response_body, dict)
+    detail = response_body["detail"]
+    assert isinstance(detail, list)
+    assert detail[0]["input"] == "account=jiangshan&password=%2A%2A%2A"
+    assert "Test1234" not in raw_log
+
+
 def test_non_application_json_suffix_body_is_logged_as_text(tmp_path: Path) -> None:
     body = '{"message":"hello"}'
     with logging_client(tmp_path) as (client, log_path):

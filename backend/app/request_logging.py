@@ -6,6 +6,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+from urllib.parse import parse_qsl, urlencode
 
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -58,9 +59,35 @@ def _redact(value: Any) -> Any:
     return value
 
 
+def _parse_form_fields(text: str) -> dict[str, str | list[str]]:
+    fields: dict[str, str | list[str]] = {}
+    for key, value in parse_qsl(text, keep_blank_values=True):
+        existing = fields.get(key)
+        if existing is None:
+            fields[key] = value
+        elif isinstance(existing, list):
+            existing.append(value)
+        else:
+            fields[key] = [existing, value]
+    return fields
+
+
+def _redact_form_strings(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _redact_form_strings(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_form_strings(item) for item in value]
+    if isinstance(value, str):
+        fields = _parse_form_fields(value)
+        if any(_normalized_key(key) in SENSITIVE_KEYS for key in fields):
+            return urlencode(_redact(fields), doseq=True)
+    return value
+
+
 @dataclass
 class _BodyCapture:
     content_type: str | None
+    redact_form_strings: bool = False
     content: bytearray = field(default_factory=bytearray)
 
     def add(self, chunk: bytes) -> None:
@@ -79,7 +106,10 @@ class _BodyCapture:
                 and media_type.startswith("application/")
                 and media_type.endswith("+json")
             ):
-                return _redact(json.loads(text))
+                body = _redact(json.loads(text))
+                return _redact_form_strings(body) if self.redact_form_strings else body
+            if media_type == "application/x-www-form-urlencoded":
+                return _redact(_parse_form_fields(text))
             return text
         except (UnicodeDecodeError, json.JSONDecodeError):
             return {
@@ -139,7 +169,13 @@ class RequestLoggingMiddleware:
             if message["type"] == "http.response.start":
                 status_code = message["status"]
                 response_content_type = _header_value(message.get("headers", []), "content-type")
-                response_capture = _BodyCapture(response_content_type)
+                response_capture = _BodyCapture(
+                    response_content_type,
+                    redact_form_strings=(
+                        _media_type(request_content_type)
+                        == "application/x-www-form-urlencoded"
+                    ),
+                )
             elif message["type"] == "http.response.body" and response_capture is not None:
                 response_capture.add(message.get("body", b""))
             await send(message)
