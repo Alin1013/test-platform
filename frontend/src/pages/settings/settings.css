@@ -100,6 +100,48 @@
   border-bottom: 0;
 }
 
+.settings-profile {
+  max-width: 880px;
+}
+
+.settings-profile__avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.settings-profile__avatar-actions {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.settings-profile__avatar-actions span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-profile__fields {
+  max-width: 720px;
+}
+
+.settings-profile__field {
+  min-width: 0;
+}
+
+.settings-profile__field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.settings-profile__error {
+  margin-top: 4px;
+  color: #d4380d;
+  font-size: 13px;
+}
+
 .settings-webhook-row .ant-form-item {
   margin-bottom: 0;
 }
@@ -138,5 +180,9 @@
 
   .settings-webhook-row .ant-btn {
     justify-self: start;
+  }
+
+  .settings-profile__avatar-row {
+    align-items: flex-start;
   }
 }

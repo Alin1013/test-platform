@@ -100,3 +100,73 @@ it('创建用例后继续遵守当前筛选', async () => {
 
   expect(within(list).queryByText('P1 筛选外用例')).not.toBeInTheDocument();
 });
+
+it('测试用例分页提供统一的每页条数和页码跳转控件', async () => {
+  renderApp('/test-cases/functional');
+
+  await screen.findByRole('region', { name: '功能用例列表' });
+
+  expect(screen.getByRole('combobox', { name: '每页条数' })).toBeInTheDocument();
+  expect(screen.getByRole('spinbutton', { name: '跳转页码' })).toBeInTheDocument();
+
+  await userEvent.setup().click(screen.getByRole('combobox', { name: '每页条数' }));
+  expect(await screen.findByRole('option', { name: '50 条/页' })).toBeInTheDocument();
+});
+
+it('模块目录支持重命名、删除和新增子目录', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/functional');
+
+  await screen.findByRole('treeitem', { name: '鉴权' });
+  await user.click(screen.getByRole('button', { name: '核心模块 操作' }));
+
+  expect(screen.getByRole('menuitem', { name: '重命名' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '新增子目录' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('menuitem', { name: '重命名' }));
+  const renameDialog = await screen.findByRole('dialog', { name: '重命名模块' });
+  const nameInput = within(renameDialog).getByRole('textbox', { name: '目录名称' });
+  await user.clear(nameInput);
+  await user.type(nameInput, '业务核心');
+  await user.click(within(renameDialog).getByRole('button', { name: '确定' }));
+
+  expect(await screen.findByText('业务核心')).toBeInTheDocument();
+  expect(screen.queryByText('核心模块')).not.toBeInTheDocument();
+});
+
+it('新增子目录后可以删除该目录', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/functional');
+
+  await screen.findByRole('treeitem', { name: '鉴权' });
+  await user.click(screen.getByRole('button', { name: '核心模块 操作' }));
+  await user.click(screen.getByRole('menuitem', { name: '新增子目录' }));
+
+  const addDialog = await screen.findByRole('dialog', { name: '新增子目录' });
+  await user.type(within(addDialog).getByRole('textbox', { name: '目录名称' }), '审计');
+  await user.click(within(addDialog).getByRole('button', { name: '确定' }));
+
+  expect(await screen.findByRole('treeitem', { name: '审计' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '审计 操作' }));
+  await user.click(screen.getByRole('menuitem', { name: '删除' }));
+
+  const deleteDialog = await screen.findByRole('dialog', { name: '删除模块' });
+  await user.click(within(deleteDialog).getByRole('button', { name: '删除' }));
+  expect(screen.queryByRole('treeitem', { name: '审计' })).not.toBeInTheDocument();
+});
+
+it('可以在模块根目录新增同级目录', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/functional');
+
+  await screen.findByText('核心模块');
+  await user.click(screen.getByRole('button', { name: '新增根目录' }));
+
+  const addDialog = await screen.findByRole('dialog', { name: '新增根目录' });
+  await user.type(within(addDialog).getByRole('textbox', { name: '目录名称' }), '结算模块');
+  await user.click(within(addDialog).getByRole('button', { name: '确定' }));
+
+  expect(await screen.findByText('结算模块')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '结算模块 操作' })).toBeInTheDocument();
+});

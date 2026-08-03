@@ -34,3 +34,6 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# 数据库相关文档
+DATABASE.md

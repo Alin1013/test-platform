@@ -6,6 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { PersonAvatar } from '../../components/PersonAvatar';
 import { StatusBadge } from '../../components/StatusBadge';
+import { AppPagination } from '../../components/common';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
   CreateTestCaseInput,
@@ -40,6 +41,8 @@ export function TestCasesPage() {
   const [priority, setPriority] = useState<Priority | undefined>();
   const [status, setStatus] = useState<TestCaseStatus | undefined>();
   const [rows, setRows] = useState<TestCaseRecord[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [drawerOpen, setDrawerOpen] = useState(searchParams.get('create') === '1');
   const query = useMemo<TestCaseQuery>(
     () => ({
@@ -67,6 +70,22 @@ export function TestCasesPage() {
       active = false;
     };
   }, [query, service]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const totalPages = rows ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
+  const visibleRows = useMemo(() => {
+    if (!rows) return [];
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [page, pageSize, rows]);
 
   const columns = useMemo<ColumnsType<TestCaseRecord>>(() => {
     const base: ColumnsType<TestCaseRecord> = [
@@ -194,9 +213,9 @@ export function TestCasesPage() {
                 <Table
                   rowKey="id"
                   columns={columns}
-                  dataSource={rows}
+                  dataSource={visibleRows}
                   size="small"
-                  pagination={{ pageSize: 8, showSizeChanger: false }}
+                  pagination={false}
                   scroll={{ x: type === 'api' ? 1080 : 760 }}
                 />
               ) : (
@@ -205,6 +224,17 @@ export function TestCasesPage() {
             ) : (
               <Skeleton active paragraph={{ rows: 7 }} />
             )}
+            {rows ? (
+              <AppPagination
+                current={page}
+                pageSize={pageSize}
+                total={rows.length}
+                onChange={(nextPage, nextPageSize) => {
+                  setPageSize(nextPageSize);
+                  setPage(nextPageSize === pageSize ? nextPage : 1);
+                }}
+              />
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,0 +1,83 @@
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--workspace);
+}
+
+.login-card {
+  width: min(100%, 420px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(30, 54, 82, 0.08);
+}
+
+.login-card .ant-card-body {
+  padding: 36px;
+}
+
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 36px;
+}
+
+.login-card__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  background: #1e82db;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.login-card__brand div {
+  display: grid;
+  gap: 2px;
+}
+
+.login-card__brand strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.login-card__brand span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.login-card__heading h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+}
+
+.login-card__heading p {
+  margin: 8px 0 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-card__error {
+  margin-bottom: 16px;
+}
+
+.login-card__submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: 12px;
+  }
+
+  .login-card .ant-card-body {
+    padding: 28px 22px;
+  }
+}

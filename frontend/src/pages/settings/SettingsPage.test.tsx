@@ -1,8 +1,11 @@
 import { App as AntdApp, ConfigProvider } from 'antd';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { renderApp } from '../../tests/renderApp';
 import { PlatformServiceProvider } from '../../services/PlatformServiceContext';
 import { createMockPlatformService } from '../../services/mockPlatformService';
+import { AuthProvider } from '../../services/AuthContext';
 import { SettingsPage } from './SettingsPage';
 
 function renderSettingsPage() {
@@ -11,15 +14,26 @@ function renderSettingsPage() {
   render(
     <ConfigProvider theme={{ token: { borderRadius: 6, colorPrimary: '#1677ff' } }}>
       <AntdApp>
-        <PlatformServiceProvider service={service}>
-          <SettingsPage />
-        </PlatformServiceProvider>
+        <AuthProvider>
+          <PlatformServiceProvider service={service}>
+            <MemoryRouter>
+              <SettingsPage />
+            </MemoryRouter>
+          </PlatformServiceProvider>
+        </AuthProvider>
       </AntdApp>
     </ConfigProvider>,
   );
 
   return service;
 }
+
+it('个人信息页签位于设置页签首位', async () => {
+  renderSettingsPage();
+
+  await screen.findByDisplayValue('测试平台');
+  expect(screen.getAllByRole('tab')[0]).toHaveTextContent('个人信息');
+});
 
 it('切换设置分类并保存基础设置', async () => {
   const user = userEvent.setup();
@@ -119,4 +133,38 @@ it('添加环境并将其设为默认执行环境', async () => {
   expect(savedSettings.execution.environments).toContainEqual(
     expect.objectContaining({ name: 'STAG', baseUrl: 'https://staging.example.com' }),
   );
+});
+
+it('个人信息页签中账号不可修改且密码需要二次确认', async () => {
+  const user = userEvent.setup();
+  renderSettingsPage();
+
+  await screen.findByDisplayValue('测试平台');
+  await user.click(screen.getByRole('tab', { name: '个人信息' }));
+
+  const account = screen.getByLabelText('账号');
+  expect(account).toBeDisabled();
+
+  await user.type(screen.getByLabelText('新密码'), 'NewPass123');
+  await user.type(screen.getByLabelText('确认新密码'), 'Different123');
+  await user.click(screen.getByRole('button', { name: '保存个人信息' }));
+
+  expect(await screen.findByText('两次输入的密码不一致')).toBeInTheDocument();
+});
+
+it('修改密码后退出到登录页并要求使用新密码重新登录', async () => {
+  const user = userEvent.setup();
+  renderApp('/settings?tab=profile');
+
+  await screen.findByRole('tab', { name: '个人信息' });
+  await user.type(screen.getByLabelText('新密码'), 'NewPass123');
+  await user.type(screen.getByLabelText('确认新密码'), 'NewPass123');
+  await user.click(screen.getByRole('button', { name: '保存个人信息' }));
+
+  expect(await screen.findByRole('heading', { name: '账号登录' })).toBeInTheDocument();
+  await user.type(screen.getByLabelText('账号'), 'jiangshan');
+  await user.type(screen.getByLabelText('密码'), 'NewPass123');
+  await user.click(screen.getByRole('button', { name: '登录' }));
+
+  expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument();
 });

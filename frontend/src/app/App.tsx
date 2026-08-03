@@ -8,6 +8,8 @@ import { PersonnelPage } from '../pages/personnel/PersonnelPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
 import { XMindPage } from '../pages/xmind/XMindPage';
+import { LoginPage } from '../pages/login/LoginPage';
+import { AuthProvider, useAuth } from '../services/AuthContext';
 
 interface AppProps {
   router?: 'browser' | 'memory';
@@ -15,10 +17,13 @@ interface AppProps {
 }
 
 function AppRoutes() {
+  const { user } = useAuth();
+
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route element={<AppShell />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+      <Route element={user ? <AppShell /> : <Navigate to="/login" replace />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
         <Route path="/xmind" element={<XMindPage />} />
@@ -36,7 +41,9 @@ function Providers({ children }: { children: React.ReactNode }) {
       theme={{ token: { borderRadius: 6, colorPrimary: '#1677ff', fontSize: 14 } }}
     >
       <AntdApp>
-        <PlatformServiceProvider>{children}</PlatformServiceProvider>
+        <AuthProvider>
+          <PlatformServiceProvider>{children}</PlatformServiceProvider>
+        </AuthProvider>
       </AntdApp>
     </ConfigProvider>
   );

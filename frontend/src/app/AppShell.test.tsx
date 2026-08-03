@@ -30,3 +30,39 @@ it('菜单按钮打开移动端导航抽屉', async () => {
 
   expect(screen.getByRole('dialog', { name: '主导航' })).toBeInTheDocument();
 });
+
+it('点击头像显示账号操作并可退出登录', async () => {
+  const user = userEvent.setup();
+  renderApp('/dashboard');
+
+  await user.click(screen.getByRole('button', { name: '当前用户：江珊' }));
+
+  expect(screen.getByRole('menuitem', { name: '编辑个人信息' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '切换账号' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('menuitem', { name: '退出登录' }));
+
+  expect(await screen.findByRole('heading', { name: '账号登录' })).toBeInTheDocument();
+});
+
+it('点击编辑个人信息进入设置的个人信息页签', async () => {
+  const user = userEvent.setup();
+  renderApp('/dashboard');
+
+  await user.click(screen.getByRole('button', { name: '当前用户：江珊' }));
+  await user.click(screen.getByRole('menuitem', { name: '编辑个人信息' }));
+
+  expect(await screen.findByRole('heading', { name: '系统设置' })).toBeInTheDocument();
+  expect(await screen.findByRole('tab', { name: '个人信息' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('切换账号也会回到登录页', async () => {
+  const user = userEvent.setup();
+  renderApp('/dashboard');
+
+  await user.click(screen.getByRole('button', { name: '当前用户：江珊' }));
+  await user.click(screen.getByRole('menuitem', { name: '切换账号' }));
+
+  expect(await screen.findByRole('heading', { name: '账号登录' })).toBeInTheDocument();
+});

@@ -26,10 +26,11 @@
 }
 
 .module-panel__title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 6px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 14px;
 }
 
 .module-panel__title h2 {
@@ -37,9 +38,22 @@
   font-size: 14px;
 }
 
-.module-panel__title span {
+.module-panel__count {
+  justify-self: end;
   color: var(--muted);
   font-size: 11px;
+}
+
+.module-panel__root-action {
+  width: 28px;
+  padding-inline: 0;
+  color: #768699;
+}
+
+.module-panel__root-action:hover,
+.module-panel__root-action:focus-visible {
+  color: #1268ae;
+  background: #e4f1fb;
 }
 
 .module-panel__group {
@@ -49,9 +63,25 @@
   font-weight: 700;
 }
 
+.module-panel__group-row,
+.module-panel__item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+}
+
+.module-panel__group-row {
+  min-height: 30px;
+}
+
+.module-panel__item-row {
+  position: relative;
+}
+
 .module-panel__item {
   display: flex;
-  width: 100%;
+  min-width: 0;
+  width: auto;
   min-height: 36px;
   align-items: center;
   gap: 9px;
@@ -80,6 +110,33 @@
   border-radius: 2px;
 }
 
+.module-panel__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-panel__actions {
+  width: 28px;
+  padding-inline: 0;
+  color: #768699;
+  opacity: 1;
+}
+
+.module-panel__item-row:hover .module-panel__actions,
+.module-panel__item-row:focus-within .module-panel__actions,
+.module-panel__group-row:hover .module-panel__actions,
+.module-panel__group-row:focus-within .module-panel__actions {
+  opacity: 1;
+}
+
+.module-panel__actions:hover,
+.module-panel__actions:focus-visible {
+  color: #1268ae;
+  background: #e4f1fb;
+  opacity: 1;
+}
+
 .case-list-panel {
   min-width: 0;
   padding: 16px;
@@ -95,6 +152,27 @@
 .case-list-table {
   min-width: 0;
   overflow-x: auto;
+}
+
+.app-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 32px;
+  margin-top: 14px;
+}
+
+.app-pagination__jumper {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.app-pagination__jumper .ant-input-number {
+  width: 48px;
 }
 
 .case-person {
@@ -142,17 +220,16 @@
   }
 
   .module-panel [role="tree"] {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    gap: 2px;
   }
 
   .module-panel__group {
-    display: none;
+    padding: 4px 10px 0;
   }
 
   .module-panel__item {
-    width: auto;
+    width: 100%;
     padding: 0 12px !important;
   }
 }

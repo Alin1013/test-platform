@@ -3,14 +3,18 @@ import {
   BookOutlined,
   BulbOutlined,
   DashboardOutlined,
+  EditOutlined,
+  LogoutOutlined,
   MenuOutlined,
   SettingOutlined,
+  SwapOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Badge, Button, Drawer, Input, Layout, Menu, Select, Space, Tooltip } from 'antd';
+import { Badge, Button, Dropdown, Drawer, Input, Layout, Menu, Select, Space, Tooltip } from 'antd';
 import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { PersonAvatar } from '../components/PersonAvatar';
+import { useAuth } from '../services/AuthContext';
 import './app-shell.css';
 
 const { Content, Header, Sider } = Layout;
@@ -68,6 +72,27 @@ function Navigation({ onNavigate }: NavigationProps) {
 
 export function AppShell() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const accountMenuItems = [
+    { key: 'profile', icon: <EditOutlined aria-hidden="true" />, label: '编辑个人信息' },
+    { key: 'switch', icon: <SwapOutlined aria-hidden="true" />, label: '切换账号' },
+    { type: 'divider' as const },
+    { key: 'logout', icon: <LogoutOutlined aria-hidden="true" />, label: '退出登录', danger: true },
+  ];
+
+  const handleAccountMenuClick = ({ key }: { key: string }) => {
+    if (key === 'profile') {
+      navigate('/settings?tab=profile');
+      return;
+    }
+
+    if (key === 'switch' || key === 'logout') {
+      logout();
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <Layout className="app-shell">
@@ -103,11 +128,21 @@ export function AppShell() {
                 <Button type="text" icon={<BellOutlined />} aria-label="通知" />
               </Badge>
             </Tooltip>
-            <Tooltip title="当前用户：江珊">
-              <Button className="app-topbar__avatar" type="text" aria-label="当前用户：江珊">
-                <PersonAvatar name="江珊" size={30} />
-              </Button>
-            </Tooltip>
+            <Dropdown
+              trigger={['click']}
+              menu={{ items: accountMenuItems, onClick: handleAccountMenuClick }}
+              placement="bottomRight"
+            >
+              <Tooltip title={`当前用户：${user?.name ?? ''}`}>
+                <Button
+                  className="app-topbar__avatar"
+                  type="text"
+                  aria-label={`当前用户：${user?.name ?? '未登录'}`}
+                >
+                  <PersonAvatar name={user?.name ?? '用'} src={user?.avatar} size={30} />
+                </Button>
+              </Tooltip>
+            </Dropdown>
           </Space>
         </Header>
         <Content className="app-content">

@@ -315,6 +315,17 @@ test('测试用例在 900 和 600 断点保持模块布局、表格滚动与抽�
   expect(modulePanelBox).not.toBeNull();
   expect(caseListBox).not.toBeNull();
   expect(modulePanelBox!.y + modulePanelBox!.height).toBeLessThanOrEqual(caseListBox!.y);
+
+  await page.getByRole('button', { name: '新增根目录' }).click();
+  const addRootDialog = page.getByRole('dialog', { name: '新增根目录' });
+  await addRootDialog.getByRole('textbox', { name: '目录名称' }).fill('结算模块');
+  await addRootDialog.getByRole('button', { name: '确定' }).click();
+  await expect(page.getByText('结算模块', { exact: true })).toBeVisible();
+
+  const moduleActionXs = await page
+    .locator('.module-panel__root-action, .module-panel__actions')
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().x));
+  expect(new Set(moduleActionXs).size).toBe(1);
   await expectTableScroll(page, '.case-list-table');
 
   await page.setViewportSize({ width: 600, height: 900 });

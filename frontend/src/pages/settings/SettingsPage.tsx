@@ -1,7 +1,16 @@
-import { DeleteOutlined, LinkOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { App, Button, Form, Input, InputNumber, Select, Skeleton, Tabs } from 'antd';
+import {
+  DeleteOutlined,
+  LinkOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
+import { App, Button, Form, Input, InputNumber, Select, Skeleton, Tabs, Upload } from 'antd';
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { PersonAvatar } from '../../components/PersonAvatar';
 import { PageHeader } from '../../components/PageHeader';
+import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type { NotificationChannel, SystemSettings } from '../../services/contracts';
 import './settings.css';
@@ -26,12 +35,31 @@ const modelOptions = [
 export function SettingsPage() {
   const service = usePlatformService();
   const { message } = App.useApp();
+  const { user, logout, updateProfile } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [form] = Form.useForm<SystemSettings>();
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState(
+    new URLSearchParams(location.search).get('tab') === 'profile' ? 'profile' : 'general',
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileName, setProfileName] = useState(user?.name ?? '');
+  const [profileAvatar, setProfileAvatar] = useState(user?.avatar);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [profileError, setProfileError] = useState('');
   const [testingChannel, setTestingChannel] = useState<NotificationChannel | null>(null);
   const environments = Form.useWatch(['execution', 'environments'], form) ?? [];
+
+  useEffect(() => {
+    setActiveTab(new URLSearchParams(location.search).get('tab') === 'profile' ? 'profile' : 'general');
+  }, [location.search]);
+
+  useEffect(() => {
+    setProfileName(user?.name ?? '');
+    setProfileAvatar(user?.avatar);
+  }, [user?.avatar, user?.name]);
 
   useEffect(() => {
     let active = true;
@@ -63,6 +91,50 @@ export function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveProfile = () => {
+    setProfileError('');
+    if (!profileName.trim()) {
+      setProfileError('请输入用户名');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setProfileError('两次输入的密码不一致');
+      return;
+    }
+
+    setSaving(true);
+    const passwordChanged = updateProfile({
+      name: profileName,
+      avatar: profileAvatar,
+      password: newPassword || undefined,
+    });
+    setSaving(false);
+
+    if (passwordChanged) {
+      logout();
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    setNewPassword('');
+    setConfirmPassword('');
+    void message.success('个人信息已保存');
+  };
+
+  const handleAvatarUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      void message.error('请选择图片文件');
+      return false;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') setProfileAvatar(reader.result);
+    };
+    reader.readAsDataURL(file);
+    return false;
   };
 
   const testWebhook = async (channel: NotificationChannel) => {
@@ -117,7 +189,68 @@ export function SettingsPage() {
     }
   };
 
+  const profileTab = {
+    key: 'profile',
+    label: '个人信息',
+    children: (
+      <div className="settings-profile">
+        <div className="settings-profile__avatar-row">
+          <PersonAvatar name={profileName || user?.name || '用'} src={profileAvatar} size={72} />
+          <div className="settings-profile__avatar-actions">
+            <Upload
+              accept="image/*"
+              maxCount={1}
+              showUploadList={false}
+              beforeUpload={(file) => handleAvatarUpload(file)}
+            >
+              <Button icon={<UploadOutlined aria-hidden="true" />}>更换头像</Button>
+            </Upload>
+            <span>支持 JPG、PNG 格式图片</span>
+          </div>
+        </div>
+        <div className="settings-form-grid settings-profile__fields">
+          <div className="settings-profile__field">
+            <label htmlFor="profile-account">账号</label>
+            <Input id="profile-account" autoComplete="username" value={user?.account ?? ''} disabled />
+          </div>
+          <div className="settings-profile__field">
+            <label htmlFor="profile-name">用户名</label>
+            <Input
+              id="profile-name"
+              autoComplete="name"
+              value={profileName}
+              maxLength={40}
+              onChange={(event) => setProfileName(event.target.value)}
+            />
+          </div>
+          <div className="settings-profile__field">
+            <label htmlFor="profile-new-password">新密码</label>
+            <Input.Password
+              id="profile-new-password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="不修改请留空"
+            />
+          </div>
+          <div className="settings-profile__field">
+            <label htmlFor="profile-confirm-password">确认新密码</label>
+            <Input.Password
+              id="profile-confirm-password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="再次输入新密码"
+            />
+          </div>
+        </div>
+        {profileError ? <div className="settings-profile__error" role="alert">{profileError}</div> : null}
+      </div>
+    ),
+  };
+
   const tabItems = [
+    profileTab,
     {
       key: 'general',
       label: '基础设置',
@@ -344,9 +477,9 @@ export function SettingsPage() {
             icon={<SaveOutlined aria-hidden="true" />}
             loading={saving}
             disabled={loading}
-            onClick={() => form.submit()}
+            onClick={() => (activeTab === 'profile' ? saveProfile() : form.submit())}
           >
-            保存设置
+            {activeTab === 'profile' ? '保存个人信息' : '保存设置'}
           </Button>
         }
       />
