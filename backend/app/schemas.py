@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 CaseType = Literal["functional", "api", "ui"]
@@ -65,3 +65,21 @@ class TestCaseUpdate(BaseModel):
     author_id: int | None = None
     api_details: ApiDetailsUpdate | None = None
     ui_details: UiDetailsCreate | None = None
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+    email: EmailStr
+    department: str = Field(min_length=1, max_length=128)
+    role: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class UserStatusUpdate(BaseModel):
+    status: Literal["enabled", "disabled"]
+
+
+class RolePermissionsUpdate(BaseModel):
+    permissions: dict[str, bool]
