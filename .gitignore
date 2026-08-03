@@ -8,6 +8,7 @@
 /frontend/output
 /.venv/
 /backend/test_platform.db
+/backend/uploads/
 __pycache__/
 *.py[cod]
 .pytest_cache/
