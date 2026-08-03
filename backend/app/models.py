@@ -23,6 +23,7 @@ class TimestampMixin:
 
 class Role(Base, TimestampMixin):
     __tablename__ = "roles"
+    __table_args__ = {"comment": "角色与权限配置"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -37,6 +38,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("status IN ('enabled', 'disabled')", name="ck_users_status"),
+        {"comment": "用户账号、个人资料与启停状态"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -59,6 +61,7 @@ class User(Base, TimestampMixin):
 
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
+    __table_args__ = {"comment": "用户登录会话与访问令牌摘要"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -73,6 +76,7 @@ class AuthSession(Base):
 
 class Module(Base, TimestampMixin):
     __tablename__ = "modules"
+    __table_args__ = {"comment": "项目测试模块及父子层级"}
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
@@ -99,6 +103,7 @@ class TestCase(Base, TimestampMixin):
             "status IN ('维护中', '已通过', '草稿', '已失败', '已停用')",
             name="ck_test_cases_status",
         ),
+        {"comment": "测试用例公共信息"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -130,6 +135,7 @@ class ApiCaseDetails(Base):
             "expected_code BETWEEN 100 AND 599",
             name="ck_api_case_details_expected_code",
         ),
+        {"comment": "接口测试用例扩展信息"},
     )
 
     case_id: Mapped[int] = mapped_column(
@@ -149,6 +155,7 @@ class ApiCaseDetails(Base):
 
 class UiCaseDetails(Base):
     __tablename__ = "ui_case_details"
+    __table_args__ = {"comment": "UI 自动化用例扩展信息"}
 
     case_id: Mapped[int] = mapped_column(
         ForeignKey("test_cases.id", ondelete="CASCADE"), primary_key=True
@@ -162,6 +169,7 @@ class UiCaseDetails(Base):
 
 class XMindRecord(Base):
     __tablename__ = "xmind_records"
+    __table_args__ = {"comment": "XMind 文件上传与解析记录"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     file_name: Mapped[str] = mapped_column(String(255))
@@ -175,6 +183,7 @@ class XMindRecord(Base):
 
 class SystemConfig(Base):
     __tablename__ = "system_configs"
+    __table_args__ = {"comment": "系统全局配置"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     key: Mapped[str] = mapped_column(String(128), unique=True, index=True)

@@ -1,3 +1,4 @@
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,45 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from backend.app.models import TestCase as CaseRecordModel
+from backend.app.models import Base, TestCase as CaseRecordModel
+
+
+EXPECTED_TABLE_COMMENTS = {
+    "roles": "角色与权限配置",
+    "users": "用户账号、个人资料与启停状态",
+    "auth_sessions": "用户登录会话与访问令牌摘要",
+    "modules": "项目测试模块及父子层级",
+    "test_cases": "测试用例公共信息",
+    "api_case_details": "接口测试用例扩展信息",
+    "ui_case_details": "UI 自动化用例扩展信息",
+    "xmind_records": "XMind 文件上传与解析记录",
+    "system_configs": "系统全局配置",
+}
+
+
+def test_all_application_tables_have_chinese_comments() -> None:
+    assert set(Base.metadata.tables) == set(EXPECTED_TABLE_COMMENTS)
+
+    comments = {
+        table_name: Base.metadata.tables[table_name].comment
+        for table_name in EXPECTED_TABLE_COMMENTS
+    }
+
+    assert comments == EXPECTED_TABLE_COMMENTS
+
+
+def test_comment_migration_emits_native_table_comment_sql(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = StringIO()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/test_platform")
+    config = Config("alembic.ini", output_buffer=output)
+
+    command.upgrade(config, "d84e2b7f6a19:e91f4c6a2d30", sql=True)
+
+    generated_sql = output.getvalue()
+    for table_name, comment in EXPECTED_TABLE_COMMENTS.items():
+        assert f"COMMENT ON TABLE {table_name} IS '{comment}';" in generated_sql
 
 
 def test_sqlite_rejects_records_with_missing_foreign_keys(client: TestClient) -> None:

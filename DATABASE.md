@@ -14,7 +14,7 @@
 | 主机与端口 | 无 |
 | ORM | SQLAlchemy 2 |
 | 迁移工具 | Alembic |
-| 仓库最新迁移版本 | `d84e2b7f6a19` |
+| 仓库最新迁移版本 | `e91f4c6a2d30` |
 
 应用演示账号为 `jiangshan`，密码为 `Test1234`。该凭据仅限本地演示，部署前必须修改或禁用。这是测试平台的应用账号，不是数据库登录信息；密码在数据库中以 PBKDF2 哈希保存。
 
@@ -177,3 +177,9 @@ SELECT id, account, name, email, status FROM users;
 - `users.password_hash` 和 `auth_sessions.token_hash` 分别保存密码哈希与令牌摘要，不包含明文凭据。
 - `system_configs.value` 可能包含 AI API Key、Webhook 等敏感配置，备份和迁移数据库时应按敏感数据处理。
 - 应通过 Alembic 修改数据库结构，不要直接手工修改生产数据库表结构。
+
+## 6. 表注释与 DataGrip
+
+9 张应用业务表已在 SQLAlchemy 元数据中配置中文 `comment`，迁移也会在支持原生表注释的数据库中写入这些说明。`alembic_version` 由 Alembic 内部管理，不添加应用注释。
+
+SQLite 不支持 `COMMENT ON TABLE`，也不会在数据库文件中持久化表注释。因此 DataGrip 连接当前 `backend/test_platform.db` 时无法从数据库读取原生 Comment；表含义以本文档“数据表总览”和 ORM 元数据为准。切换到 PostgreSQL、MySQL 等支持表注释的数据库并执行迁移后，DataGrip 才能直接显示这些 Comment。
