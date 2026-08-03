@@ -71,8 +71,18 @@ def test_disabled_user_cannot_login_or_reuse_an_access_token(client: TestClient)
         "/api/v1/auth/login",
         json={"account": "jiangshan", "password": "Test1234"},
     )
-    assert rejected_login.status_code == 401
-    assert rejected_login.json()["detail"] == "Invalid account or password"
+    assert rejected_login.status_code == 403
+    assert rejected_login.json()["detail"] == {
+        "code": "account_disabled",
+        "message": "Account is disabled",
+    }
+
+    rejected_with_wrong_password = client.post(
+        "/api/v1/auth/login",
+        json={"account": "jiangshan", "password": "wrong-password"},
+    )
+    assert rejected_with_wrong_password.status_code == 401
+    assert rejected_with_wrong_password.json()["detail"] == "Invalid account or password"
 
 
 def test_user_can_update_profile_without_revoking_access_token(client: TestClient) -> None:

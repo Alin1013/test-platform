@@ -47,7 +47,8 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
           setToken(session.token);
           setUser(session.user);
           return true;
-        } catch {
+        } catch (error) {
+          if (error instanceof AuthClientError) throw error;
           return false;
         }
       },

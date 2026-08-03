@@ -40,6 +40,12 @@ export function LoginPage() {
         return;
       }
       navigate('/dashboard', { replace: true });
+    } catch (loginError) {
+      setError(
+        loginError instanceof AuthClientError && loginError.code === 'account_disabled'
+          ? '当前用户已禁用'
+          : '账号或密码错误',
+      );
     } finally {
       setSubmitting(false);
     }

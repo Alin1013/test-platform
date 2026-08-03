@@ -26,6 +26,10 @@ ACCOUNT_CONFLICT_DETAIL = {
     "code": "account_or_email_already_exists",
     "message": "Account or email already exists",
 }
+ACCOUNT_DISABLED_DETAIL = {
+    "code": "account_disabled",
+    "message": "Account is disabled",
+}
 
 
 def hash_password(password: str) -> str:
@@ -86,12 +90,13 @@ def login(session: Session, payload: LoginRequest) -> dict:
         .options(selectinload(User.role))
         .where(User.account == account)
     )
-    if (
-        user is None
-        or user.status != "enabled"
-        or not verify_password(payload.password, user.password_hash)
-    ):
+    if user is None or not verify_password(payload.password, user.password_hash):
         raise _unauthorized()
+    if user.status != "enabled":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ACCOUNT_DISABLED_DETAIL,
+        )
 
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + SESSION_TTL
