@@ -1,7 +1,7 @@
 # 测试管理平台项目结构与功能说明
 
 > 更新日期：2026-08-03
-> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、XMind 解析及 CSV/XLSX 导入导出。
+> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、账号认证、用户资料维护、XMind 解析及 CSV/XLSX 导入导出。
 
 ## 1. 项目定位
 
@@ -27,6 +27,7 @@ test-platform/
 │       ├── plans/                 # 分阶段实施计划
 │       └── specs/                 # 产品与技术设计说明
 ├── frontend/                      # React 前端应用
+├── DATABASE.md                    # 数据库表结构、连接信息与维护命令
 ├── requirements.txt              # 锁定的 Python 后端依赖
 └── README.md                      # 项目结构、运行与验证说明
 ```
@@ -103,6 +104,7 @@ frontend/
 | 用例生成器 | `/xmind` | 上传并解析 XMind 节点树，生成结构化用例预览 | 支持新版 JSON 与 XMind 8 XML 格式 |
 | 人员管理 | `/personnel` | 查询、新增、启停用户并维护角色权限 | 后端筛选、密码哈希和权限更新已实现 |
 | 系统设置 | `/settings` | 维护平台、环境、通知和 AI 配置 | 结构化配置持久化已实现 |
+| 账号认证 | `/login` | 账号密码登录、退出及当前用户资料维护 | 后端使用可撤销会话令牌，修改密码后全部会话失效 |
 
 根路径 `/` 会自动重定向到 `/dashboard`。无法识别的测试用例类型在页面内部按接口用例视图处理，但正式导航只生成 `functional`、`api` 和 `ui` 三种类型。
 
@@ -126,7 +128,7 @@ frontend/
 
 - 用例类型：`functional`、`api`、`ui`。
 - 优先级：`P0`、`P1`、`P2`、`P3`。
-- 用例状态：`维护中`、`已通过`、`草稿`、`已停用`。
+- 用例状态：`维护中`、`已通过`、`草稿`、`已失败`、`已停用`。
 - 用户角色：`测试负责人`、`测试工程师`、`开发人员`。
 - 权限项：用例查看、用例编辑、XMind 转换、人员管理和系统设置。
 
@@ -152,7 +154,10 @@ python3 -m venv .venv
 ./.venv/bin/uvicorn backend.app.main:app --reload --port 8000
 ```
 
-后端 API 文档位于 `http://localhost:8000/docs`。前端复制 `frontend/.env.example` 中的变量到本地 `.env` 后，在 `frontend/` 目录执行：
+后端 API 文档位于 `http://localhost:8000/docs`。
+本地演示平台账号为 `jiangshan`，密码为 `Test1234`。该账号仅限本地演示，部署前必须修改或禁用；它用于应用登录，不是数据库账号。SQLite 数据库不使用用户名或密码，完整的表结构、连接方式和维护命令见 [`DATABASE.md`](DATABASE.md)。
+
+前端复制 `frontend/.env.example` 中的变量到本地 `.env` 后，在 `frontend/` 目录执行：
 
 ```bash
 npm install          # 安装依赖
