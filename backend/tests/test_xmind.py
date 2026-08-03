@@ -50,6 +50,25 @@ def test_xmind_upload_returns_tree_case_preview_and_record(client: TestClient) -
         "密码错误时提示",
     ]
     assert all(case["module"] == "鉴权" for case in body["cases"])
+    assert body["saved_cases"] == []
+
+
+def test_xmind_preview_can_be_saved_to_mapped_modules(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/xmind/upload-parse",
+        files={"file": ("登录用例.xmind", make_xmind_file(), "application/octet-stream")},
+        data={
+            "uploader_id": "1",
+            "save_cases": "true",
+            "module_mapping": '{"鉴权":"auth"}',
+        },
+    )
+
+    assert response.status_code == 201
+    assert len(response.json()["saved_cases"]) == 2
+    assert all(item["code"].startswith("FUN-") for item in response.json()["saved_cases"])
+    listed = client.get("/api/v1/test-cases", params={"keyword": "登录成功"}).json()
+    assert any(item["title"] == "账号密码登录成功" for item in listed["items"])
 
 
 def test_xmind_upload_rejects_non_xmind_and_invalid_archives(client: TestClient) -> None:

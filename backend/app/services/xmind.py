@@ -9,7 +9,9 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ..models import User, XMindRecord
+from ..models import Module, User, XMindRecord
+from ..schemas import TestCaseCreate
+from . import test_cases
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
@@ -126,14 +128,34 @@ def save_upload(
     content: bytes,
     uploader_id: int,
     upload_dir: Path,
+    module_mapping: dict[str, str] | None = None,
 ) -> dict:
     if session.get(User, uploader_id) is None:
         raise HTTPException(status_code=404, detail="Uploader not found")
     tree = parse_xmind(content)
     cases = case_preview(tree)
+    if module_mapping is not None:
+        missing_names = sorted({case["module"] for case in cases} - module_mapping.keys())
+        if missing_names:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing module mappings: {', '.join(missing_names)}",
+            )
+        missing_modules = sorted(
+            {
+                module_id
+                for module_id in module_mapping.values()
+                if session.get(Module, module_id) is None
+            }
+        )
+        if missing_modules:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Mapped modules not found: {', '.join(missing_modules)}",
+            )
+
     stored_name = f"{uuid4().hex}.xmind"
     destination = upload_dir / stored_name
-    destination.write_bytes(content)
     record = XMindRecord(
         file_name=original_name,
         file_url=f"/uploads/{stored_name}",
@@ -141,9 +163,26 @@ def save_upload(
         parsed_cases_count=len(cases),
     )
     session.add(record)
+    saved_cases = []
     try:
+        if module_mapping is not None:
+            for preview in cases:
+                created = test_cases.add_case(
+                    session,
+                    TestCaseCreate(
+                        title=preview["title"],
+                        type="functional",
+                        module_id=module_mapping[preview["module"]],
+                        priority="P1",
+                        status="草稿",
+                        author_id=uploader_id,
+                    ),
+                )
+                saved_cases.append(created)
+        destination.write_bytes(content)
         session.commit()
     except Exception:
+        session.rollback()
         destination.unlink(missing_ok=True)
         raise
     return {
@@ -157,4 +196,13 @@ def save_upload(
         },
         "tree": tree,
         "cases": cases,
+        "saved_cases": [
+            {
+                "id": test_case.id,
+                "code": test_case.code,
+                "title": test_case.title,
+                "module_id": test_case.module_id,
+            }
+            for test_case in saved_cases
+        ],
     }
