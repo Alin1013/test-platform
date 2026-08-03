@@ -1,14 +1,35 @@
 /.superpowers
-/frontend/node_modules
-/frontend/dist
-/frontend/playwright-report
-/frontend/test-results
 /docs
 /.playwright-cli
-/frontend/output
 /.venv/
-/backend/test_platform.db
-/backend/uploads/
+
+# Python caches and local runtime data
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+/backend/test_platform.db
+/backend/uploads/
+
+# Frontend dependencies, caches, and generated reports
+/frontend/node_modules
+/frontend/dist
+/frontend/.vite
+/frontend/playwright-report
+/frontend/test-results
+/frontend/output
+*.tsbuildinfo
+.eslintcache
+
+# Local configuration, logs, editors, and operating-system files
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.idea/
+.vscode/
