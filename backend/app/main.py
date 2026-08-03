@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import DEFAULT_DATABASE_URL, create_session_factory
 from .routers.dashboard import router as dashboard_router
 from .routers.personnel import router as personnel_router
+from .routers.settings import router as settings_router
 from .routers.test_cases import router as test_cases_router
 from .seed import seed_database
 
@@ -35,6 +36,7 @@ def create_app(database_url: str = DEFAULT_DATABASE_URL) -> FastAPI:
 
     app.include_router(dashboard_router)
     app.include_router(personnel_router)
+    app.include_router(settings_router)
     app.include_router(test_cases_router)
     return app
 

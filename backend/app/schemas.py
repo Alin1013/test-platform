@@ -83,3 +83,38 @@ class UserStatusUpdate(BaseModel):
 
 class RolePermissionsUpdate(BaseModel):
     permissions: dict[str, bool]
+
+
+class SettingsModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class GeneralSettings(SettingsModel):
+    platformName: str = Field(min_length=1, max_length=40)
+    announcement: str = Field(max_length=500)
+    caseNumberPrefix: str = Field(pattern=r"^[A-Za-z0-9_-]+$", max_length=16)
+
+
+class ExecutionSettings(SettingsModel):
+    baseUrl: str = Field(min_length=1, max_length=2048)
+    retryCount: int = Field(ge=0, le=3)
+    apiTimeoutMs: int = Field(ge=1000, le=300000)
+
+
+class NotificationSettings(SettingsModel):
+    wechatWork: str = Field(max_length=2048)
+    feishu: str = Field(max_length=2048)
+    dingtalk: str = Field(max_length=2048)
+
+
+class AiSettings(SettingsModel):
+    apiKey: str = Field(max_length=4096)
+    baseUrl: str = Field(min_length=1, max_length=2048)
+    defaultModel: str = Field(min_length=1, max_length=128)
+
+
+class SystemSettings(SettingsModel):
+    general: GeneralSettings
+    execution: ExecutionSettings
+    notifications: NotificationSettings
+    ai: AiSettings
