@@ -62,6 +62,7 @@ export interface CreateUserInput {
 }
 
 export interface PermissionRole {
+  id: string;
   name: UserRole;
   permissions: Record<PermissionKey, boolean>;
 }
@@ -118,6 +119,10 @@ export interface PlatformService {
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
   listRoles(): Promise<PermissionRole[]>;
+  updateRolePermissions(
+    id: string,
+    permissions: PermissionRole['permissions'],
+  ): Promise<PermissionRole>;
   getSystemSettings(): Promise<SystemSettings>;
   updateSystemSettings(settings: SystemSettings): Promise<SystemSettings>;
   testWebhookConnection(input: TestWebhookConnectionInput): Promise<TestConnectionResult>;

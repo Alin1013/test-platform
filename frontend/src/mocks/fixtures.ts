@@ -137,6 +137,7 @@ export const initialUsers: UserRecord[] = [
 
 export const initialRoles: PermissionRole[] = [
   {
+    id: '1',
     name: '测试负责人',
     permissions: {
       caseView: true,
@@ -147,6 +148,7 @@ export const initialRoles: PermissionRole[] = [
     },
   },
   {
+    id: '2',
     name: '测试工程师',
     permissions: {
       caseView: true,
@@ -157,6 +159,7 @@ export const initialRoles: PermissionRole[] = [
     },
   },
   {
+    id: '3',
     name: '开发人员',
     permissions: {
       caseView: true,

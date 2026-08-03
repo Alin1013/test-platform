@@ -1,11 +1,17 @@
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Empty, Input, Select, Skeleton, Switch, Table, Tabs, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { PersonAvatar } from '../../components/PersonAvatar';
 import { usePlatformService } from '../../services/PlatformServiceContext';
-import type { CreateUserInput, UserRecord, UserRole } from '../../services/contracts';
+import type {
+  CreateUserInput,
+  PermissionKey,
+  PermissionRole,
+  UserRecord,
+  UserRole,
+} from '../../services/contracts';
 import { PermissionMatrix } from './components/PermissionMatrix';
 import { UserDrawer } from './components/UserDrawer';
 import './personnel.css';
@@ -30,6 +36,9 @@ export function PersonnelPage() {
   const [status, setStatus] = useState<UserStatusFilter | undefined>();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [permissionRoles, setPermissionRoles] = useState<PermissionRole[] | null>(null);
+  const [savedPermissionRoles, setSavedPermissionRoles] = useState<PermissionRole[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -43,6 +52,82 @@ export function PersonnelPage() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const nextRoles = await service.listRoles();
+      setPermissionRoles(nextRoles);
+      setSavedPermissionRoles(nextRoles);
+    } catch {
+      setPermissionRoles([]);
+    }
+  }, [service]);
+
+  useEffect(() => {
+    if (activeTab === 'permissions' && permissionRoles === null) void loadRoles();
+  }, [activeTab, loadRoles, permissionRoles]);
+
+  const changedPermissionRoles = useMemo(
+    () =>
+      permissionRoles?.filter((role) => {
+        const saved = savedPermissionRoles.find((candidate) => candidate.id === role.id);
+        return !saved || JSON.stringify(saved.permissions) !== JSON.stringify(role.permissions);
+      }) ?? [],
+    [permissionRoles, savedPermissionRoles],
+  );
+
+  const togglePermission = (roleId: string, permission: PermissionKey) => {
+    setPermissionRoles((current) =>
+      current?.map((role) =>
+        role.id === roleId
+          ? {
+              ...role,
+              permissions: {
+                ...role.permissions,
+                [permission]: !role.permissions[permission],
+              },
+            }
+          : role,
+      ) ?? null,
+    );
+  };
+
+  const savePermissions = async () => {
+    if (!changedPermissionRoles.length || savingPermissions) return;
+    setSavingPermissions(true);
+    const pendingEdits = new Map(changedPermissionRoles.map((role) => [role.id, role]));
+
+    try {
+      const results = await Promise.allSettled(
+        changedPermissionRoles.map((role) =>
+          service.updateRolePermissions(role.id, role.permissions),
+        ),
+      );
+
+      if (results.some((result) => result.status === 'rejected')) {
+        const refreshed = await service.listRoles();
+        setSavedPermissionRoles(refreshed);
+        setPermissionRoles(refreshed.map((role) => pendingEdits.get(role.id) ?? role));
+        void message.error('角色权限保存失败');
+        return;
+      }
+
+      const updated = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+      setPermissionRoles((current) =>
+        current?.map((role) => updated.find((item) => item.id === role.id) ?? role) ?? null,
+      );
+      setSavedPermissionRoles((current) =>
+        current.map((role) => updated.find((item) => item.id === role.id) ?? role),
+      );
+      void message.success('角色权限已保存');
+    } catch {
+      void message.error('角色权限保存失败');
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -156,7 +241,18 @@ export function PersonnelPage() {
             >
               添加用户
             </Button>
-          ) : null
+          ) : (
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              aria-label="保存"
+              loading={savingPermissions}
+              disabled={savingPermissions || !changedPermissionRoles.length}
+              onClick={() => void savePermissions()}
+            >
+              保存
+            </Button>
+          )
         }
       />
 
@@ -224,7 +320,11 @@ export function PersonnelPage() {
         </section>
       ) : (
         <section className="personnel-panel personnel-panel--permissions">
-          <PermissionMatrix />
+          <PermissionMatrix
+            roles={permissionRoles}
+            disabled={savingPermissions}
+            onToggle={togglePermission}
+          />
         </section>
       )}
 

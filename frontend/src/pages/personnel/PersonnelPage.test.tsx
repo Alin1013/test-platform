@@ -31,10 +31,26 @@ it('可以查看角色权限矩阵', async () => {
   expect(within(matrix).getByText('开发人员')).toBeInTheDocument();
   expect(within(matrix).getByRole('columnheader', { name: '系统设置' })).toBeInTheDocument();
 
+  const saveButton = screen.getByRole('button', { name: '保存' });
+  expect(saveButton).toBeDisabled();
+
   const permission = within(matrix).getByRole('checkbox', { name: '开发人员的用例编辑权限' });
   expect(permission).not.toBeChecked();
   await user.click(permission);
   expect(permission).toBeChecked();
+  expect(saveButton).toBeEnabled();
+
+  await user.click(saveButton);
+
+  expect(await screen.findByText('角色权限已保存')).toBeInTheDocument();
+  expect(saveButton).toBeDisabled();
+  await user.click(screen.getByRole('tab', { name: '用户列表' }));
+  await user.click(screen.getByRole('tab', { name: '角色与权限' }));
+  expect(
+    within(screen.getByRole('table', { name: '权限矩阵' })).getByRole('checkbox', {
+      name: '开发人员的用例编辑权限',
+    }),
+  ).toBeChecked();
 });
 
 it('按关键字筛选用户列表', async () => {

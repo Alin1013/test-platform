@@ -52,9 +52,9 @@ interface ApiUser {
   enabled: boolean;
 }
 
-interface ApiRole extends PermissionRole {
+type ApiRole = Omit<PermissionRole, 'id'> & {
   id: number;
-}
+};
 
 function mapCase(testCase: ApiTestCase): TestCaseRecord {
   // 传输层使用蛇形字段，页面层继续消费既有的驼峰领域对象。
@@ -85,6 +85,14 @@ function mapUser(user: ApiUser): UserRecord {
     department: user.department,
     role: user.role,
     enabled: user.enabled,
+  };
+}
+
+function mapRole(role: ApiRole): PermissionRole {
+  return {
+    id: String(role.id),
+    name: role.name,
+    permissions: role.permissions,
   };
 }
 
@@ -191,7 +199,15 @@ export function createApiPlatformService({
 
     async listRoles() {
       const roles = await request<ApiRole[]>('/roles');
-      return roles.map(({ name, permissions }) => ({ name, permissions }));
+      return roles.map(mapRole);
+    },
+
+    async updateRolePermissions(id, permissions) {
+      const role = await request<ApiRole>(`/roles/${encodeURIComponent(id)}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify({ permissions }),
+      });
+      return mapRole(role);
     },
 
     async getSystemSettings() {

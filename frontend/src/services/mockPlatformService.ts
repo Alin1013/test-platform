@@ -21,6 +21,7 @@ const copy = <T,>(value: T): T => {
 export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
   let testCases = copy(initialTestCases);
   let users = copy(initialUsers);
+  let roles = copy(initialRoles);
   let caseSequence = 260000;
   let userSequence = 2000;
   let systemSettings = copy(initialSystemSettings);
@@ -101,7 +102,16 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     },
 
     async listRoles() {
-      return respond(initialRoles);
+      return respond(roles);
+    },
+
+    async updateRolePermissions(id, permissions) {
+      const existing = roles.find((role) => role.id === id);
+      if (!existing) throw new Error('角色不存在');
+
+      const updated = { ...existing, permissions: copy(permissions) };
+      roles = roles.map((role) => (role.id === id ? updated : role));
+      return respond(updated);
     },
 
     async getSystemSettings() {

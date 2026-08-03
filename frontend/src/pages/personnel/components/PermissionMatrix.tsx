@@ -1,6 +1,4 @@
 import { Checkbox, Empty, Skeleton } from 'antd';
-import { useEffect, useState } from 'react';
-import { usePlatformService } from '../../../services/PlatformServiceContext';
 import type { PermissionKey, PermissionRole } from '../../../services/contracts';
 
 const permissionColumns: Array<{ key: PermissionKey; label: string }> = [
@@ -11,42 +9,13 @@ const permissionColumns: Array<{ key: PermissionKey; label: string }> = [
   { key: 'systemSettings', label: '系统设置' },
 ];
 
-export function PermissionMatrix() {
-  const service = usePlatformService();
-  const [roles, setRoles] = useState<PermissionRole[] | null>(null);
+interface PermissionMatrixProps {
+  roles: PermissionRole[] | null;
+  disabled?: boolean;
+  onToggle: (roleId: string, permission: PermissionKey) => void;
+}
 
-  useEffect(() => {
-    let active = true;
-
-    void service
-      .listRoles()
-      .then((nextRoles) => {
-        if (active) setRoles(nextRoles);
-      })
-      .catch(() => {
-        if (active) setRoles([]);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [service]);
-
-  const togglePermission = (roleName: PermissionRole['name'], permission: PermissionKey) => {
-    setRoles((current) =>
-      current?.map((role) =>
-        role.name === roleName
-          ? {
-              ...role,
-              permissions: {
-                ...role.permissions,
-                [permission]: !role.permissions[permission],
-              },
-            }
-          : role,
-      ) ?? null,
-    );
-  };
+export function PermissionMatrix({ roles, disabled = false, onToggle }: PermissionMatrixProps) {
 
   if (!roles) {
     return <Skeleton active paragraph={{ rows: 4 }} />;
@@ -71,14 +40,15 @@ export function PermissionMatrix() {
         </thead>
         <tbody>
           {roles.map((role) => (
-            <tr key={role.name}>
+            <tr key={role.id}>
               <th scope="row">{role.name}</th>
               {permissionColumns.map((permission) => (
                 <td key={permission.key}>
                   <Checkbox
                     aria-label={`${role.name}的${permission.label}权限`}
                     checked={role.permissions[permission.key]}
-                    onChange={() => togglePermission(role.name, permission.key)}
+                    disabled={disabled}
+                    onChange={() => onToggle(role.id, permission.key)}
                   />
                 </td>
               ))}
