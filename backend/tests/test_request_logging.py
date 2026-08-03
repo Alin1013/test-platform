@@ -49,7 +49,9 @@ def test_each_http_request_writes_one_structured_record(tmp_path: Path) -> None:
             == 200
         )
         assert client.get("/missing").status_code == 404
-        assert client.get("/__test/error").status_code == 500
+        error_response = client.get("/__test/error")
+        assert error_response.status_code == 500
+        assert error_response.headers["content-type"] == "text/plain; charset=utf-8"
 
     records = read_records(log_path)
 
@@ -66,7 +68,7 @@ def test_each_http_request_writes_one_structured_record(tmp_path: Path) -> None:
     assert [record["response_content_type"] for record in records] == [
         "application/json",
         "application/json",
-        None,
+        "text/plain; charset=utf-8",
     ]
     for record in records:
         timestamp = datetime.fromisoformat(str(record["timestamp"]))

@@ -51,7 +51,6 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(RequestLoggingMiddleware, writer=request_log_writer)
     app.mount("/uploads", StaticFiles(directory=resolved_upload_dir, check_dir=False), name="uploads")
 
     @app.get("/health", tags=["system"])
@@ -64,6 +63,9 @@ def create_app(
     app.include_router(settings_router)
     app.include_router(test_cases_router)
     app.include_router(xmind_router)
+    app.middleware_stack = RequestLoggingMiddleware(
+        app.build_middleware_stack(), request_log_writer
+    )
     return app
 
 
