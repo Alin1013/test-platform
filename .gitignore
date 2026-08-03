@@ -1,6 +1,7 @@
 /.superpowers
 /docs
 /.playwright-cli
+/.worktrees/
 /.venv/
 
 # Python 缓存与本地运行数据
