@@ -78,7 +78,11 @@ def test_each_http_request_writes_one_structured_record(tmp_path: Path) -> None:
         assert record["client_ip"] == "testclient"
         assert float(record["duration_ms"]) >= 0
         assert record["request_body"] is None
-        assert record["response_body"] is None
+    assert [record["response_body"] for record in records] == [
+        {"status": "ok"},
+        {"detail": "Not Found"},
+        "Internal Server Error",
+    ]
 
 
 def test_unhandled_error_is_logged_then_reraised(tmp_path: Path) -> None:
@@ -91,6 +95,27 @@ def test_unhandled_error_is_logged_then_reraised(tmp_path: Path) -> None:
     assert [(record["path"], record["status_code"]) for record in records] == [
         ("/__test/error", 500)
     ]
+
+
+def test_json_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"account": "jiangshan", "password": "Test1234"},
+        )
+        assert response.status_code == 200
+        access_token = response.json()["access_token"]
+
+    record = read_records(log_path)[-1]
+    raw_log = log_path.read_text(encoding="utf-8")
+
+    assert record["request_body"] == {"account": "jiangshan", "password": "***"}
+    response_body = record["response_body"]
+    assert isinstance(response_body, dict)
+    assert response_body["access_token"] == "***"
+    assert response_body["user"]["account"] == "jiangshan"
+    assert "Test1234" not in raw_log
+    assert access_token not in raw_log
 
 
 def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:

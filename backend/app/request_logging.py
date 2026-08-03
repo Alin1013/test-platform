@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -13,6 +14,19 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 LOG_FILE_NAME = "requests.log"
 LOG_MAX_BYTES = 10 * 1024 * 1024
 LOG_BACKUP_COUNT = 5
+SENSITIVE_KEYS = {
+    "password",
+    "passwd",
+    "passwordhash",
+    "token",
+    "accesstoken",
+    "refreshtoken",
+    "authorization",
+    "cookie",
+    "setcookie",
+    "clientsecret",
+    "apikey",
+}
 
 
 def _header_value(headers: list[tuple[bytes, bytes]], name: str) -> str | None:
@@ -21,6 +35,54 @@ def _header_value(headers: list[tuple[bytes, bytes]], name: str) -> str | None:
         if header_name.lower() == encoded_name:
             return value.decode("latin-1")
     return None
+
+
+def _media_type(content_type: str | None) -> str | None:
+    if content_type is None:
+        return None
+    return content_type.partition(";")[0].strip().casefold()
+
+
+def _normalized_key(key: object) -> str:
+    return "".join(character for character in str(key).casefold() if character.isalnum())
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "***" if _normalized_key(key) in SENSITIVE_KEYS else _redact(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
+
+
+@dataclass
+class _BodyCapture:
+    content_type: str | None
+    content: bytearray = field(default_factory=bytearray)
+
+    def add(self, chunk: bytes) -> None:
+        self.content.extend(chunk)
+
+    def render(self) -> Any | None:
+        if not self.content:
+            return None
+
+        size_bytes = len(self.content)
+        try:
+            text = bytes(self.content).decode("utf-8")
+            media_type = _media_type(self.content_type)
+            if media_type == "application/json" or (media_type or "").endswith("+json"):
+                return _redact(json.loads(text))
+            return text
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {
+                "content_type": self.content_type,
+                "size_bytes": size_bytes,
+                "unparseable": True,
+            }
 
 
 class RequestLogWriter:
@@ -58,16 +120,28 @@ class RequestLoggingMiddleware:
         started_at = perf_counter()
         status_code = 500
         response_content_type: str | None = None
+        request_content_type = _header_value(scope.get("headers", []), "content-type")
+        request_capture = _BodyCapture(request_content_type)
+        response_capture: _BodyCapture | None = None
 
-        async def send_with_response_details(message: Message) -> None:
-            nonlocal response_content_type, status_code
+        async def logged_receive() -> Message:
+            message = await receive()
+            if message["type"] == "http.request":
+                request_capture.add(message.get("body", b""))
+            return message
+
+        async def logged_send(message: Message) -> None:
+            nonlocal response_capture, response_content_type, status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
                 response_content_type = _header_value(message.get("headers", []), "content-type")
+                response_capture = _BodyCapture(response_content_type)
+            elif message["type"] == "http.response.body" and response_capture is not None:
+                response_capture.add(message.get("body", b""))
             await send(message)
 
         try:
-            await self.app(scope, receive, send_with_response_details)
+            await self.app(scope, logged_receive, logged_send)
         finally:
             client = scope.get("client")
             self.writer.write(
@@ -78,10 +152,12 @@ class RequestLoggingMiddleware:
                     "path": scope["path"],
                     "status_code": status_code,
                     "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "request_content_type": _header_value(scope.get("headers", []), "content-type"),
+                    "request_content_type": request_content_type,
                     "response_content_type": response_content_type,
-                    "request_body": None,
-                    "response_body": None,
+                    "request_body": request_capture.render(),
+                    "response_body": response_capture.render()
+                    if response_capture is not None
+                    else None,
                 }
             )
 
