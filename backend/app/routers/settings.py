@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
 from ..schemas import SystemSettings
-from ..services import settings
+from ..services import settings, webhooks
+from ..settings_schemas import WebhookTestRequest, WebhookTestResponse
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -22,3 +23,8 @@ def replace_system_settings(
     payload: SystemSettings, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
     return settings.replace_settings(session, payload)
+
+
+@router.post("/test-webhook", response_model=WebhookTestResponse)
+def test_webhook_connection(payload: WebhookTestRequest) -> dict:
+    return webhooks.test_connection(payload)
