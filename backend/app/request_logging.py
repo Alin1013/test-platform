@@ -73,7 +73,16 @@ def _form_payload(raw: bytes) -> dict[str, str | list[str]]:
     return result
 
 
-def _is_binary_media_type(media_type: str) -> bool:
+def _is_binary_media_type(
+    media_type: str, content_disposition: str | None = None
+) -> bool:
+    disposition = (
+        content_disposition.partition(";")[0].strip().lower()
+        if content_disposition
+        else ""
+    )
+    if disposition == "attachment":
+        return True
     return not (
         media_type == "application/json"
         or media_type.endswith("+json")
@@ -85,6 +94,7 @@ def _is_binary_media_type(media_type: str) -> bool:
 @dataclass
 class _BodyCapture:
     content_type: str | None
+    content_disposition: str | None = None
     content: bytearray = field(default_factory=bytearray)
     size_bytes: int = 0
 
@@ -105,12 +115,12 @@ class _BodyCapture:
                 "size_bytes": self.size_bytes,
                 "truncated": True,
             }
-            if _is_binary_media_type(media_type):
+            if _is_binary_media_type(media_type, self.content_disposition):
                 metadata["binary"] = True
             return metadata
 
         raw = bytes(self.content)
-        if _is_binary_media_type(media_type):
+        if _is_binary_media_type(media_type, self.content_disposition):
             return {
                 "content_type": self.content_type,
                 "size_bytes": self.size_bytes,
@@ -124,7 +134,7 @@ class _BodyCapture:
                 return {
                     "content_type": self.content_type,
                     "size_bytes": self.size_bytes,
-                    "unparseable": True,
+                    "binary": True,
                 }
 
         if media_type == "application/x-www-form-urlencoded":
@@ -134,7 +144,7 @@ class _BodyCapture:
                 return {
                     "content_type": self.content_type,
                     "size_bytes": self.size_bytes,
-                    "unparseable": True,
+                    "binary": True,
                 }
 
         try:
@@ -143,7 +153,7 @@ class _BodyCapture:
             return {
                 "content_type": self.content_type,
                 "size_bytes": self.size_bytes,
-                "unparseable": True,
+                "binary": True,
             }
 
 
@@ -202,12 +212,18 @@ class RequestLoggingMiddleware:
                 response_body.content_type = _header_value(
                     message.get("headers", []), b"content-type"
                 )
+                response_body.content_disposition = _header_value(
+                    message.get("headers", []), b"content-disposition"
+                )
             elif message["type"] == "http.response.body":
                 response_body.add(message.get("body", b""))
             await send(message)
 
         try:
             await self.app(scope, logged_receive, logged_send)
+        except Exception:
+            status_code = 500
+            raise
         finally:
             client = scope.get("client")
             self.writer.write(

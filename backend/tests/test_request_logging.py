@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import Response
 from fastapi.testclient import TestClient
+from starlette.responses import StreamingResponse
 
 from backend.app.database import Base
 from backend.app.main import create_app
@@ -31,6 +32,26 @@ def logging_client(tmp_path: Path) -> Iterator[tuple[TestClient, Path]]:
     @app.get("/__test/large")
     def large_response() -> dict[str, str]:
         return {"payload": "x" * 20_000}
+
+    @app.get("/__test/text-download")
+    def text_download() -> Response:
+        return Response(
+            content="download-body",
+            media_type="text/plain",
+            headers={"Content-Disposition": 'attachment; filename="report.txt"'},
+        )
+
+    @app.get("/__test/invalid-text")
+    def invalid_text() -> Response:
+        return Response(content=b"\xff", media_type="text/plain")
+
+    @app.get("/__test/stream-error")
+    def stream_error() -> StreamingResponse:
+        def body() -> Iterator[bytes]:
+            yield b"partial"
+            raise RuntimeError("stream error")
+
+        return StreamingResponse(body(), media_type="text/plain")
 
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
@@ -154,3 +175,31 @@ def test_large_request_and_response_bodies_are_truncated_safely(
     assert response_record["response_body"]["size_bytes"] > 16 * 1024
     assert "Test1234" not in raw_log
     assert "x" * 16 * 1024 not in raw_log
+
+
+def test_downloads_and_undecodable_text_only_log_metadata(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        assert client.get("/__test/text-download").status_code == 200
+        assert client.get("/__test/invalid-text").status_code == 200
+        download_record, invalid_text_record = read_records(log_path)[-2:]
+
+    assert download_record["response_body"] == {
+        "content_type": "text/plain; charset=utf-8",
+        "size_bytes": len(b"download-body"),
+        "binary": True,
+    }
+    assert invalid_text_record["response_body"] == {
+        "content_type": "text/plain; charset=utf-8",
+        "size_bytes": 1,
+        "binary": True,
+    }
+
+
+def test_application_error_after_response_start_is_logged_as_500(
+    tmp_path: Path,
+) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        client.get("/__test/stream-error")
+        record = read_records(log_path)[-1]
+
+    assert record["status_code"] == 500
