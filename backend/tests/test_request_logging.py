@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -26,6 +27,11 @@ def logging_client(
     @app.get("/__test/error")
     def error() -> None:
         raise RuntimeError("test error")
+
+    @app.post("/__test/echo-form")
+    async def echo_form(request: Request) -> dict[str, object]:
+        raw_text = (await request.body()).decode("utf-8")
+        return {"nested": [{"input": raw_text}]}
 
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
@@ -136,6 +142,32 @@ def test_form_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -
     assert isinstance(detail, list)
     assert detail[0]["input"] == "account=jiangshan&password=%2A%2A%2A"
     assert "Test1234" not in raw_log
+
+
+def test_form_bodies_preserve_repeated_and_blank_fields_in_logs(tmp_path: Path) -> None:
+    form_body = "tag=&password=secret&tag=two"
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/__test/echo-form",
+            content=form_body,
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        assert response.status_code == 200
+
+    record = read_records(log_path)[-1]
+    raw_log = log_path.read_text(encoding="utf-8")
+
+    assert record["request_body"] == {
+        "tag": ["", "two"],
+        "password": "***",
+    }
+    response_body = record["response_body"]
+    assert isinstance(response_body, dict)
+    assert response_body["nested"] == [
+        {"input": "tag=&tag=two&password=%2A%2A%2A"}
+    ]
+    assert "secret" not in raw_log
+    assert form_body not in raw_log
 
 
 def test_non_application_json_suffix_body_is_logged_as_text(tmp_path: Path) -> None:
