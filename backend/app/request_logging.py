@@ -45,12 +45,16 @@ def _media_type(content_type: str | None) -> str | None:
     return content_type.partition(";")[0].strip().casefold()
 
 
-def _is_binary_media_type(media_type: str | None) -> bool:
-    if media_type == "application/json" or (
+def _is_json_media_type(media_type: str | None) -> bool:
+    return media_type == "application/json" or (
         media_type is not None
         and media_type.startswith("application/")
         and media_type.endswith("+json")
-    ):
+    )
+
+
+def _is_binary_media_type(media_type: str | None) -> bool:
+    if _is_json_media_type(media_type):
         return False
     if media_type == "application/x-www-form-urlencoded":
         return False
@@ -132,11 +136,7 @@ class _BodyCapture:
             }
         try:
             text = bytes(self.content).decode("utf-8")
-            if media_type == "application/json" or (
-                media_type is not None
-                and media_type.startswith("application/")
-                and media_type.endswith("+json")
-            ):
+            if _is_json_media_type(media_type):
                 body = _redact(json.loads(text))
                 return _redact_form_strings(body) if self.redact_form_strings else body
             if media_type == "application/x-www-form-urlencoded":
@@ -146,6 +146,7 @@ class _BodyCapture:
             return {
                 "content_type": self.content_type,
                 "size_bytes": self.size_bytes,
+                "binary": True,
                 "unparseable": True,
             }
 
@@ -213,24 +214,30 @@ class RequestLoggingMiddleware:
 
         try:
             await self.app(scope, logged_receive, logged_send)
+        except Exception:
+            status_code = 500
+            raise
         finally:
-            client = scope.get("client")
-            self.writer.write(
-                {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "client_ip": client[0] if client else None,
-                    "method": scope["method"],
-                    "path": scope["path"],
-                    "status_code": status_code,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
-                    "request_content_type": request_content_type,
-                    "response_content_type": response_content_type,
-                    "request_body": request_capture.render(),
-                    "response_body": response_capture.render()
-                    if response_capture is not None
-                    else None,
-                }
-            )
+            try:
+                client = scope.get("client")
+                self.writer.write(
+                    {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "client_ip": client[0] if client else None,
+                        "method": scope["method"],
+                        "path": scope["path"],
+                        "status_code": status_code,
+                        "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                        "request_content_type": request_content_type,
+                        "response_content_type": response_content_type,
+                        "request_body": request_capture.render(),
+                        "response_body": response_capture.render()
+                        if response_capture is not None
+                        else None,
+                    }
+                )
+            except Exception:
+                pass
 
 
 class RequestLoggingFastAPI(FastAPI):

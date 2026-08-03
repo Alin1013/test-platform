@@ -12,7 +12,10 @@ from starlette.responses import StreamingResponse
 
 from backend.app.database import Base
 from backend.app.main import create_app
-from backend.app.request_logging import MAX_CAPTURE_BYTES
+from backend.app.request_logging import RequestLogWriter
+
+
+CAPTURE_LIMIT_BYTES = 16 * 1024
 
 
 @contextmanager
@@ -45,13 +48,21 @@ def logging_client(
 
     @app.get("/__test/body-at-capture-limit")
     def body_at_capture_limit() -> Response:
-        return Response(content=b"x" * MAX_CAPTURE_BYTES, media_type="text/plain")
+        return Response(content=b"x" * CAPTURE_LIMIT_BYTES, media_type="text/plain")
 
     @app.get("/__test/body-over-capture-limit-stream")
     def body_over_capture_limit_stream() -> StreamingResponse:
         def chunks() -> Iterator[bytes]:
-            yield b"x" * (MAX_CAPTURE_BYTES // 2)
-            yield b"y" * (MAX_CAPTURE_BYTES // 2 + 1)
+            yield b"x" * (CAPTURE_LIMIT_BYTES // 2)
+            yield b"y" * (CAPTURE_LIMIT_BYTES // 2 + 1)
+
+        return StreamingResponse(chunks(), media_type="text/plain")
+
+    @app.get("/__test/stream-error")
+    def stream_error() -> StreamingResponse:
+        def chunks() -> Iterator[bytes]:
+            yield b"started"
+            raise RuntimeError("stream error")
 
         return StreamingResponse(chunks(), media_type="text/plain")
 
@@ -123,6 +134,33 @@ def test_unhandled_error_is_logged_then_reraised(tmp_path: Path) -> None:
     assert [(record["path"], record["status_code"]) for record in records] == [
         ("/__test/error", 500)
     ]
+
+
+def test_log_write_failures_do_not_change_http_response_or_app_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_write(self: RequestLogWriter, entry: dict[str, object]) -> None:
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(RequestLogWriter, "write", fail_write)
+
+    with logging_client(tmp_path, raise_server_exceptions=True) as (client, _):
+        health_response = client.get("/health")
+        assert health_response.status_code == 200
+        assert health_response.json() == {"status": "ok"}
+
+        with pytest.raises(RuntimeError, match="test error"):
+            client.get("/__test/error")
+
+
+def test_exception_after_response_start_is_logged_as_500(tmp_path: Path) -> None:
+    with logging_client(tmp_path, raise_server_exceptions=True) as (client, log_path):
+        with pytest.raises(RuntimeError, match="stream error"):
+            client.get("/__test/stream-error")
+
+    record = read_records(log_path)[-1]
+
+    assert record["status_code"] == 500
 
 
 def test_json_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -> None:
@@ -207,6 +245,48 @@ def test_non_application_json_suffix_body_is_logged_as_text(tmp_path: Path) -> N
     assert record["request_body"] == body
 
 
+def test_malformed_json_request_body_is_logged_as_binary_metadata(tmp_path: Path) -> None:
+    body = b'{"account":'
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/api/v1/auth/login",
+            content=body,
+            headers={"content-type": "application/json"},
+        )
+        assert response.status_code == 422
+
+    record = read_records(log_path)[-1]
+
+    assert record["request_body"] == {
+        "content_type": "application/json",
+        "size_bytes": len(body),
+        "binary": True,
+        "unparseable": True,
+    }
+
+
+def test_invalid_utf8_text_request_body_is_logged_as_binary_metadata(
+    tmp_path: Path,
+) -> None:
+    body = b"\xff"
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/api/v1/auth/login",
+            content=body,
+            headers={"content-type": "text/plain"},
+        )
+        assert response.status_code == 500
+
+    record = read_records(log_path)[-1]
+
+    assert record["request_body"] == {
+        "content_type": "text/plain",
+        "size_bytes": len(body),
+        "binary": True,
+        "unparseable": True,
+    }
+
+
 def test_multipart_and_binary_bodies_only_log_metadata(tmp_path: Path) -> None:
     with logging_client(tmp_path) as (client, log_path):
         upload_response = client.post(
@@ -273,11 +353,11 @@ def test_response_body_at_capture_limit_is_logged_in_full(tmp_path: Path) -> Non
     with logging_client(tmp_path) as (client, log_path):
         response = client.get("/__test/body-at-capture-limit")
         assert response.status_code == 200
-        assert len(response.content) == MAX_CAPTURE_BYTES
+        assert len(response.content) == CAPTURE_LIMIT_BYTES
 
     record = read_records(log_path)[-1]
 
-    assert record["response_body"] == "x" * MAX_CAPTURE_BYTES
+    assert record["response_body"] == "x" * CAPTURE_LIMIT_BYTES
 
 
 def test_streamed_response_body_over_capture_limit_is_metadata_only(
@@ -286,15 +366,15 @@ def test_streamed_response_body_over_capture_limit_is_metadata_only(
     with logging_client(tmp_path) as (client, log_path):
         response = client.get("/__test/body-over-capture-limit-stream")
         assert response.status_code == 200
-        assert response.content == b"x" * (MAX_CAPTURE_BYTES // 2) + b"y" * (
-            MAX_CAPTURE_BYTES // 2 + 1
+        assert response.content == b"x" * (CAPTURE_LIMIT_BYTES // 2) + b"y" * (
+            CAPTURE_LIMIT_BYTES // 2 + 1
         )
 
     record = read_records(log_path)[-1]
 
     assert record["response_body"] == {
         "content_type": "text/plain; charset=utf-8",
-        "size_bytes": MAX_CAPTURE_BYTES + 1,
+        "size_bytes": CAPTURE_LIMIT_BYTES + 1,
         "truncated": True,
     }
 
