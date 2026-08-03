@@ -44,6 +44,18 @@ def _media_type(content_type: str | None) -> str | None:
     return content_type.partition(";")[0].strip().casefold()
 
 
+def _is_binary_media_type(media_type: str | None) -> bool:
+    if media_type == "application/json" or (
+        media_type is not None
+        and media_type.startswith("application/")
+        and media_type.endswith("+json")
+    ):
+        return False
+    if media_type == "application/x-www-form-urlencoded":
+        return False
+    return media_type is None or not media_type.startswith("text/")
+
+
 def _normalized_key(key: object) -> str:
     return "".join(character for character in str(key).casefold() if character.isalnum())
 
@@ -98,9 +110,15 @@ class _BodyCapture:
             return None
 
         size_bytes = len(self.content)
+        media_type = _media_type(self.content_type)
+        if _is_binary_media_type(media_type):
+            return {
+                "content_type": self.content_type,
+                "size_bytes": size_bytes,
+                "binary": True,
+            }
         try:
             text = bytes(self.content).decode("utf-8")
-            media_type = _media_type(self.content_type)
             if media_type == "application/json" or (
                 media_type is not None
                 and media_type.startswith("application/")

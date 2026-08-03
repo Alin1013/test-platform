@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -32,6 +32,10 @@ def logging_client(
     async def echo_form(request: Request) -> dict[str, object]:
         raw_text = (await request.body()).decode("utf-8")
         return {"nested": [{"input": raw_text}]}
+
+    @app.get("/__test/binary")
+    def binary() -> Response:
+        return Response(content=b"\x00\xff", media_type="application/octet-stream")
 
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
@@ -183,6 +187,37 @@ def test_non_application_json_suffix_body_is_logged_as_text(tmp_path: Path) -> N
     record = read_records(log_path)[-1]
 
     assert record["request_body"] == body
+
+
+def test_multipart_and_binary_bodies_only_log_metadata(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        upload_response = client.post(
+            "/api/v1/xmind/upload-parse",
+            files={
+                "file": (
+                    "cases.xmind",
+                    b"not-a-zip",
+                    "application/octet-stream",
+                )
+            },
+        )
+        assert upload_response.status_code == 422
+
+        binary_response = client.get("/__test/binary")
+        assert binary_response.status_code == 200
+
+    upload_record, binary_record = read_records(log_path)[-2:]
+
+    upload_body = upload_record["request_body"]
+    assert isinstance(upload_body, dict)
+    assert upload_body["binary"] is True
+    assert upload_body["size_bytes"] > len(b"not-a-zip")
+    assert str(upload_body["content_type"]).startswith("multipart/form-data")
+    assert binary_record["response_body"] == {
+        "content_type": "application/octet-stream",
+        "size_bytes": 2,
+        "binary": True,
+    }
 
 
 def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:
