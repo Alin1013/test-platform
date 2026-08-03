@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from time import perf_counter
+from typing import Any
+
+from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
@@ -81,3 +84,14 @@ class RequestLoggingMiddleware:
                     "response_body": None,
                 }
             )
+
+
+class RequestLoggingFastAPI(FastAPI):
+    def __init__(self, *, request_log_writer: RequestLogWriter, **kwargs: Any) -> None:
+        self._request_log_writer = request_log_writer
+        super().__init__(**kwargs)
+
+    def build_middleware_stack(self) -> ASGIApp:
+        return RequestLoggingMiddleware(
+            super().build_middleware_stack(), self._request_log_writer
+        )

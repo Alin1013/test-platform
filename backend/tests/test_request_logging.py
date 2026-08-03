@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.middleware.gzip import GZipMiddleware
 
 from backend.app.database import Base
 from backend.app.main import create_app
@@ -89,4 +90,29 @@ def test_unhandled_error_is_logged_then_reraised(tmp_path: Path) -> None:
 
     assert [(record["path"], record["status_code"]) for record in records] == [
         ("/__test/error", 500)
+    ]
+
+
+def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:
+    log_path = tmp_path / "logs" / "requests.log"
+    app = create_app(
+        f"sqlite:///{tmp_path / 'test.db'}",
+        upload_dir=tmp_path / "uploads",
+        log_dir=log_path.parent,
+    )
+    app.add_middleware(GZipMiddleware, minimum_size=0)
+
+    engine = app.state.session_factory.kw["bind"]
+    Base.metadata.create_all(engine)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/health")
+            assert response.status_code == 200
+            assert response.headers["content-encoding"] == "gzip"
+    finally:
+        Base.metadata.drop_all(engine)
+
+    records = read_records(log_path)
+    assert [(record["path"], record["status_code"]) for record in records] == [
+        ("/health", 200)
     ]

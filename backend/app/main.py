@@ -1,12 +1,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import DEFAULT_DATABASE_URL, create_session_factory
-from .request_logging import LOG_FILE_NAME, RequestLogWriter, RequestLoggingMiddleware
+from .request_logging import LOG_FILE_NAME, RequestLogWriter, RequestLoggingFastAPI
 from .routers.auth import router as auth_router
 from .routers.dashboard import router as dashboard_router
 from .routers.personnel import router as personnel_router
@@ -22,7 +21,7 @@ def create_app(
     database_url: str = DEFAULT_DATABASE_URL,
     upload_dir: Path | None = None,
     log_dir: Path | None = None,
-) -> FastAPI:
+) -> RequestLoggingFastAPI:
     session_factory = create_session_factory(database_url)
     resolved_upload_dir = upload_dir or Path(__file__).resolve().parents[1] / "uploads"
     resolved_log_dir = log_dir or DEFAULT_LOG_DIR
@@ -30,7 +29,7 @@ def create_app(
     request_log_writer = RequestLogWriter(request_log_path)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):
+    async def lifespan(_: RequestLoggingFastAPI):
         resolved_upload_dir.mkdir(parents=True, exist_ok=True)
         # 初始化演示数据是幂等操作，测试和首次本地启动共用这一入口。
         try:
@@ -40,7 +39,12 @@ def create_app(
         finally:
             request_log_writer.close()
 
-    app = FastAPI(title="Test Platform API", version="1.0.0", lifespan=lifespan)
+    app = RequestLoggingFastAPI(
+        request_log_writer=request_log_writer,
+        title="Test Platform API",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
     app.state.session_factory = session_factory
     app.state.upload_dir = resolved_upload_dir
     app.state.request_log_path = request_log_path
@@ -63,9 +67,6 @@ def create_app(
     app.include_router(settings_router)
     app.include_router(test_cases_router)
     app.include_router(xmind_router)
-    app.middleware_stack = RequestLoggingMiddleware(
-        app.build_middleware_stack(), request_log_writer
-    )
     return app
 
 
