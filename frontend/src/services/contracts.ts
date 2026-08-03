@@ -1,6 +1,6 @@
 export type TestCaseType = 'functional' | 'api' | 'ui';
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
-export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已停用';
+export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已失败' | '已停用';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 export type UserRole = '测试负责人' | '测试工程师' | '开发人员';
 export type PermissionKey =
