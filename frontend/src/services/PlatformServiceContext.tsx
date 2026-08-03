@@ -1,9 +1,13 @@
 import { createContext, type ReactNode, useContext } from 'react';
+import { createApiPlatformService } from './apiPlatformService';
 import type { PlatformService } from './contracts';
 import { createMockPlatformService } from './mockPlatformService';
 
 const PlatformServiceContext = createContext<PlatformService | null>(null);
-const defaultService = createMockPlatformService();
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const defaultService = apiBaseUrl
+  ? createApiPlatformService({ baseUrl: apiBaseUrl })
+  : createMockPlatformService();
 
 interface PlatformServiceProviderProps {
   children: ReactNode;
