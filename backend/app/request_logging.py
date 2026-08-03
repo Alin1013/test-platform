@@ -74,7 +74,11 @@ class _BodyCapture:
         try:
             text = bytes(self.content).decode("utf-8")
             media_type = _media_type(self.content_type)
-            if media_type == "application/json" or (media_type or "").endswith("+json"):
+            if media_type == "application/json" or (
+                media_type is not None
+                and media_type.startswith("application/")
+                and media_type.endswith("+json")
+            ):
                 return _redact(json.loads(text))
             return text
         except (UnicodeDecodeError, json.JSONDecodeError):

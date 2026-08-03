@@ -118,6 +118,21 @@ def test_json_bodies_are_logged_with_sensitive_fields_redacted(tmp_path: Path) -
     assert access_token not in raw_log
 
 
+def test_non_application_json_suffix_body_is_logged_as_text(tmp_path: Path) -> None:
+    body = '{"message":"hello"}'
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.post(
+            "/api/v1/auth/login",
+            content=body,
+            headers={"content-type": "text/custom+json"},
+        )
+        assert response.status_code == 422
+
+    record = read_records(log_path)[-1]
+
+    assert record["request_body"] == body
+
+
 def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:
     log_path = tmp_path / "logs" / "requests.log"
     app = create_app(
