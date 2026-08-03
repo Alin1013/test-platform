@@ -8,9 +8,11 @@ import pytest
 from fastapi import Request, Response
 from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.responses import StreamingResponse
 
 from backend.app.database import Base
 from backend.app.main import create_app
+from backend.app.request_logging import MAX_CAPTURE_BYTES
 
 
 @contextmanager
@@ -40,6 +42,18 @@ def logging_client(
     @app.get("/__test/large")
     def large() -> dict[str, str]:
         return {"payload": "x" * 20_000}
+
+    @app.get("/__test/body-at-capture-limit")
+    def body_at_capture_limit() -> Response:
+        return Response(content=b"x" * MAX_CAPTURE_BYTES, media_type="text/plain")
+
+    @app.get("/__test/body-over-capture-limit-stream")
+    def body_over_capture_limit_stream() -> StreamingResponse:
+        def chunks() -> Iterator[bytes]:
+            yield b"x" * (MAX_CAPTURE_BYTES // 2)
+            yield b"y" * (MAX_CAPTURE_BYTES // 2 + 1)
+
+        return StreamingResponse(chunks(), media_type="text/plain")
 
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
@@ -253,6 +267,36 @@ def test_large_request_and_response_bodies_are_truncated_safely(tmp_path: Path) 
     assert response_body["size_bytes"] > 16 * 1024
     assert "Test1234" not in raw_log
     assert "x" * (16 * 1024) not in raw_log
+
+
+def test_response_body_at_capture_limit_is_logged_in_full(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.get("/__test/body-at-capture-limit")
+        assert response.status_code == 200
+        assert len(response.content) == MAX_CAPTURE_BYTES
+
+    record = read_records(log_path)[-1]
+
+    assert record["response_body"] == "x" * MAX_CAPTURE_BYTES
+
+
+def test_streamed_response_body_over_capture_limit_is_metadata_only(
+    tmp_path: Path,
+) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        response = client.get("/__test/body-over-capture-limit-stream")
+        assert response.status_code == 200
+        assert response.content == b"x" * (MAX_CAPTURE_BYTES // 2) + b"y" * (
+            MAX_CAPTURE_BYTES // 2 + 1
+        )
+
+    record = read_records(log_path)[-1]
+
+    assert record["response_body"] == {
+        "content_type": "text/plain; charset=utf-8",
+        "size_bytes": MAX_CAPTURE_BYTES + 1,
+        "truncated": True,
+    }
 
 
 def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:
