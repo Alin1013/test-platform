@@ -15,6 +15,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 LOG_FILE_NAME = "requests.log"
 LOG_MAX_BYTES = 10 * 1024 * 1024
 LOG_BACKUP_COUNT = 5
+MAX_CAPTURE_BYTES = 16 * 1024
 SENSITIVE_KEYS = {
     "password",
     "passwd",
@@ -101,20 +102,32 @@ class _BodyCapture:
     content_type: str | None
     redact_form_strings: bool = False
     content: bytearray = field(default_factory=bytearray)
+    size_bytes: int = 0
 
     def add(self, chunk: bytes) -> None:
-        self.content.extend(chunk)
+        self.size_bytes += len(chunk)
+        remaining_bytes = MAX_CAPTURE_BYTES - len(self.content)
+        if remaining_bytes > 0:
+            self.content.extend(chunk[:remaining_bytes])
 
     def render(self) -> Any | None:
-        if not self.content:
+        if self.size_bytes == 0:
             return None
 
-        size_bytes = len(self.content)
         media_type = _media_type(self.content_type)
+        if self.size_bytes > MAX_CAPTURE_BYTES:
+            metadata: dict[str, object] = {
+                "content_type": self.content_type,
+                "size_bytes": self.size_bytes,
+                "truncated": True,
+            }
+            if _is_binary_media_type(media_type):
+                metadata["binary"] = True
+            return metadata
         if _is_binary_media_type(media_type):
             return {
                 "content_type": self.content_type,
-                "size_bytes": size_bytes,
+                "size_bytes": self.size_bytes,
                 "binary": True,
             }
         try:
@@ -132,7 +145,7 @@ class _BodyCapture:
         except (UnicodeDecodeError, json.JSONDecodeError):
             return {
                 "content_type": self.content_type,
-                "size_bytes": size_bytes,
+                "size_bytes": self.size_bytes,
                 "unparseable": True,
             }
 

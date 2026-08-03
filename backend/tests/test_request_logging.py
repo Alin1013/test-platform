@@ -37,6 +37,10 @@ def logging_client(
     def binary() -> Response:
         return Response(content=b"\x00\xff", media_type="application/octet-stream")
 
+    @app.get("/__test/large")
+    def large() -> dict[str, str]:
+        return {"payload": "x" * 20_000}
+
     engine = app.state.session_factory.kw["bind"]
     Base.metadata.create_all(engine)
     try:
@@ -218,6 +222,37 @@ def test_multipart_and_binary_bodies_only_log_metadata(tmp_path: Path) -> None:
         "size_bytes": 2,
         "binary": True,
     }
+
+
+def test_large_request_and_response_bodies_are_truncated_safely(tmp_path: Path) -> None:
+    with logging_client(tmp_path) as (client, log_path):
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "account": "jiangshan",
+                "password": "Test1234",
+                "padding": "x" * 20_000,
+            },
+        )
+        assert login_response.status_code == 422
+
+        large_response = client.get("/__test/large")
+        assert large_response.status_code == 200
+
+    request_record, response_record = read_records(log_path)[-2:]
+    raw_log = log_path.read_text(encoding="utf-8")
+
+    request_body = request_record["request_body"]
+    assert isinstance(request_body, dict)
+    assert request_body["truncated"] is True
+    assert request_body["size_bytes"] > 16 * 1024
+
+    response_body = response_record["response_body"]
+    assert isinstance(response_body, dict)
+    assert response_body["truncated"] is True
+    assert response_body["size_bytes"] > 16 * 1024
+    assert "Test1234" not in raw_log
+    assert "x" * (16 * 1024) not in raw_log
 
 
 def test_app_accepts_middleware_added_after_factory_creation(tmp_path: Path) -> None:
