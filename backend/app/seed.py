@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import ApiCaseDetails, Module, Role, SystemConfig, TestCase, UiCaseDetails, User
+from .services.auth import hash_password
 
 
 DEFAULT_PERMISSIONS = {
@@ -54,8 +55,27 @@ DEFAULT_SETTINGS = {
 
 
 def seed_database(session: Session) -> None:
-    # 角色是整组种子数据的哨兵，已存在时不重复写入任何演示记录。
+    # 角色是种子数据哨兵；已存在时只修复旧版演示账号的缺失凭据。
     if session.scalar(select(Role.id).limit(1)) is not None:
+        # 旧版演示库没有登录凭据，仅为预置邮箱补齐默认密码。
+        demo_users = session.scalars(
+            select(User).where(
+                User.email.in_(
+                    {
+                        "jiangshan@example.com",
+                        "linran@example.com",
+                        "shenyi@example.com",
+                    }
+                )
+            )
+        ).all()
+        changed = False
+        for user in demo_users:
+            if user.password_hash is None:
+                user.password_hash = hash_password("Test1234")
+                changed = True
+        if changed:
+            session.commit()
         return
 
     roles = [Role(name=name, permissions=permissions) for name, permissions in DEFAULT_PERMISSIONS.items()]
@@ -63,25 +83,31 @@ def seed_database(session: Session) -> None:
     session.flush()
 
     lead = User(
+        account="jiangshan",
         name="江珊",
         email="jiangshan@example.com",
         department="质量保障部",
         role=roles[0],
         status="enabled",
+        password_hash=hash_password("Test1234"),
     )
     developer = User(
+        account="linran",
         name="林然",
         email="linran@example.com",
         department="研发部",
         role=roles[2],
         status="enabled",
+        password_hash=hash_password("Test1234"),
     )
     engineer = User(
+        account="shenyi",
         name="沈怡",
         email="shenyi@example.com",
         department="质量保障部",
         role=roles[1],
         status="enabled",
+        password_hash=hash_password("Test1234"),
     )
     session.add_all([lead, developer, engineer])
     session.add_all(

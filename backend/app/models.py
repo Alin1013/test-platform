@@ -40,6 +40,7 @@ class User(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    account: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64), index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     department: Mapped[str] = mapped_column(String(128))
@@ -50,6 +51,23 @@ class User(Base, TimestampMixin):
     role: Mapped[Role] = relationship(back_populates="users")
     test_cases: Mapped[list[TestCase]] = relationship(back_populates="author")
     xmind_records: Mapped[list[XMindRecord]] = relationship(back_populates="uploader")
+    auth_sessions: Mapped[list[AuthSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    user: Mapped[User] = relationship(back_populates="auth_sessions")
 
 
 class Module(Base, TimestampMixin):

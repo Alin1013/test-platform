@@ -1,7 +1,3 @@
-import base64
-import hashlib
-import secrets
-
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -9,11 +5,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..models import Role, User
 from ..schemas import RolePermissionsUpdate, UserCreate
+from .auth import hash_password
 
 
 def _serialize_user(user: User) -> dict:
     return {
         "id": user.id,
+        "account": user.account,
         "name": user.name,
         "email": user.email,
         "department": user.department,
@@ -24,15 +22,6 @@ def _serialize_user(user: User) -> dict:
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
-
-
-def _hash_password(password: str) -> str:
-    # 每个密码使用独立随机盐；结果保留算法和迭代次数，便于后续升级校验策略。
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600_000)
-    return "pbkdf2_sha256$600000${}${}".format(
-        base64.b64encode(salt).decode(), base64.b64encode(digest).decode()
-    )
 
 
 def list_users(
@@ -73,19 +62,20 @@ def create_user(session: Session, payload: UserCreate) -> dict:
         raise HTTPException(status_code=404, detail="Role not found")
 
     user = User(
+        account=str(payload.email).partition("@")[0].casefold(),
         name=payload.name,
         email=str(payload.email).lower(),
         department=payload.department,
         role=role,
         status="enabled",
-        password_hash=_hash_password(payload.password),
+        password_hash=hash_password(payload.password),
     )
     session.add(user)
     try:
         session.commit()
     except IntegrityError as error:
         session.rollback()
-        raise HTTPException(status_code=409, detail="Email already exists") from error
+        raise HTTPException(status_code=409, detail="Account or email already exists") from error
     return _serialize_user(user)
 
 
