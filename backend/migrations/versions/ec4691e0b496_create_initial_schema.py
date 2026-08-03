@@ -1,7 +1,7 @@
 """create initial schema
 
 Revision ID: ec4691e0b496
-Revises: 
+Revises:
 Create Date: 2026-08-03 09:25:59.338576
 
 """
