@@ -21,3 +21,21 @@ def test_sqlite_rejects_records_with_missing_foreign_keys(client: TestClient) ->
 
         with pytest.raises(IntegrityError):
             session.commit()
+
+
+def test_database_rejects_invalid_case_domain_values(client: TestClient) -> None:
+    with client.app.state.session_factory() as session:
+        session.add(
+            CaseRecordModel(
+                code="FUN-INVALID-PRIORITY",
+                title="非法优先级",
+                type="functional",
+                module_id="auth",
+                priority="urgent",
+                status="草稿",
+                author_id=1,
+            )
+        )
+
+        with pytest.raises(IntegrityError):
+            session.commit()

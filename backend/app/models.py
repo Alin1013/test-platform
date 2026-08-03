@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,9 @@ class Role(Base, TimestampMixin):
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("status IN ('enabled', 'disabled')", name="ck_users_status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(64), index=True)
@@ -66,6 +69,18 @@ class Module(Base, TimestampMixin):
 
 class TestCase(Base, TimestampMixin):
     __tablename__ = "test_cases"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('functional', 'api', 'ui')", name="ck_test_cases_type"
+        ),
+        CheckConstraint(
+            "priority IN ('P0', 'P1', 'P2', 'P3')", name="ck_test_cases_priority"
+        ),
+        CheckConstraint(
+            "status IN ('维护中', '已通过', '草稿', '已失败', '已停用')",
+            name="ck_test_cases_status",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
@@ -88,6 +103,15 @@ class TestCase(Base, TimestampMixin):
 
 class ApiCaseDetails(Base):
     __tablename__ = "api_case_details"
+    __table_args__ = (
+        CheckConstraint(
+            "method IN ('GET', 'POST', 'PUT', 'DELETE')", name="ck_api_case_details_method"
+        ),
+        CheckConstraint(
+            "expected_code BETWEEN 100 AND 599",
+            name="ck_api_case_details_expected_code",
+        ),
+    )
 
     case_id: Mapped[int] = mapped_column(
         ForeignKey("test_cases.id", ondelete="CASCADE"), primary_key=True

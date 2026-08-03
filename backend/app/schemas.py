@@ -126,16 +126,6 @@ class NotificationSettings(SettingsModel):
     dingtalk: str = Field(max_length=2048, pattern=r"^$|^https?://")
 
 
-class WebhookTestRequest(SettingsModel):
-    channel: Literal["wechatWork", "feishu", "dingtalk"]
-    webhookUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
-
-
-class WebhookTestResponse(SettingsModel):
-    success: bool
-    message: str
-
-
 class AiSettings(SettingsModel):
     apiKey: str = Field(max_length=4096)
     baseUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
