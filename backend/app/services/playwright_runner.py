@@ -73,8 +73,11 @@ class PlaywrightUiRunner:
         logs: list[str] = []
         step_results: list[dict[str, Any]] = []
         error_message: str | None = None
+        cancelled = False
         started_at = perf_counter()
         video = None
+        should_cancel = config.get("shouldCancel")
+        on_step = config.get("onStep")
 
         with sync_playwright() as playwright:
             browser_name = config.get("browser", "chrome")
@@ -89,6 +92,9 @@ class PlaywrightUiRunner:
             video = page.video
             try:
                 for index, step in enumerate(steps, start=1):
+                    if callable(should_cancel) and should_cancel():
+                        cancelled = True
+                        break
                     step_started_at = perf_counter()
                     self._run_step(page, step)
                     duration_ms = round((perf_counter() - step_started_at) * 1000)
@@ -101,7 +107,10 @@ class PlaywrightUiRunner:
                             "durationMs": duration_ms,
                         }
                     )
-                    logs.append(f"步骤 {step_index} 执行成功")
+                    log = f"步骤 {step_index} 执行成功"
+                    logs.append(log)
+                    if callable(on_step):
+                        on_step(step_results[-1], log)
             except Exception as error:
                 error_message = str(error)
                 page.screenshot(path=str(screenshot_path), full_page=True)
@@ -114,6 +123,8 @@ class PlaywrightUiRunner:
                     }
                 )
                 logs.append(error_message)
+                if callable(on_step):
+                    on_step(step_results[-1], error_message)
             finally:
                 context.close()
             if video is not None:
@@ -122,7 +133,7 @@ class PlaywrightUiRunner:
                     copyfile(recorded_path, video_path)
             browser.close()
         return {
-            "status": "FAILED" if error_message else "PASSED",
+            "status": "SKIPPED" if cancelled else "FAILED" if error_message else "PASSED",
             "durationMs": round((perf_counter() - started_at) * 1000),
             "stepResults": step_results,
             "logs": logs,

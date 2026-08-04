@@ -162,7 +162,7 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `status` | `PENDING`、`RUNNING`、`PASSED`、`FAILED` 或 `SKIPPED` |
 | `duration_ms` | 执行耗时，单位毫秒 |
 | `request_payload` | UI 步骤或接口请求方法、地址、请求头和请求体 |
-| `response_payload` | 接口响应或 UI 日志、错误、截图和录屏地址 |
+| `response_payload` | 接口的最终渲染请求与响应，或 UI 步骤结果、日志、错误、截图和录屏地址 |
 | `assertion_results` | JSON 断言结果列表 |
 
 ### `execution_tasks`

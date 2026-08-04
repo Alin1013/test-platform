@@ -1,4 +1,4 @@
-from threading import Barrier, Lock, Thread
+from threading import Barrier, Event, Lock, Thread
 from time import sleep
 
 import httpx
@@ -372,7 +372,6 @@ def test_queued_ui_execution_uses_configured_runner(client: TestClient) -> None:
             }
 
     client.app.state.ui_runner = SuccessfulUiRunner()
-    client.app.state.auto_run_executions = True
     started = client.post(
         "/api/v1/executions/start",
         json={
@@ -390,6 +389,10 @@ def test_queued_ui_execution_uses_configured_runner(client: TestClient) -> None:
 
     assert started.status_code == 202
     execution_id = started.json()["data"]["executionId"]
+    execution_worker.run_next_execution(
+        client.app.state.session_factory,
+        ui_runner=client.app.state.ui_runner,
+    )
     summary = client.get(
         f"/api/v1/executions/{execution_id}/summary"
     ).json()["data"]
@@ -539,3 +542,193 @@ def test_legacy_execution_is_not_consumed_by_queue_worker(client: TestClient) ->
     report = client.get(f"/api/v1/ui-test/executions/{execution_id}").json()["data"]
     assert report["status"] == "RUNNING"
     assert report["cases"][0]["status"] == "PENDING"
+
+
+def test_stopped_execution_is_not_overwritten_by_late_api_result(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/v1/api-cases",
+        json={
+            "title": "中止运行中请求",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P0",
+            "api_details": {
+                "url": "/api/slow",
+                "method": "GET",
+                "expected_code": 200,
+            },
+        },
+    ).json()
+    execution_id = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "API",
+            "projectId": 1,
+            "caseIds": [created["id"]],
+            "envName": "test",
+            "config": {
+                "globalHeaders": {},
+                "variables": {},
+                "iterations": 1,
+                "rampUpTime": 0,
+            },
+        },
+    ).json()["data"]["executionId"]
+    request_started = Event()
+    release_request = Event()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_started.set()
+        release_request.wait(timeout=5)
+        return httpx.Response(200, request=request, json={"ok": True})
+
+    worker = Thread(
+        target=execution_worker.run_next_execution,
+        args=(client.app.state.session_factory,),
+        kwargs={"api_transport": httpx.MockTransport(handler)},
+    )
+    worker.start()
+    assert request_started.wait(timeout=5)
+
+    stopped = client.post(f"/api/v1/executions/{execution_id}/stop")
+    release_request.set()
+    worker.join(timeout=5)
+
+    assert stopped.status_code == 200
+    assert not worker.is_alive()
+    summary = client.get(
+        f"/api/v1/executions/{execution_id}/summary"
+    ).json()["data"]
+    detail = client.get(
+        f"/api/v1/executions/{execution_id}/details"
+    ).json()["data"]["items"][0]
+    assert summary["status"] == "CANCELLED"
+    assert detail["status"] == "SKIPPED"
+
+
+def test_ui_execution_honors_case_concurrency(client: TestClient) -> None:
+    active_count = 0
+    max_active_count = 0
+    active_lock = Lock()
+
+    class ConcurrentUiRunner:
+        def run(self, *, steps: list[dict], config: dict) -> dict:
+            nonlocal active_count, max_active_count
+            with active_lock:
+                active_count += 1
+                max_active_count = max(max_active_count, active_count)
+            sleep(0.1)
+            with active_lock:
+                active_count -= 1
+            return {
+                "status": "PASSED",
+                "durationMs": 100,
+                "stepResults": [],
+                "logs": [],
+                "screenshotUrl": None,
+                "videoUrl": None,
+                "errorMessage": None,
+            }
+
+    execution_id = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "UI",
+            "projectId": 1,
+            "caseIds": [2, 7],
+            "envName": "test",
+            "config": {
+                "browser": "chrome",
+                "headless": True,
+                "concurrency": 2,
+            },
+        },
+    ).json()["data"]["executionId"]
+
+    execution_worker.run_next_execution(
+        client.app.state.session_factory,
+        ui_runner=ConcurrentUiRunner(),
+    )
+
+    summary = client.get(
+        f"/api/v1/executions/{execution_id}/summary"
+    ).json()["data"]
+    assert max_active_count == 2
+    assert summary["passedCount"] == 2
+
+
+def test_ui_step_log_is_persisted_before_case_finishes(client: TestClient) -> None:
+    first_step_recorded = Event()
+    release_runner = Event()
+
+    class StreamingUiRunner:
+        def run(self, *, steps: list[dict], config: dict) -> dict:
+            on_step = config["onStep"]
+            on_step(
+                {
+                    "stepIndex": 1,
+                    "action": "navigate",
+                    "status": "PASSED",
+                    "durationMs": 12,
+                },
+                "步骤 1 执行成功",
+            )
+            first_step_recorded.set()
+            release_runner.wait(timeout=5)
+            return {
+                "status": "PASSED",
+                "durationMs": 12,
+                "stepResults": [
+                    {
+                        "stepIndex": 1,
+                        "action": "navigate",
+                        "status": "PASSED",
+                        "durationMs": 12,
+                    }
+                ],
+                "logs": ["步骤 1 执行成功"],
+                "screenshotUrl": None,
+                "videoUrl": None,
+                "errorMessage": None,
+            }
+
+    execution_id = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "UI",
+            "projectId": 1,
+            "caseIds": [2],
+            "envName": "test",
+            "config": {
+                "browser": "chrome",
+                "headless": True,
+                "concurrency": 1,
+            },
+        },
+    ).json()["data"]["executionId"]
+    worker = Thread(
+        target=execution_worker.run_next_execution,
+        args=(client.app.state.session_factory,),
+        kwargs={"ui_runner": StreamingUiRunner()},
+    )
+    worker.start()
+
+    assert first_step_recorded.wait(timeout=5)
+    detail = client.get(
+        f"/api/v1/executions/{execution_id}/details"
+    ).json()["data"]["items"][0]
+    release_runner.set()
+    worker.join(timeout=5)
+
+    assert detail["status"] == "RUNNING"
+    assert detail["logs"] == ["步骤 1 执行成功"]
+    assert detail["stepResults"] == [
+        {
+            "stepIndex": 1,
+            "action": "navigate",
+            "status": "PASSED",
+            "durationMs": 12,
+        }
+    ]

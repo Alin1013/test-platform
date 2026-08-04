@@ -1,9 +1,12 @@
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from ..models import (
     ExecutionTask,
@@ -319,6 +322,9 @@ def ui_execution_result(session: Session, execution_code: str) -> dict:
                 "screenshotUrl": (detail.response_payload or {}).get("screenshotUrl"),
                 "videoUrl": (detail.response_payload or {}).get("videoUrl"),
                 "steps": (detail.request_payload or {}).get("steps", []),
+                "stepResults": (detail.response_payload or {}).get(
+                    "stepResults", []
+                ),
                 "logs": (detail.response_payload or {}).get("logs", []),
             }
             for detail in execution.details
@@ -418,7 +424,8 @@ def execution_details(session: Session, execution_code: str) -> dict:
                 "caseName": detail.target_name,
                 "status": detail.status,
                 "durationMs": detail.duration_ms,
-                "requestData": {
+                "requestData": (detail.response_payload or {}).get("requestData")
+                or {
                     "method": (detail.request_payload or {}).get("method"),
                     "url": (detail.request_payload or {}).get("url"),
                     "headers": (detail.request_payload or {}).get("headers", {}),
@@ -540,3 +547,35 @@ def execution_events(session: Session, execution_code: str) -> list[dict]:
                     }
                 )
     return events
+
+
+async def execution_event_stream(
+    session_factory: sessionmaker[Session],
+    execution_code: str,
+    *,
+    poll_interval: float = 0.25,
+) -> AsyncIterator[dict]:
+    seen_events: dict[tuple, str] = {}
+    while True:
+        with session_factory() as session:
+            execution = get_execution_by_code(session, execution_code)
+            current_events = execution_events(session, execution_code)
+            is_terminal = execution.status in {
+                "COMPLETED",
+                "FAILED",
+                "CANCELLED",
+            }
+        for event in current_events:
+            key = (
+                event["type"],
+                event.get("caseId"),
+                event.get("stepIndex"),
+            )
+            encoded = json.dumps(event, ensure_ascii=False, sort_keys=True)
+            if seen_events.get(key) == encoded:
+                continue
+            seen_events[key] = encoded
+            yield event
+        if is_terminal:
+            return
+        await asyncio.sleep(poll_interval)

@@ -1,6 +1,8 @@
 import httpx
 from fastapi.testclient import TestClient
 
+from backend.app.services import execution_worker
+
 
 def test_api_case_debug_executes_request_and_evaluates_response(client: TestClient) -> None:
     def handle_request(request: httpx.Request) -> httpx.Response:
@@ -65,6 +67,14 @@ def test_api_case_debug_executes_request_and_evaluates_response(client: TestClie
         "code": 0,
         "data": {"token": "response-token"},
     }
+    assert result["requestData"]["url"] == (
+        "https://test-api.example.com/api/users?page=1&source=automation"
+    )
+    assert result["requestData"]["method"] == "POST"
+    assert result["requestData"]["headers"]["authorization"] == (
+        "Bearer rendered-token"
+    )
+    assert result["requestData"]["body"] == {"name": "example"}
     assert result["assertions"] == [
         {
             "type": "statusCode",
@@ -114,7 +124,6 @@ def test_queued_api_execution_is_completed_by_background_worker(
             json={"code": 0, "data": {"token": "next-token"}},
         )
     )
-    client.app.state.auto_run_executions = True
     created = client.post(
         "/api/v1/api-cases",
         json={
@@ -158,6 +167,10 @@ def test_queued_api_execution_is_completed_by_background_worker(
     assert started.status_code == 202
     assert started.json()["data"]["status"] == "PENDING"
     execution_id = started.json()["data"]["executionId"]
+    execution_worker.run_next_execution(
+        client.app.state.session_factory,
+        api_transport=client.app.state.api_debug_transport,
+    )
     summary = client.get(
         f"/api/v1/executions/{execution_id}/summary"
     ).json()["data"]
@@ -167,5 +180,6 @@ def test_queued_api_execution_is_completed_by_background_worker(
         f"/api/v1/executions/{execution_id}/details"
     ).json()["data"]["items"][0]
     assert detail["status"] == "PASSED"
+    assert detail["requestData"]["url"] == "https://test-api.example.com/api/worker"
     assert detail["responseData"]["responseBody"]["data"]["token"] == "next-token"
     assert detail["assertionResults"][0]["passed"] is True

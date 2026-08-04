@@ -73,6 +73,18 @@ def _display(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def _request_body(request: httpx.Request) -> Any:
+    if not request.content:
+        return None
+    text = request.content.decode(errors="replace")
+    if "application/json" in request.headers.get("content-type", ""):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+    return text
+
+
 def _assertion_result(
     assertion: ApiResponseAssertion,
     *,
@@ -179,6 +191,12 @@ def debug_api_case(
     return {
         "requestUrl": str(response.request.url),
         "requestHeaders": dict(response.request.headers),
+        "requestData": {
+            "method": response.request.method,
+            "url": str(response.request.url),
+            "headers": dict(response.request.headers),
+            "body": _request_body(response.request),
+        },
         "statusCode": response.status_code,
         "responseTimeMs": response_time_ms,
         "responseHeaders": dict(response.headers),
