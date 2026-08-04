@@ -221,7 +221,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async stopUiExecution(executionId: string) {
       const execution = uiExecutions.get(executionId);
       if (!execution) throw new Error('执行任务不存在');
-      execution.status = 'CANCELED';
+      execution.status = 'CANCELLED';
       execution.cases = execution.cases.map((item) =>
         item.status === 'PENDING' || item.status === 'RUNNING'
           ? { ...item, status: 'SKIPPED' }
@@ -273,7 +273,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async stopApiExecution(executionId: string) {
       const execution = apiExecutions.get(executionId);
       if (!execution) throw new Error('执行任务不存在');
-      execution.status = 'CANCELED';
+      execution.status = 'CANCELLED';
       execution.results = execution.results.map((item) =>
         item.status === 'PENDING' || item.status === 'RUNNING'
           ? { ...item, status: 'SKIPPED' }

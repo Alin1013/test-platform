@@ -169,7 +169,7 @@ it('模拟 UI 自动化执行的启动、查询和中断', async () => {
 
   expect((await service.getUiExecution(started.executionId)).summary.pending).toBe(1);
   await service.stopUiExecution(started.executionId);
-  expect((await service.getUiExecution(started.executionId)).status).toBe('CANCELED');
+  expect((await service.getUiExecution(started.executionId)).status).toBe('CANCELLED');
 });
 
 it('模拟接口自动化执行报告', async () => {

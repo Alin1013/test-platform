@@ -102,3 +102,70 @@ def test_api_case_debug_rejects_unknown_variables_before_sending(client: TestCli
 
     assert response.status_code == 422
     assert response.json()["detail"] == "Undefined variable: missing"
+
+
+def test_queued_api_execution_is_completed_by_background_worker(
+    client: TestClient,
+) -> None:
+    client.app.state.api_debug_transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={"code": 0, "data": {"token": "next-token"}},
+        )
+    )
+    client.app.state.auto_run_executions = True
+    created = client.post(
+        "/api/v1/api-cases",
+        json={
+            "title": "后台执行接口",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P0",
+            "api_details": {
+                "url": "/api/worker",
+                "method": "GET",
+                "expected_code": 200,
+                "assertions": [
+                    {
+                        "type": "jsonPath",
+                        "target": "$.code",
+                        "comparison": "equals",
+                        "expected": "0",
+                    }
+                ],
+                "extracts": [{"name": "token", "jsonPath": "$.data.token"}],
+            },
+        },
+    ).json()
+
+    started = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "API",
+            "projectId": 1,
+            "caseIds": [created["id"]],
+            "envName": "test",
+            "config": {
+                "globalHeaders": {},
+                "variables": {},
+                "iterations": 1,
+                "rampUpTime": 0,
+            },
+        },
+    )
+
+    assert started.status_code == 202
+    assert started.json()["data"]["status"] == "PENDING"
+    execution_id = started.json()["data"]["executionId"]
+    summary = client.get(
+        f"/api/v1/executions/{execution_id}/summary"
+    ).json()["data"]
+    assert summary["status"] == "COMPLETED"
+    assert summary["passedCount"] == 1
+    detail = client.get(
+        f"/api/v1/executions/{execution_id}/details"
+    ).json()["data"]["items"][0]
+    assert detail["status"] == "PASSED"
+    assert detail["responseData"]["responseBody"]["data"]["token"] == "next-token"
+    assert detail["assertionResults"][0]["passed"] is True

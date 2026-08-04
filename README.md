@@ -137,8 +137,8 @@ frontend/
 
 | 方法与路径 | 职责 |
 | --- | --- |
-| `POST /api/v1/api-cases` | 创建包含请求、断言和提取规则的接口自动化用例 |
-| `POST /api/v1/ui-cases` | 创建包含步骤与运行配置的 UI 自动化用例 |
+| `POST/PUT /api/v1/api-cases[/{caseId}]` | 创建或更新包含请求、断言和提取规则的接口自动化用例 |
+| `POST/PUT /api/v1/ui-cases[/{caseId}]` | 创建或更新包含步骤与运行配置的 UI 自动化用例 |
 | `POST /api/v1/api-cases/debug` | 同步调试接口配置并返回响应、断言和提取结果，不写执行历史 |
 | `POST /api/v1/executions/start` | 统一创建 UI 或 API 执行批次及用例快照 |
 | `POST /api/v1/executions/{executionId}/stop` | 按执行编号统一中止任务 |
@@ -153,7 +153,7 @@ frontend/
 | `GET /api/v1/api-test/executions/{executionId}/report` | 查询接口自动化报告 |
 | `POST /api/v1/api-test/executions/{executionId}/stop` | 中断接口自动化执行 |
 
-当前实现负责执行配置校验、配置快照、记录持久化、状态查询、中断和 WebSocket 事件快照。接口用例弹窗可通过同步调试接口直接调用 HTTP 服务，但批量任务仍以 `RUNNING` 创建、明细以 `PENDING` 创建，供后续 Celery/Worker 调用 Playwright 或 HTTP Client 后回写。仓库目前尚未包含 Redis/Celery、真实浏览器 Worker 或批量 HTTP Worker，因此不会伪造通过、失败、截图、录屏或响应数据。后端分层和 Worker 接入边界见 [`docs/automation-backend-architecture.md`](docs/automation-backend-architecture.md)。
+当前实现负责执行配置校验、不可变配置快照、持久化任务入队、状态查询、中断和持续 WebSocket 状态流。独立 Worker 可执行批量 HTTP 请求、变量传递、断言与提取，也可通过 Playwright 执行 UI 步骤、失败重试、截图和录屏；产物默认保存在本地 `/uploads/executions`。生产环境可在相同 Worker 边界替换 Redis/RabbitMQ 和 OSS 适配器。后端分层和接入约束见 [`docs/automation-backend-architecture.md`](docs/automation-backend-architecture.md)。
 
 当前核心领域类型包括：
 
@@ -184,6 +184,13 @@ python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/alembic upgrade head
 ./.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+```
+
+另开一个终端启动自动化 Worker；首次使用 Playwright 时先安装浏览器：
+
+```bash
+./.venv/bin/playwright install chromium firefox webkit
+./.venv/bin/python -m backend.app.worker
 ```
 
 后端 API 文档位于 `http://localhost:8000/docs`。

@@ -47,7 +47,7 @@ const executionStatusLabels: Record<ExecutionStatus, string> = {
   RUNNING: '运行中',
   COMPLETED: '已完成',
   FAILED: '执行失败',
-  CANCELED: '已中断',
+  CANCELLED: '已中断',
 };
 
 const statusColors: Record<ExecutionDetailStatus, string> = {

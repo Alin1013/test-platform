@@ -9,7 +9,7 @@ Priority = Literal["P0", "P1", "P2", "P3"]
 CaseStatus = Literal["维护中", "已通过", "草稿", "已失败", "已停用"]
 HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 UiAction = Literal["click", "input", "navigate", "hover", "wait", "assert"]
-UiLocatorType = Literal["xpath", "css", "id", "text"]
+UiLocatorType = Literal["", "xpath", "css", "id", "text"]
 UiAssertion = Literal["none", "textEquals", "isVisible", "urlEquals"]
 ApiBodyType = Literal["none", "json", "form-data", "x-www-form-urlencoded"]
 ApiAssertionType = Literal["statusCode", "jsonPath", "responseTime"]
@@ -119,12 +119,46 @@ class ApiCaseDebugRequest(ApiDetailsCreate):
 class UiStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    stepIndex: int | None = Field(default=None, ge=1)
     action: UiAction
     locatorType: UiLocatorType
-    target: str = Field(max_length=2048)
-    value: str = Field(max_length=4000)
+    target: str = Field(default="", max_length=2048)
+    value: str = Field(default="", max_length=4000)
     assertion: UiAssertion = "none"
     expected: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_design_step(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        if "selector" in normalized and "target" not in normalized:
+            normalized["target"] = normalized.pop("selector")
+        action_aliases = {
+            "OpenUrl": "navigate",
+            "Input": "input",
+            "Click": "click",
+            "Hover": "hover",
+            "Wait": "wait",
+            "AssertText": "assert",
+        }
+        original_action = normalized.get("action")
+        normalized["action"] = action_aliases.get(original_action, original_action)
+        locator_aliases = {
+            "XPath": "xpath",
+            "CSS Selector": "css",
+            "ID": "id",
+            "Text": "text",
+        }
+        original_locator = normalized.get("locatorType")
+        normalized["locatorType"] = locator_aliases.get(
+            original_locator, original_locator
+        )
+        if original_action == "AssertText":
+            normalized.setdefault("assertion", "textEquals")
+            normalized.setdefault("expected", normalized.get("value", ""))
+        return normalized
 
     @model_validator(mode="after")
     def assert_action_requires_assertion(self) -> "UiStep":
@@ -227,6 +261,7 @@ class ApiExecutionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     globalHeaders: dict[str, str] = Field(default_factory=dict)
+    variables: dict[str, str] = Field(default_factory=dict, max_length=100)
     iterations: int = Field(default=1, ge=1, le=100)
     rampUpTime: int = Field(default=0, ge=0, le=60000)
 

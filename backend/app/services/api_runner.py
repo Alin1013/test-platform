@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..schemas import ApiCaseDebugRequest, ApiResponseAssertion
-from .settings import get_settings
+from .settings import get_environment, get_settings
 
 
 VARIABLE_PATTERN = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
@@ -30,16 +30,7 @@ def _render(value: str, variables: dict[str, str]) -> str:
 def _environment(session: Session, environment_id: str | None) -> tuple[str, int]:
     execution_settings = get_settings(session)["execution"]
     selected_id = environment_id or execution_settings["defaultEnvironmentId"]
-    environment = next(
-        (
-            item
-            for item in execution_settings["environments"]
-            if item["id"] == selected_id
-        ),
-        None,
-    )
-    if environment is None:
-        raise HTTPException(status_code=422, detail="Execution environment is not configured")
+    environment = get_environment(session, selected_id)
     return environment["baseUrl"], execution_settings["apiTimeoutMs"]
 
 

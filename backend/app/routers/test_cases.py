@@ -1,10 +1,9 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
-    HTTPException,
     Query,
     Request,
     Response,
@@ -66,20 +65,11 @@ def create_test_case(
     return test_cases.create_case(session, payload)
 
 
-def _create_automation_case(
-    session: Session, payload: TestCaseCreate, expected_type: Literal["api", "ui"]
-) -> dict:
-    if payload.type != expected_type:
-        label = "API" if expected_type == "api" else "UI automation"
-        raise HTTPException(status_code=422, detail=f"Only {label} cases are accepted")
-    return test_cases.create_case(session, payload)
-
-
 @router.post("/api-cases", status_code=status.HTTP_201_CREATED)
 def create_api_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
-    return _create_automation_case(session, payload, "api")
+    return test_cases.create_automation_case(session, payload, "api")
 
 
 @router.post("/api-cases/debug")
@@ -103,7 +93,25 @@ def debug_api_case(
 def create_ui_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
-    return _create_automation_case(session, payload, "ui")
+    return test_cases.create_automation_case(session, payload, "ui")
+
+
+@router.put("/api-cases/{case_id}")
+def update_api_case(
+    case_id: int,
+    payload: TestCaseUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    return test_cases.update_automation_case(session, case_id, payload, "api")
+
+
+@router.put("/ui-cases/{case_id}")
+def update_ui_case(
+    case_id: int,
+    payload: TestCaseUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    return test_cases.update_automation_case(session, case_id, payload, "ui")
 
 
 @router.post("/test-cases/export")

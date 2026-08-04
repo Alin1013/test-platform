@@ -14,7 +14,7 @@
 | 主机与端口 | 无 |
 | ORM | SQLAlchemy 2 |
 | 迁移工具 | Alembic |
-| 仓库最新迁移版本 | `1c5e8a7d3b42` |
+| 仓库最新迁移版本 | `6e4b9c2a7d15` |
 
 应用演示账号为 `jiangshan`，密码为 `Test1234`。该凭据仅限本地演示，部署前必须修改或禁用。这是测试平台的应用账号，不是数据库登录信息；密码在数据库中以 PBKDF2 哈希保存。
 
@@ -40,6 +40,7 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `ui_case_details` | UI 自动化用例的步骤或脚本配置 | 与 `test_cases` 一对一，删除主用例时级联删除 |
 | `test_execution` | UI/接口自动化执行配置、状态和创建人 | 关联 `users`，一对多关联 `test_execution_detail` |
 | `test_execution_detail` | 单个 UI 用例或接口的执行状态、请求、响应和断言 | 多对一关联 `test_execution`，执行记录删除时级联删除 |
+| `execution_tasks` | 可被独立 Worker 领取的持久化异步任务 | 与 `test_execution` 一对一，执行记录删除时级联删除 |
 | `xmind_records` | XMind 上传文件、上传人及解析数量 | 多对一关联 `users` |
 | `system_configs` | 平台、执行环境、Webhook 和 AI 等全局配置 | 通过唯一配置键读取 |
 | `alembic_version` | Alembic 当前迁移版本 | 迁移工具内部使用 |
@@ -142,7 +143,7 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `type` | `UI` 或 `API` |
 | `project_id` | 所属项目 ID |
 | `env_name` | 执行环境标识 |
-| `status` | `PENDING`、`RUNNING`、`COMPLETED`、`FAILED` 或 `CANCELED` |
+| `status` | `PENDING`、`RUNNING`、`COMPLETED`、`FAILED` 或 `CANCELLED` |
 | `config_json` | JSON 执行配置，包括环境、浏览器、并发、迭代和全局请求头等 |
 | `total_count`、`passed_count`、`failed_count` | 批次用例总数及结果计数 |
 | `duration_ms` | 批次总耗时，单位毫秒 |
@@ -163,6 +164,18 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `request_payload` | UI 步骤或接口请求方法、地址、请求头和请求体 |
 | `response_payload` | 接口响应或 UI 日志、错误、截图和录屏地址 |
 | `assertion_results` | JSON 断言结果列表 |
+
+### `execution_tasks`
+
+| 字段 | 存储内容 |
+| --- | --- |
+| `id` | 队列任务主键 |
+| `execution_id` | 唯一关联的执行批次 ID |
+| `status` | `PENDING`、`RUNNING`、`COMPLETED`、`FAILED` 或 `CANCELLED` |
+| `attempts` | Worker 领取次数 |
+| `available_at`、`locked_at` | 可领取时间和最近领取时间 |
+| `completed_at`、`last_error` | 完成时间和任务级错误 |
+| `created_at`、`updated_at` | 创建和更新时间 |
 
 ### `xmind_records`
 
@@ -223,7 +236,7 @@ SELECT id, account, name, email, status FROM users;
 
 ## 6. 表注释与 DataGrip
 
-11 张应用业务表已在 SQLAlchemy 元数据中配置中文 `comment`，迁移也会在支持原生表注释的数据库中写入这些说明。`alembic_version` 由 Alembic 内部管理，不添加应用注释。
+12 张应用业务表已在 SQLAlchemy 元数据中配置中文 `comment`，迁移也会在支持原生表注释的数据库中写入这些说明。`alembic_version` 由 Alembic 内部管理，不添加应用注释。
 
 SQLite 不支持 `COMMENT ON TABLE`，也不会在数据库文件中持久化表注释。因此 DataGrip 连接当前 `backend/test_platform.db` 时无法从数据库读取原生 Comment；表含义以本文档“数据表总览”和 ORM 元数据为准。切换到 PostgreSQL、MySQL 等支持表注释的数据库并执行迁移后，DataGrip 才能直接显示这些 Comment。
 

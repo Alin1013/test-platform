@@ -5,7 +5,14 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Module, TestCase, TestExecution, TestExecutionDetail, User
+from ..models import (
+    ExecutionTask,
+    Module,
+    TestCase,
+    TestExecution,
+    TestExecutionDetail,
+    User,
+)
 from ..schemas import (
     ApiExecutionConfig,
     ApiExecutionCreate,
@@ -13,7 +20,7 @@ from ..schemas import (
     UiExecutionConfig,
     UiExecutionCreate,
 )
-from .settings import get_settings
+from .settings import get_environment
 
 
 def _execution_code(prefix: str) -> str:
@@ -63,22 +70,13 @@ def _creator(session: Session, user_id: int = 1) -> User:
     return user
 
 
-def _configured_environment(session: Session, environment_id: str) -> dict:
-    environment = next(
-        (
-            item
-            for item in get_settings(session)["execution"]["environments"]
-            if item["id"] == environment_id
-        ),
-        None,
-    )
-    if environment is None:
-        raise HTTPException(status_code=422, detail="Execution environment is not configured")
-    return environment
-
-
-def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
-    _configured_environment(session, payload.environment)
+def start_ui_execution(
+    session: Session,
+    payload: UiExecutionCreate,
+    *,
+    initial_status: str = "RUNNING",
+) -> dict:
+    get_environment(session, payload.environment)
     cases = _selected_cases(
         session,
         project_id=payload.projectId,
@@ -90,10 +88,10 @@ def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
         type="UI",
         project_id=payload.projectId,
         env_name=payload.environment,
-        status="RUNNING",
+        status=initial_status,
         config_json=payload.model_dump(),
         total_count=len(cases),
-        start_time=datetime.now(timezone.utc),
+        start_time=datetime.now(timezone.utc) if initial_status == "RUNNING" else None,
         creator=_creator(session),
     )
     execution.details = [
@@ -102,7 +100,17 @@ def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
             target_name=test_case.title,
             status="PENDING",
             duration_ms=0,
-            request_payload={"steps": test_case.ui_details.steps if test_case.ui_details else []},
+            request_payload={
+                "steps": test_case.ui_details.steps if test_case.ui_details else [],
+                "timeoutSeconds": (
+                    test_case.ui_details.timeout_seconds
+                    if test_case.ui_details
+                    else 30
+                ),
+                "retryCount": (
+                    test_case.ui_details.retry_count if test_case.ui_details else 0
+                ),
+            },
             response_payload={
                 "logs": ["测试用例已加入执行队列"],
                 "screenshotUrl": None,
@@ -113,6 +121,10 @@ def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
         )
         for test_case in cases
     ]
+    if initial_status == "PENDING":
+        execution.task = ExecutionTask(
+            status="PENDING", available_at=datetime.now(timezone.utc)
+        )
     session.add(execution)
     session.commit()
     return {
@@ -131,6 +143,7 @@ def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
         global_headers=payload.globalHeaders,
         iterations=payload.iterations,
         ramp_up_time=payload.rampUpTime,
+        variables={},
     )
 
 
@@ -143,6 +156,8 @@ def _start_api_execution(
     global_headers: dict[str, str],
     iterations: int,
     ramp_up_time: int,
+    variables: dict[str, str],
+    initial_status: str = "RUNNING",
 ) -> dict:
     cases = _selected_cases(
         session,
@@ -155,6 +170,7 @@ def _start_api_execution(
         "suiteIds": case_ids,
         "environment": env_name,
         "globalHeaders": global_headers,
+        "variables": variables,
         "iterations": iterations,
         "rampUpTime": ramp_up_time,
     }
@@ -163,10 +179,10 @@ def _start_api_execution(
         type="API",
         project_id=project_id,
         env_name=env_name,
-        status="RUNNING",
+        status=initial_status,
         config_json=config,
         total_count=len(cases),
-        start_time=datetime.now(timezone.utc),
+        start_time=datetime.now(timezone.utc) if initial_status == "RUNNING" else None,
         creator=_creator(session),
     )
     execution.details = []
@@ -189,12 +205,25 @@ def _start_api_execution(
                     "bodyContent": api_details.body_content,
                     "bodyFields": api_details.body_fields,
                     "body": api_details.request_body,
-                    "assertionRules": api_details.assertions,
+                    "expectedCode": api_details.expected_code,
+                    "assertionRules": api_details.assertions
+                    or [
+                        {
+                            "type": "statusCode",
+                            "target": "",
+                            "comparison": "equals",
+                            "expected": str(api_details.expected_code),
+                        }
+                    ],
                     "extractRules": api_details.extracts,
                 },
                 response_payload=None,
                 assertion_results=[],
             )
+        )
+    if initial_status == "PENDING":
+        execution.task = ExecutionTask(
+            status="PENDING", available_at=datetime.now(timezone.utc)
         )
     session.add(execution)
     session.commit()
@@ -202,7 +231,7 @@ def _start_api_execution(
 
 
 def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
-    _configured_environment(session, payload.envName)
+    get_environment(session, payload.envName)
     if payload.type == "UI":
         config = payload.config
         if not isinstance(config, UiExecutionConfig):
@@ -217,6 +246,7 @@ def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
                 headless=config.headless,
                 concurrency=config.concurrency,
             ),
+            initial_status="PENDING",
         )
 
     config = payload.config
@@ -230,6 +260,8 @@ def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
         global_headers=config.globalHeaders,
         iterations=config.iterations,
         ramp_up_time=config.rampUpTime,
+        variables=config.variables,
+        initial_status="PENDING",
     )
 
 
@@ -354,7 +386,7 @@ def execution_summary(session: Session, execution_code: str) -> dict:
         "type": execution.type,
         "envName": execution.env_name,
         "status": execution.status,
-        "totalCount": execution.total_count,
+        "totalCount": execution.total_count or len(execution.details),
         "passedCount": summary["passed"],
         "failedCount": summary["failed"],
         "runningCount": summary["running"],
@@ -416,10 +448,17 @@ def execution_details(session: Session, execution_code: str) -> dict:
 
 def stop_execution(session: Session, execution_code: str, execution_type: str) -> None:
     execution = get_execution(session, execution_code, execution_type)
-    if execution.status in {"COMPLETED", "FAILED", "CANCELED"}:
+    _cancel_execution(session, execution)
+
+
+def _cancel_execution(session: Session, execution: TestExecution) -> None:
+    if execution.status in {"COMPLETED", "FAILED", "CANCELLED"}:
         return
-    execution.status = "CANCELED"
+    execution.status = "CANCELLED"
     execution.end_time = datetime.now(timezone.utc)
+    if execution.task is not None:
+        execution.task.status = "CANCELLED"
+        execution.task.completed_at = execution.end_time
     if execution.start_time is not None:
         start_time = execution.start_time
         if start_time.tzinfo is None:
@@ -435,7 +474,7 @@ def stop_execution(session: Session, execution_code: str, execution_type: str) -
 
 def stop_execution_by_code(session: Session, execution_code: str) -> None:
     execution = get_execution_by_code(session, execution_code)
-    stop_execution(session, execution_code, execution.type)
+    _cancel_execution(session, execution)
 
 
 def ui_execution_events(session: Session, execution_code: str) -> list[dict]:

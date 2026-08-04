@@ -176,7 +176,9 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
     if payload.type == "ui":
         details = payload.ui_details or UiCaseDetails(steps=[])
         test_case.ui_details = (
-            details if isinstance(details, UiCaseDetails) else UiCaseDetails(**details.model_dump())
+            details
+            if isinstance(details, UiCaseDetails)
+            else UiCaseDetails(**details.model_dump(exclude_none=True))
         )
     return test_case
 
@@ -185,6 +187,30 @@ def create_case(session: Session, payload: TestCaseCreate) -> dict:
     test_case = add_case(session, payload)
     session.commit()
     return serialize_case(test_case)
+
+
+def create_automation_case(
+    session: Session, payload: TestCaseCreate, expected_type: str
+) -> dict:
+    if payload.type != expected_type:
+        label = "API" if expected_type == "api" else "UI automation"
+        raise HTTPException(status_code=422, detail=f"Only {label} cases are accepted")
+    return create_case(session, payload)
+
+
+def update_automation_case(
+    session: Session,
+    case_id: int,
+    payload: TestCaseUpdate,
+    expected_type: str,
+) -> dict:
+    test_case = session.get(TestCase, case_id)
+    if test_case is None:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    if test_case.type != expected_type:
+        label = "API" if expected_type == "api" else "UI automation"
+        raise HTTPException(status_code=422, detail=f"Only {label} cases are accepted")
+    return update_case(session, case_id, payload)
 
 
 def update_case(session: Session, case_id: int, payload: TestCaseUpdate) -> dict:
@@ -212,7 +238,7 @@ def update_case(session: Session, case_id: int, payload: TestCaseUpdate) -> dict
             dependency = session.get(TestCase, payload.ui_details.dependency_case_id)
             if dependency is None or dependency.type != "ui" or dependency.id == test_case.id:
                 raise HTTPException(status_code=422, detail="UI dependency case not found")
-        details = payload.ui_details.model_dump()
+        details = payload.ui_details.model_dump(exclude_none=True)
         if test_case.ui_details is None:
             test_case.ui_details = UiCaseDetails(**details)
         else:

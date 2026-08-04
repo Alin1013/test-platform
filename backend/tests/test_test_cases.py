@@ -183,6 +183,64 @@ def test_dedicated_ui_case_endpoint_rejects_other_case_types(client: TestClient)
     assert response.json()["detail"] == "Only UI automation cases are accepted"
 
 
+def test_dedicated_case_endpoints_update_matching_automation_types(
+    client: TestClient,
+) -> None:
+    api_case = client.get(
+        "/api/v1/test-cases", params={"type": "api", "page_size": 1}
+    ).json()["items"][0]
+    updated = client.put(
+        f"/api/v1/api-cases/{api_case['id']}",
+        json={"title": "接口专用路径更新"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "接口专用路径更新"
+
+    rejected = client.put(
+        f"/api/v1/ui-cases/{api_case['id']}",
+        json={"title": "错误类型更新"},
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == "Only UI automation cases are accepted"
+
+
+def test_ui_case_accepts_step_shape_from_backend_design(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/ui-cases",
+        json={
+            "title": "设计稿步骤兼容",
+            "type": "ui",
+            "module_id": "auth",
+            "priority": "P1",
+            "ui_details": {
+                "steps": [
+                    {
+                        "stepIndex": 1,
+                        "action": "OpenUrl",
+                        "locatorType": "",
+                        "selector": "",
+                        "value": "https://test.example.com/login",
+                    },
+                    {
+                        "stepIndex": 2,
+                        "action": "Input",
+                        "locatorType": "XPath",
+                        "selector": "//input[@id='username']",
+                        "value": "tester",
+                    },
+                ]
+            },
+        },
+    )
+
+    assert created.status_code == 201
+    steps = created.json()["ui_details"]["steps"]
+    assert steps[0]["stepIndex"] == 1
+    assert steps[0]["action"] == "navigate"
+    assert steps[1]["locatorType"] == "xpath"
+    assert steps[1]["target"] == "//input[@id='username']"
+
+
 def test_ui_case_creation_persists_execution_config_and_steps(client: TestClient) -> None:
     created = client.post(
         "/api/v1/test-cases",

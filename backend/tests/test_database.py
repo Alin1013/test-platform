@@ -23,6 +23,7 @@ EXPECTED_TABLE_COMMENTS = {
     "system_configs": "系统全局配置",
     "test_execution": "自动化测试执行主记录",
     "test_execution_detail": "自动化测试执行明细",
+    "execution_tasks": "自动化执行异步任务队列",
 }
 
 

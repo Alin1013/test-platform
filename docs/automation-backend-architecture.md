@@ -2,7 +2,7 @@
 
 ## 1. 目标与边界
 
-后端为 UI 自动化与接口自动化提供统一的用例配置、执行编排、结果查询和事件协议。当前仓库完成控制面与持久化层，并提供接口用例同步调试 Runner；批量 UI/API Runner 和外部消息队列作为独立部署组件接入，不在 API 进程内伪造执行结果。
+后端为 UI 自动化与接口自动化提供统一的用例配置、执行编排、结果查询和事件协议。当前仓库完成控制面、持久化任务队列、接口同步调试、批量 API Runner、Playwright UI Runner 与持续状态流。生产环境可将数据库任务领取和本地产物存储替换成 Redis/RabbitMQ 与 OSS 适配器。
 
 ## 2. 模块分层
 
@@ -20,10 +20,10 @@ FastAPI 路由层
        |
 SQLAlchemy / Alembic
   |-- test_cases + api_case_details + ui_case_details
-  `-- test_execution + test_execution_detail
+  `-- test_execution + test_execution_detail + execution_tasks
 ```
 
-API 进程只依赖服务接口和数据库模型。后续任务队列适配器应放在服务层边界之外，由 Worker 消费执行编号并回写明细，避免路由层依赖 Celery、Redis 或 Playwright 的具体 API。
+API 进程只依赖服务接口和数据库模型。独立 Worker 领取 `execution_tasks` 中的任务并回写明细；路由层不依赖 Celery、Redis 或 Playwright 的具体 API。
 
 ## 3. 数据模型映射
 
@@ -36,6 +36,7 @@ API 进程只依赖服务接口和数据库模型。后续任务队列适配器�
 | UI 用例配置 | `ui_case_details` | 前置依赖、浏览器、环境、超时、重试和步骤 |
 | 执行批次 | `test_execution` | 类型、环境、配置、状态、汇总、耗时和起止时间 |
 | 执行明细 | `test_execution_detail` | 用例快照、请求/步骤、响应/媒体和断言结果 |
+| 异步任务 | `execution_tasks` | Worker 领取状态、尝试次数、锁定/完成时间和任务错误 |
 
 执行创建时必须把用例配置复制到明细。Worker 只消费执行快照，不重新读取用例定义，因此用户在任务运行期间编辑用例不会改变本次执行。
 
@@ -47,7 +48,7 @@ API 进程只依赖服务接口和数据库模型。后续任务队列适配器�
 | `POST /api/v1/ui-cases` | 创建 UI 自动化用例 |
 | `POST /api/v1/api-cases/debug` | 同步发送一次 HTTP 请求；返回请求、响应、断言和提取结果，不创建执行历史 |
 | `POST /api/v1/executions/start` | 创建 UI/API 执行批次和不可变用例快照，返回执行编号 |
-| `POST /api/v1/executions/{id}/stop` | 将批次标记为 `CANCELED`，未开始明细标记为 `SKIPPED` |
+| `POST /api/v1/executions/{id}/stop` | 将批次标记为 `CANCELLED`，未开始明细标记为 `SKIPPED` |
 | `GET /api/v1/executions/{id}/summary` | 返回进度、通过率、平均耗时和批次时间 |
 | `GET /api/v1/executions/{id}/details` | 返回 UI 步骤/媒体或 API 请求/响应/断言明细 |
 | `WS /ws/execution/{id}` | 发送 `PROGRESS_UPDATE`、`CASE_STATUS_CHANGE` 和 `STEP_LOG` 快照 |
@@ -60,13 +61,13 @@ API 进程只依赖服务接口和数据库模型。后续任务队列适配器�
 RUNNING
   |-- 所有明细结束 ----------------> COMPLETED
   |-- Worker 或系统错误 -----------> FAILED
-  `-- 用户中止 --------------------> CANCELED
+  `-- 用户中止 --------------------> CANCELLED
 
 明细: PENDING -> RUNNING -> PASSED | FAILED
                        `-> SKIPPED（批次被中止）
 ```
 
-当前控制面创建批次后保持 `RUNNING/PENDING`，等待外部 Worker。生产接入时，队列消息只需要携带 `execution_code`；Worker 应在同一数据库事务中更新明细、批次计数、耗时和终态，再发布相同类型的 WebSocket 事件。
+控制面以 `PENDING` 状态原子创建批次、明细和队列任务。Worker 领取后切换为 `RUNNING`，逐条回写明细并在结束时更新批次计数、耗时和终态。WebSocket 服务轮询持久化状态并只发送发生变化的事件，终态后主动关闭连接。
 
 ## 6. Runner 接入约束
 
@@ -79,7 +80,7 @@ RUNNING
 
 ## 7. 部署与安全
 
-- 生产环境使用 PostgreSQL/MySQL 和 Redis/RabbitMQ；SQLite 与进程内事件快照只适合本地开发。
+- 本地可使用 SQLite 持久化队列；多 Worker 生产环境推荐 PostgreSQL 的行锁，或替换为 Redis/RabbitMQ。
 - 调试接口能够访问配置环境和绝对 HTTP(S) URL。生产部署应在网关或网络层限制可访问网段，防止 SSRF。
 - Header、请求体、响应体和日志可能包含令牌或个人数据；落库和日志输出前应按项目规则脱敏。
 - WebSocket 与 Worker 回写接口接入生产前必须补充与 REST API 一致的身份认证和项目权限校验。
