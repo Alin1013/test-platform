@@ -298,6 +298,37 @@ def test_ui_case_creation_persists_execution_config_and_steps(client: TestClient
     assert persisted["ui_details"] == details
 
 
+def test_ui_case_creation_accepts_configured_environment_id(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "开发环境登录冒烟",
+            "type": "ui",
+            "module_id": "auth",
+            "priority": "P1",
+            "status": "维护中",
+            "author_id": 1,
+            "ui_details": {
+                "browser": "chrome",
+                "environment": "dev",
+                "steps": [
+                    {
+                        "action": "navigate",
+                        "locatorType": "css",
+                        "target": "{{baseUrl}}/login",
+                        "value": "",
+                        "assertion": "none",
+                        "expected": "",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["ui_details"]["environment"] == "dev"
+
+
 def test_ui_assert_step_requires_a_meaningful_assertion(client: TestClient) -> None:
     response = client.post(
         "/api/v1/test-cases",

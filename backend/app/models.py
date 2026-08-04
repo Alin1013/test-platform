@@ -182,9 +182,6 @@ class UiCaseDetails(Base):
             "browser IN ('chrome', 'firefox')", name="ck_ui_case_details_browser"
         ),
         CheckConstraint(
-            "environment IN ('staging', 'test')", name="ck_ui_case_details_environment"
-        ),
-        CheckConstraint(
             "timeout_seconds BETWEEN 1 AND 3600",
             name="ck_ui_case_details_timeout_seconds",
         ),
@@ -202,7 +199,7 @@ class UiCaseDetails(Base):
         ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True
     )
     browser: Mapped[str] = mapped_column(String(16), default="chrome")
-    environment: Mapped[str] = mapped_column(String(16), default="test")
+    environment: Mapped[str] = mapped_column(String(64), default="test")
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=30)
     retry_count: Mapped[int] = mapped_column(Integer, default=1)
     steps: Mapped[list[dict[str, Any]] | list[str]] = mapped_column(

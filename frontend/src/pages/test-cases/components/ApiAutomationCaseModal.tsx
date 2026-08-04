@@ -86,10 +86,24 @@ interface ApiCaseFormValues {
   bodyFields: ApiKeyValueItem[];
   assertions: ApiResponseAssertion[];
   extracts: ApiExtractVariable[];
-  debugEnvironment: string;
+  debugEnvironment?: string;
   debugVariables: ApiKeyValueItem[];
   status?: TestCaseStatus;
 }
+
+const apiDebugFieldNames: Array<keyof ApiCaseFormValues> = [
+  'method',
+  'endpoint',
+  'headers',
+  'queryParams',
+  'bodyType',
+  'bodyContent',
+  'bodyFields',
+  'assertions',
+  'extracts',
+  'debugEnvironment',
+  'debugVariables',
+];
 
 interface ApiAutomationCaseModalProps {
   open: boolean;
@@ -497,11 +511,8 @@ export function ApiAutomationCaseModal({
         { type: 'jsonPath', target: '$.code', comparison: 'equals', expected: '0' },
       ],
       extracts: details?.extracts ?? [],
-      debugEnvironment: 'test',
-      debugVariables: [
-        createKeyValue('token', 'debug-token'),
-        createKeyValue('coupon_id', 'debug-coupon'),
-      ],
+      debugEnvironment: undefined,
+      debugVariables: [],
     });
     setDebugResult(null);
     setDebugError(null);
@@ -569,7 +580,7 @@ export function ApiAutomationCaseModal({
 
   const debugRequest = async () => {
     try {
-      const values = await form.validateFields();
+      const values = await form.validateFields(apiDebugFieldNames, { recursive: true });
       const statusAssertion = values.assertions.find((assertion) => assertion.type === 'statusCode');
       setDebugLoading(true);
       setDebugResult(null);
@@ -594,7 +605,9 @@ export function ApiAutomationCaseModal({
       });
       setDebugResult(result);
     } catch (error) {
-      const validationErrors = form.getFieldsError().some((field) => field.errors.length > 0);
+      const validationErrors = form
+        .getFieldsError(apiDebugFieldNames)
+        .some((field) => field.errors.length > 0);
       if (validationErrors) {
         void message.warning('请先补全必填项并修正配置错误');
       } else {

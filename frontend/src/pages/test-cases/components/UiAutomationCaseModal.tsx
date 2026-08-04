@@ -16,6 +16,7 @@ import type {
   Priority,
   TestCaseRecord,
   TestCaseStatus,
+  TestEnvironment,
   TestModule,
   UiAction,
   UiAssertion,
@@ -75,13 +76,21 @@ interface UiCaseFormValues {
   description: string;
   dependencyCaseId?: number;
   browser: 'chrome' | 'firefox';
-  environment: 'staging' | 'test';
+  environment: string;
   timeoutSeconds: number;
   retryCount: number;
   steps: UiAutomationStep[];
   debugVariables: ApiKeyValueItem[];
   status?: TestCaseStatus;
 }
+
+const uiDebugFieldNames: Array<keyof UiCaseFormValues> = [
+  'browser',
+  'environment',
+  'timeoutSeconds',
+  'steps',
+  'debugVariables',
+];
 
 interface UiAutomationCaseModalProps {
   open: boolean;
@@ -221,6 +230,7 @@ export function UiAutomationCaseModal({
   const service = usePlatformService();
   const [dependencyCases, setDependencyCases] = useState<TestCaseRecord[]>([]);
   const [modules, setModules] = useState<TestModule[]>([]);
+  const [environments, setEnvironments] = useState<TestEnvironment[]>([]);
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [draggedStep, setDraggedStep] = useState<number | null>(null);
   const [debugLoading, setDebugLoading] = useState(false);
@@ -241,7 +251,7 @@ export function UiAutomationCaseModal({
       description: details?.description ?? '',
       dependencyCaseId: details?.dependencyCaseId,
       browser: details?.browser ?? 'chrome',
-      environment: details?.environment ?? 'test',
+      environment: details?.environment,
       timeoutSeconds: details?.timeoutSeconds ?? 30,
       retryCount: details?.retryCount ?? 1,
       steps: details?.steps?.length ? details.steps : [createStep()],
@@ -250,11 +260,19 @@ export function UiAutomationCaseModal({
     setDebugResult(null);
     setDebugError(null);
     let active = true;
-    void Promise.all([service.listTestCases({ type: 'ui' }), service.listTestModules(1)]).then(
-      ([cases, nextModules]) => {
+    void Promise.all([
+      service.listTestCases({ type: 'ui' }),
+      service.listTestModules(1),
+      service.getSystemSettings(),
+    ]).then(
+      ([cases, nextModules, settings]) => {
         if (!active) return;
         setDependencyCases(cases);
         setModules(nextModules);
+        setEnvironments(settings.execution.environments);
+        if (!details?.environment && !form.isFieldTouched('environment')) {
+          form.setFieldValue('environment', settings.execution.defaultEnvironmentId);
+        }
       },
     );
     return () => {
@@ -296,7 +314,7 @@ export function UiAutomationCaseModal({
 
   const debugRequest = async () => {
     try {
-      const values = await form.validateFields();
+      const values = await form.validateFields(uiDebugFieldNames, { recursive: true });
       setDebugLoading(true);
       setDebugResult(null);
       setDebugError(null);
@@ -314,7 +332,9 @@ export function UiAutomationCaseModal({
       });
       setDebugResult(result);
     } catch (error) {
-      const validationErrors = form.getFieldsError().some((field) => field.errors.length > 0);
+      const validationErrors = form
+        .getFieldsError(uiDebugFieldNames)
+        .some((field) => field.errors.length > 0);
       if (validationErrors) {
         void message.warning('请先补全必填项并修正配置错误');
       } else {
@@ -445,10 +465,10 @@ export function UiAutomationCaseModal({
               <Form.Item name="environment" label="默认环境" rules={[{ required: true }]}>
                 <Select
                   aria-label="默认环境"
-                  options={[
-                    { value: 'test', label: 'Test' },
-                    { value: 'staging', label: 'Staging' },
-                  ]}
+                  options={environments.map((environment) => ({
+                    value: environment.id,
+                    label: environment.name,
+                  }))}
                 />
               </Form.Item>
               <Form.Item name="timeoutSeconds" label="超时时间（秒）" rules={[{ required: true }]}>

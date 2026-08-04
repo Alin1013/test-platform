@@ -125,3 +125,30 @@ def test_auth_migration_resolves_all_account_name_collisions(
             text("SELECT account FROM users ORDER BY id")
         ).scalars().all()
     assert accounts == ["foo", "foo-3", "foo-3-2"]
+
+
+def test_configured_ui_environment_migration_can_downgrade_custom_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_url = f"sqlite:///{tmp_path / 'migration.db'}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    config = Config("alembic.ini")
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO ui_case_details "
+                "(case_id, description, browser, environment, timeout_seconds, retry_count, steps) "
+                "VALUES (999, '', 'chrome', 'dev', 30, 1, '[]')"
+            )
+        )
+
+    command.downgrade(config, "6e4b9c2a7d15")
+
+    with engine.connect() as connection:
+        environment = connection.execute(
+            text("SELECT environment FROM ui_case_details WHERE case_id = 999")
+        ).scalar_one()
+    assert environment == "test"

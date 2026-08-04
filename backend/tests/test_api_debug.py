@@ -25,7 +25,7 @@ def test_api_case_debug_executes_request_and_evaluates_response(client: TestClie
         json={
             "environment": "test",
             "variables": {"token": "rendered-token"},
-            "url": "/api/users",
+            "url": "{{baseUrl}}/api/users",
             "method": "POST",
             "expected_code": 200,
             "headers": {

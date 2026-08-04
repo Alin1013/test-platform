@@ -2,6 +2,7 @@ import { App as AntdApp } from 'antd';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from '../../services/AuthContext';
 import { PlatformServiceProvider } from '../../services/PlatformServiceContext';
 import { createMockPlatformService } from '../../services/mockPlatformService';
 import { renderApp } from '../../tests/renderApp';
@@ -13,16 +14,18 @@ function renderTestCasesPageWithService(
 ) {
   return render(
     <AntdApp>
-      <PlatformServiceProvider service={service}>
-        <MemoryRouter
-          initialEntries={[route]}
-          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        >
-          <Routes>
-            <Route path="/test-cases/:type" element={<TestCasesPage />} />
-          </Routes>
-        </MemoryRouter>
-      </PlatformServiceProvider>
+      <AuthProvider>
+        <PlatformServiceProvider service={service}>
+          <MemoryRouter
+            initialEntries={[route]}
+            future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          >
+            <Routes>
+              <Route path="/test-cases/:type" element={<TestCasesPage />} />
+            </Routes>
+          </MemoryRouter>
+        </PlatformServiceProvider>
+      </AuthProvider>
     </AntdApp>,
   );
 }
@@ -37,7 +40,10 @@ it('UI自动化页使用统一名称', async () => {
 
 it('新建 UI 自动化用例时提供完整配置和可维护的步骤列表', async () => {
   const user = userEvent.setup();
-  renderApp('/test-cases/ui?create=1');
+  renderTestCasesPageWithService(
+    createMockPlatformService({ delay: 0 }),
+    '/test-cases/ui?create=1',
+  );
 
   const dialog = await screen.findByRole('dialog', { name: '新建UI自动化' });
   expect(within(dialog).getByText('基本信息')).toBeInTheDocument();
@@ -47,7 +53,7 @@ it('新建 UI 自动化用例时提供完整配置和可维护的步骤列表', 
   expect(within(dialog).getByRole('combobox', { name: '默认浏览器' })).toBeInTheDocument();
   expect(within(dialog).getByText('Chrome')).toBeInTheDocument();
   expect(within(dialog).getByRole('combobox', { name: '默认环境' })).toBeInTheDocument();
-  expect(within(dialog).getByText('Test')).toBeInTheDocument();
+  expect(await within(dialog).findByText('TEST')).toBeInTheDocument();
   expect(within(dialog).getByRole('spinbutton', { name: '超时时间' })).toHaveValue('30');
   expect(within(dialog).getByRole('spinbutton', { name: '失败重试次数' })).toHaveValue('1');
   expect(within(dialog).getByLabelText('步骤 1 操作类型')).toBeInTheDocument();
@@ -123,7 +129,6 @@ it('接口调试运行后展示真实响应、断言和提取结果', async () =
   renderApp('/test-cases/api?create=1');
   const dialog = await screen.findByRole('dialog', { name: '新建接口用例' });
 
-  await user.type(within(dialog).getByLabelText('用例名称'), '调试用户资料接口');
   await user.type(within(dialog).getByLabelText('接口地址'), '/api/profile');
   await user.click(within(dialog).getByRole('button', { name: '发送请求（Debug）' }));
 
@@ -154,15 +159,27 @@ it('接口调试请求失败时在响应控制台展示后端错误', async () =
 
 it('UI 调试运行后展示逐步结果、日志和录屏链接', async () => {
   const user = userEvent.setup();
-  renderApp('/test-cases/ui?create=1');
+  const service = createMockPlatformService({ delay: 600 });
+  const settings = await service.getSystemSettings();
+  vi.spyOn(service, 'getSystemSettings').mockResolvedValue({
+    ...settings,
+    execution: {
+      ...settings.execution,
+      environments: [{ id: 'qa', name: 'QA', baseUrl: 'https://qa.example.com' }],
+      defaultEnvironmentId: 'qa',
+    },
+  });
+  const debugUiCase = vi.spyOn(service, 'debugUiCase');
+  renderTestCasesPageWithService(service, '/test-cases/ui?create=1');
   const dialog = await screen.findByRole('dialog', { name: '新建UI自动化' });
 
-  await user.type(within(dialog).getByLabelText('用例名称'), '调试登录页面');
+  expect(await within(dialog).findByText('QA')).toBeInTheDocument();
   await user.type(within(dialog).getByLabelText('步骤 1 元素定位值'), '{{baseUrl}}/login');
   await user.click(within(dialog).getByRole('button', { name: '调试运行' }));
 
   expect(within(dialog).getByRole('button', { name: '调试运行' })).toBeDisabled();
   expect(await within(dialog).findByText('调试结果')).toBeInTheDocument();
+  expect(debugUiCase).toHaveBeenCalledWith(expect.objectContaining({ environment: 'qa' }));
   expect(within(dialog).getAllByText('PASSED')).toHaveLength(2);
   expect(within(dialog).getByText('步骤 1 · Navigate')).toBeInTheDocument();
   expect(within(dialog).getAllByText('24 ms')).toHaveLength(2);

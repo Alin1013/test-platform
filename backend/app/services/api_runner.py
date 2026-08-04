@@ -106,13 +106,14 @@ def debug_api_case(
     transport: httpx.BaseTransport | None = None,
 ) -> dict[str, Any]:
     base_url, timeout_ms = _environment(session, payload.environment)
-    request_url = _request_url(base_url, payload.url, payload.variables)
+    variables = {**payload.variables, "baseUrl": base_url}
+    request_url = _request_url(base_url, payload.url, variables)
     headers = {
-        key: render_text(str(value), payload.variables)
+        key: render_text(str(value), variables)
         for key, value in payload.headers.items()
     }
     params = [
-        (render_text(item.key, payload.variables), render_text(item.value, payload.variables))
+        (render_text(item.key, variables), render_text(item.value, variables))
         for item in payload.query_params
         if item.enabled and item.key.strip()
     ]
@@ -121,19 +122,19 @@ def debug_api_case(
         if payload.body_content:
             try:
                 request_kwargs["json"] = json.loads(
-                    render_text(payload.body_content, payload.variables)
+                    render_text(payload.body_content, variables)
                 )
             except json.JSONDecodeError as error:
                 raise HTTPException(status_code=422, detail="Request body is not valid JSON") from error
         elif payload.request_body is not None:
             request_kwargs["json"] = render_value(
                 payload.request_body,
-                payload.variables,
+                variables,
             )
     elif payload.body_type in {"form-data", "x-www-form-urlencoded"}:
         form_fields = {
-            render_text(item.key, payload.variables): render_text(
-                item.value, payload.variables
+            render_text(item.key, variables): render_text(
+                item.value, variables
             )
             for item in payload.body_fields
             if item.enabled and item.key.strip()

@@ -82,7 +82,7 @@ export interface UiAutomationCaseDetails {
   description: string;
   dependencyCaseId?: number;
   browser: 'chrome' | 'firefox';
-  environment: 'staging' | 'test';
+  environment: string;
   timeoutSeconds: number;
   retryCount: number;
   steps: UiAutomationStep[];

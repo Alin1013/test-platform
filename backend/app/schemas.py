@@ -173,7 +173,9 @@ class UiDetailsCreate(BaseModel):
     description: str = Field(default="", max_length=4000)
     dependency_case_id: int | None = Field(default=None, gt=0)
     browser: Literal["chrome", "firefox"] = "chrome"
-    environment: Literal["staging", "test"] = "test"
+    environment: str = Field(
+        default="test", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
     timeout_seconds: int = Field(default=30, ge=1, le=3600)
     retry_count: int = Field(default=1, ge=0, le=3)
     steps: list[UiStep] = Field(default_factory=list)
