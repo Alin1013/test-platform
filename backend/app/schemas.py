@@ -215,6 +215,41 @@ class ApiExecutionCreate(BaseModel):
         return self
 
 
+class UiExecutionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    browser: Literal["chrome", "firefox", "safari", "edge"]
+    headless: bool = True
+    concurrency: int = Field(default=1, ge=1, le=20)
+
+
+class ApiExecutionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    globalHeaders: dict[str, str] = Field(default_factory=dict)
+    iterations: int = Field(default=1, ge=1, le=100)
+    rampUpTime: int = Field(default=0, ge=0, le=60000)
+
+
+class ExecutionStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["UI", "API"]
+    projectId: int = Field(gt=0)
+    caseIds: list[int] = Field(min_length=1, max_length=100)
+    envName: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    config: UiExecutionConfig | ApiExecutionConfig
+
+    @model_validator(mode="after")
+    def config_matches_type(self) -> "ExecutionStartRequest":
+        expected_config = UiExecutionConfig if self.type == "UI" else ApiExecutionConfig
+        if not isinstance(self.config, expected_config):
+            raise ValueError(f"config does not match execution type {self.type}")
+        if len(self.caseIds) != len(set(self.caseIds)):
+            raise ValueError("caseIds must be unique")
+        return self
+
+
 class UserCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -6,7 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Module, TestCase, TestExecution, TestExecutionDetail, User
-from ..schemas import ApiExecutionCreate, UiExecutionCreate
+from ..schemas import (
+    ApiExecutionConfig,
+    ApiExecutionCreate,
+    ExecutionStartRequest,
+    UiExecutionConfig,
+    UiExecutionCreate,
+)
 from .settings import get_settings
 
 
@@ -57,13 +63,22 @@ def _creator(session: Session, user_id: int = 1) -> User:
     return user
 
 
-def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
-    configured_environment_ids = {
-        environment["id"]
-        for environment in get_settings(session)["execution"]["environments"]
-    }
-    if payload.environment not in configured_environment_ids:
+def _configured_environment(session: Session, environment_id: str) -> dict:
+    environment = next(
+        (
+            item
+            for item in get_settings(session)["execution"]["environments"]
+            if item["id"] == environment_id
+        ),
+        None,
+    )
+    if environment is None:
         raise HTTPException(status_code=422, detail="Execution environment is not configured")
+    return environment
+
+
+def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
+    _configured_environment(session, payload.environment)
     cases = _selected_cases(
         session,
         project_id=payload.projectId,
@@ -74,8 +89,11 @@ def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
         execution_code=_execution_code("ui_exec"),
         type="UI",
         project_id=payload.projectId,
+        env_name=payload.environment,
         status="RUNNING",
         config_json=payload.model_dump(),
+        total_count=len(cases),
+        start_time=datetime.now(timezone.utc),
         creator=_creator(session),
     )
     execution.details = [
@@ -100,23 +118,55 @@ def start_ui_execution(session: Session, payload: UiExecutionCreate) -> dict:
     return {
         "executionId": execution.execution_code,
         "status": execution.status,
-        "startTime": execution.created_at,
+        "startTime": execution.start_time,
     }
 
 
 def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
-    cases = _selected_cases(
+    return _start_api_execution(
         session,
         project_id=payload.projectId,
-        suite_ids=payload.suiteIds,
+        case_ids=payload.suiteIds,
+        env_name=str(payload.envId),
+        global_headers=payload.globalHeaders,
+        iterations=payload.iterations,
+        ramp_up_time=payload.rampUpTime,
+    )
+
+
+def _start_api_execution(
+    session: Session,
+    *,
+    project_id: int,
+    case_ids: list[int],
+    env_name: str,
+    global_headers: dict[str, str],
+    iterations: int,
+    ramp_up_time: int,
+) -> dict:
+    cases = _selected_cases(
+        session,
+        project_id=project_id,
+        suite_ids=case_ids,
         case_type="api",
     )
+    config = {
+        "projectId": project_id,
+        "suiteIds": case_ids,
+        "environment": env_name,
+        "globalHeaders": global_headers,
+        "iterations": iterations,
+        "rampUpTime": ramp_up_time,
+    }
     execution = TestExecution(
         execution_code=_execution_code("api_exec"),
         type="API",
-        project_id=payload.projectId,
+        project_id=project_id,
+        env_name=env_name,
         status="RUNNING",
-        config_json=payload.model_dump(),
+        config_json=config,
+        total_count=len(cases),
+        start_time=datetime.now(timezone.utc),
         creator=_creator(session),
     )
     execution.details = []
@@ -133,8 +183,14 @@ def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
                 request_payload={
                     "method": api_details.method,
                     "url": api_details.url,
-                    "headers": {**api_details.headers, **payload.globalHeaders},
+                    "headers": {**api_details.headers, **global_headers},
+                    "queryParams": api_details.query_params,
+                    "bodyType": api_details.body_type,
+                    "bodyContent": api_details.body_content,
+                    "bodyFields": api_details.body_fields,
                     "body": api_details.request_body,
+                    "assertionRules": api_details.assertions,
+                    "extractRules": api_details.extracts,
                 },
                 response_payload=None,
                 assertion_results=[],
@@ -145,12 +201,53 @@ def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
     return {"executionId": execution.execution_code, "status": execution.status}
 
 
+def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
+    _configured_environment(session, payload.envName)
+    if payload.type == "UI":
+        config = payload.config
+        if not isinstance(config, UiExecutionConfig):
+            raise HTTPException(status_code=422, detail="Invalid UI execution config")
+        return start_ui_execution(
+            session,
+            UiExecutionCreate(
+                projectId=payload.projectId,
+                suiteIds=payload.caseIds,
+                environment=payload.envName,
+                browser=config.browser,
+                headless=config.headless,
+                concurrency=config.concurrency,
+            ),
+        )
+
+    config = payload.config
+    if not isinstance(config, ApiExecutionConfig):
+        raise HTTPException(status_code=422, detail="Invalid API execution config")
+    return _start_api_execution(
+        session,
+        project_id=payload.projectId,
+        case_ids=payload.caseIds,
+        env_name=payload.envName,
+        global_headers=config.globalHeaders,
+        iterations=config.iterations,
+        ramp_up_time=config.rampUpTime,
+    )
+
+
 def get_execution(session: Session, execution_code: str, execution_type: str) -> TestExecution:
     execution = session.scalar(
         _execution_query().where(
             TestExecution.execution_code == execution_code,
             TestExecution.type == execution_type,
         )
+    )
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    return execution
+
+
+def get_execution_by_code(session: Session, execution_code: str) -> TestExecution:
+    execution = session.scalar(
+        _execution_query().where(TestExecution.execution_code == execution_code)
     )
     if execution is None:
         raise HTTPException(status_code=404, detail="Execution not found")
@@ -243,15 +340,102 @@ def api_execution_report(session: Session, execution_code: str) -> dict:
     }
 
 
+def execution_summary(session: Session, execution_code: str) -> dict:
+    execution = get_execution_by_code(session, execution_code)
+    summary = _summary(execution)
+    completed_durations = [
+        detail.duration_ms
+        for detail in execution.details
+        if detail.status in {"PASSED", "FAILED"}
+    ]
+    completed_count = summary["passed"] + summary["failed"]
+    return {
+        "executionId": execution.execution_code,
+        "type": execution.type,
+        "envName": execution.env_name,
+        "status": execution.status,
+        "totalCount": execution.total_count,
+        "passedCount": summary["passed"],
+        "failedCount": summary["failed"],
+        "runningCount": summary["running"],
+        "pendingCount": summary["pending"],
+        "passRate": (
+            round(summary["passed"] / completed_count * 100, 2)
+            if completed_count
+            else 0.0
+        ),
+        "avgLatencyMs": (
+            round(sum(completed_durations) / len(completed_durations))
+            if completed_durations
+            else 0
+        ),
+        "durationMs": execution.duration_ms or summary["durationMs"],
+        "startTime": execution.start_time,
+        "endTime": execution.end_time,
+    }
+
+
+def execution_details(session: Session, execution_code: str) -> dict:
+    execution = get_execution_by_code(session, execution_code)
+    if execution.type == "UI":
+        items = ui_execution_result(session, execution_code)["cases"]
+    else:
+        items = [
+            {
+                "caseId": detail.target_id,
+                "caseName": detail.target_name,
+                "status": detail.status,
+                "durationMs": detail.duration_ms,
+                "requestData": {
+                    "method": (detail.request_payload or {}).get("method"),
+                    "url": (detail.request_payload or {}).get("url"),
+                    "headers": (detail.request_payload or {}).get("headers", {}),
+                    "queryParams": (detail.request_payload or {}).get(
+                        "queryParams", []
+                    ),
+                    "bodyType": (detail.request_payload or {}).get("bodyType", "none"),
+                    "bodyContent": (detail.request_payload or {}).get("bodyContent"),
+                    "bodyFields": (detail.request_payload or {}).get("bodyFields", []),
+                },
+                "responseData": detail.response_payload,
+                "assertionRules": (detail.request_payload or {}).get(
+                    "assertionRules", []
+                ),
+                "assertionResults": detail.assertion_results,
+                "extractRules": (detail.request_payload or {}).get("extractRules", []),
+            }
+            for detail in execution.details
+        ]
+    return {
+        "executionId": execution.execution_code,
+        "type": execution.type,
+        "status": execution.status,
+        "items": items,
+    }
+
+
 def stop_execution(session: Session, execution_code: str, execution_type: str) -> None:
     execution = get_execution(session, execution_code, execution_type)
     if execution.status in {"COMPLETED", "FAILED", "CANCELED"}:
         return
     execution.status = "CANCELED"
+    execution.end_time = datetime.now(timezone.utc)
+    if execution.start_time is not None:
+        start_time = execution.start_time
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=timezone.utc)
+        execution.duration_ms = max(
+            0, round((execution.end_time - start_time).total_seconds() * 1000)
+        )
     for detail in execution.details:
         if detail.status in {"PENDING", "RUNNING"}:
             detail.status = "SKIPPED"
     session.commit()
+
+
+def stop_execution_by_code(session: Session, execution_code: str) -> None:
+    execution = get_execution_by_code(session, execution_code)
+    stop_execution(session, execution_code, execution.type)
 
 
 def ui_execution_events(session: Session, execution_code: str) -> list[dict]:
@@ -267,3 +451,53 @@ def ui_execution_events(session: Session, execution_code: str) -> list[dict]:
         }
         for detail in execution.details
     ]
+
+
+def execution_events(session: Session, execution_code: str) -> list[dict]:
+    execution = get_execution_by_code(session, execution_code)
+    completed = sum(
+        detail.status in {"PASSED", "FAILED", "SKIPPED"}
+        for detail in execution.details
+    )
+    total = execution.total_count
+    events = [
+        {
+            "type": "PROGRESS_UPDATE",
+            "executionId": execution.execution_code,
+            "status": execution.status,
+            "totalCount": total,
+            "completedCount": completed,
+            "passedCount": sum(
+                detail.status == "PASSED" for detail in execution.details
+            ),
+            "failedCount": sum(
+                detail.status == "FAILED" for detail in execution.details
+            ),
+            "progress": round(completed / total * 100) if total else 0,
+        }
+    ]
+    for detail in execution.details:
+        events.append(
+            {
+                "type": "CASE_STATUS_CHANGE",
+                "executionId": execution.execution_code,
+                "caseId": detail.target_id,
+                "caseName": detail.target_name,
+                "status": detail.status,
+            }
+        )
+        if execution.type == "UI":
+            for index, log in enumerate(
+                (detail.response_payload or {}).get("logs", [])
+            ):
+                events.append(
+                    {
+                        "type": "STEP_LOG",
+                        "executionId": execution.execution_code,
+                        "caseId": detail.target_id,
+                        "stepIndex": index,
+                        "status": detail.status,
+                        "log": log,
+                    }
+                )
+    return events

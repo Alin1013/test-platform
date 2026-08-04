@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -229,9 +229,16 @@ class TestExecution(Base, TimestampMixin):
     execution_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     type: Mapped[str] = mapped_column(String(8), index=True)
     project_id: Mapped[int] = mapped_column(Integer, index=True)
+    env_name: Mapped[str] = mapped_column(String(64), default="")
     status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    total_count: Mapped[int] = mapped_column(Integer, default=0)
+    passed_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int] = mapped_column(BigInteger, default=0)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     creator: Mapped[User] = relationship(back_populates="test_executions")
     details: Mapped[list[TestExecutionDetail]] = relationship(

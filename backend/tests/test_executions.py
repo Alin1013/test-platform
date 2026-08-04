@@ -199,3 +199,151 @@ def test_execution_rejects_cases_from_another_type(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"] == "Selected cases must all be UI automation cases"
+
+
+def test_unified_ui_execution_exposes_summary_details_stop_and_events(
+    client: TestClient,
+) -> None:
+    started = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "UI",
+            "projectId": 1,
+            "caseIds": [2, 7],
+            "envName": "test",
+            "config": {
+                "browser": "chrome",
+                "headless": True,
+                "concurrency": 2,
+            },
+        },
+    )
+
+    assert started.status_code == 202
+    execution_id = started.json()["data"]["executionId"]
+
+    summary = client.get(
+        f"/api/v1/executions/{execution_id}/summary"
+    ).json()["data"]
+    assert summary == {
+        "executionId": execution_id,
+        "type": "UI",
+        "envName": "test",
+        "status": "RUNNING",
+        "totalCount": 2,
+        "passedCount": 0,
+        "failedCount": 0,
+        "runningCount": 0,
+        "pendingCount": 2,
+        "passRate": 0.0,
+        "avgLatencyMs": 0,
+        "durationMs": 0,
+        "startTime": summary["startTime"],
+        "endTime": None,
+    }
+
+    details = client.get(
+        f"/api/v1/executions/{execution_id}/details"
+    ).json()["data"]
+    assert details["type"] == "UI"
+    assert [item["caseName"] for item in details["items"]] == [
+        "登录表单校验",
+        "支付结果页展示",
+    ]
+
+    with client.websocket_connect(f"/ws/execution/{execution_id}") as websocket:
+        progress = websocket.receive_json()
+        case_event = websocket.receive_json()
+        log_event = websocket.receive_json()
+
+    assert progress["type"] == "PROGRESS_UPDATE"
+    assert progress["progress"] == 0
+    assert case_event == {
+        "type": "CASE_STATUS_CHANGE",
+        "executionId": execution_id,
+        "caseId": 2,
+        "caseName": "登录表单校验",
+        "status": "PENDING",
+    }
+    assert log_event == {
+        "type": "STEP_LOG",
+        "executionId": execution_id,
+        "caseId": 2,
+        "stepIndex": 0,
+        "status": "PENDING",
+        "log": "测试用例已加入执行队列",
+    }
+
+    stopped = client.post(f"/api/v1/executions/{execution_id}/stop")
+    assert stopped.status_code == 200
+    stopped_summary = client.get(
+        f"/api/v1/executions/{execution_id}/summary"
+    ).json()["data"]
+    assert stopped_summary["status"] == "CANCELED"
+    assert stopped_summary["endTime"] is not None
+
+
+def test_unified_api_execution_snapshots_complete_runner_request(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/v1/api-cases",
+        json={
+            "title": "订单查询执行快照",
+            "type": "api",
+            "module_id": "payments",
+            "priority": "P1",
+            "api_details": {
+                "url": "/api/orders",
+                "method": "POST",
+                "expected_code": 200,
+                "headers": {"X-Case": "saved"},
+                "query_params": [
+                    {"enabled": True, "key": "page", "value": "1"}
+                ],
+                "body_type": "json",
+                "body_content": '{"state":"paid"}',
+                "assertions": [
+                    {
+                        "type": "jsonPath",
+                        "target": "$.code",
+                        "comparison": "equals",
+                        "expected": "0",
+                    }
+                ],
+                "extracts": [{"name": "orderId", "jsonPath": "$.data.id"}],
+            },
+        },
+    ).json()
+
+    started = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "API",
+            "projectId": 1,
+            "caseIds": [created["id"]],
+            "envName": "test",
+            "config": {
+                "globalHeaders": {"Authorization": "Bearer batch"},
+                "iterations": 1,
+                "rampUpTime": 0,
+            },
+        },
+    )
+
+    assert started.status_code == 202
+    execution_id = started.json()["data"]["executionId"]
+    item = client.get(
+        f"/api/v1/executions/{execution_id}/details"
+    ).json()["data"]["items"][0]
+    assert item["requestData"] == {
+        "method": "POST",
+        "url": "/api/orders",
+        "headers": {"X-Case": "saved", "Authorization": "Bearer batch"},
+        "queryParams": [{"enabled": True, "key": "page", "value": "1"}],
+        "bodyType": "json",
+        "bodyContent": '{"state":"paid"}',
+        "bodyFields": [],
+    }
+    assert item["assertionRules"][0]["target"] == "$.code"
+    assert item["extractRules"] == [{"name": "orderId", "jsonPath": "$.data.id"}]
