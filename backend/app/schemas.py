@@ -1,5 +1,5 @@
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -177,6 +177,39 @@ class UiDetailsCreate(BaseModel):
     timeout_seconds: int = Field(default=30, ge=1, le=3600)
     retry_count: int = Field(default=1, ge=0, le=3)
     steps: list[UiStep] = Field(default_factory=list)
+
+
+class UiCaseDebugRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment: str = Field(
+        default="test", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    variables: dict[str, str] = Field(default_factory=dict, max_length=100)
+    browser: Literal["chrome", "firefox", "safari", "edge"] = "chrome"
+    headless: bool = True
+    timeout_seconds: int = Field(default=30, ge=1, le=3600)
+    steps: list[UiStep] = Field(min_length=1, max_length=200)
+
+
+class ApiDebugRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["API"]
+    config: ApiCaseDebugRequest
+
+
+class UiDebugRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["UI"]
+    config: UiCaseDebugRequest
+
+
+DebugRunRequest = Annotated[
+    ApiDebugRunRequest | UiDebugRunRequest,
+    Field(discriminator="type"),
+]
 
 
 class TestCaseCreate(BaseModel):

@@ -140,6 +140,9 @@ frontend/
 | `POST/PUT /api/v1/api-cases[/{caseId}]` | 创建或更新包含请求、断言和提取规则的接口自动化用例 |
 | `POST/PUT /api/v1/ui-cases[/{caseId}]` | 创建或更新包含步骤与运行配置的 UI 自动化用例 |
 | `POST /api/v1/api-cases/debug` | 同步调试接口配置并返回响应、断言和提取结果，不写执行历史 |
+| `POST /api/v1/debug/api-run` | 同步发送 API 调试请求，返回真实请求、响应、标准 JSONPath 断言和提取结果 |
+| `POST /api/v1/debug/ui-run` | 同步运行 Playwright UI 步骤，返回步骤耗时、日志、错误和媒体地址 |
+| `POST /api/v1/debug-run` | 按 `API`/`UI` 类型统一分发同步调试请求 |
 | `POST /api/v1/executions/start` | 统一创建 UI 或 API 执行批次及用例快照 |
 | `POST /api/v1/executions/{executionId}/stop` | 按执行编号统一中止任务 |
 | `GET /api/v1/executions/{executionId}/summary` | 查询环境、状态、通过率、平均耗时和进度统计 |

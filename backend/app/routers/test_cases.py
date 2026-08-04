@@ -23,7 +23,7 @@ from ..schemas import (
     TestCaseCreate,
     TestCaseUpdate,
 )
-from ..services import api_runner, case_files, test_cases
+from ..services import case_files, debug_runner, test_cases
 
 router = APIRouter(prefix="/api/v1", tags=["test cases"])
 
@@ -81,7 +81,7 @@ def debug_api_case(
     return {
         "code": 200,
         "message": "Debug request completed",
-        "data": api_runner.debug_api_case(
+        "data": debug_runner.run_api(
             session,
             payload,
             transport=getattr(request.app.state, "api_debug_transport", None),

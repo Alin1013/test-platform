@@ -1,43 +1,17 @@
 from __future__ import annotations
 
 import json
-import re
 from time import perf_counter
 from typing import Any
 
 import httpx
 from fastapi import HTTPException
+from jsonpath_ng.ext import parse as parse_jsonpath
 from sqlalchemy.orm import Session
 
 from ..schemas import ApiCaseDebugRequest, ApiResponseAssertion
 from .settings import get_environment, get_settings
-
-
-VARIABLE_PATTERN = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
-JSON_PATH_TOKEN = re.compile(r"\.([A-Za-z_][A-Za-z0-9_-]*)|\[(\d+)\]")
-
-
-def _render(value: str, variables: dict[str, str]) -> str:
-    def replace(match: re.Match[str]) -> str:
-        name = match.group(1)
-        if name not in variables:
-            raise HTTPException(status_code=422, detail=f"Undefined variable: {name}")
-        return variables[name]
-
-    return VARIABLE_PATTERN.sub(replace, value)
-
-
-def _render_value(value: Any, variables: dict[str, str]) -> Any:
-    if isinstance(value, str):
-        return _render(value, variables)
-    if isinstance(value, list):
-        return [_render_value(item, variables) for item in value]
-    if isinstance(value, dict):
-        return {
-            _render(str(key), variables): _render_value(item, variables)
-            for key, item in value.items()
-        }
-    return value
+from .variables import render_text, render_value
 
 
 def _environment(session: Session, environment_id: str | None) -> tuple[str, int]:
@@ -48,7 +22,7 @@ def _environment(session: Session, environment_id: str | None) -> tuple[str, int
 
 
 def _request_url(base_url: str, configured_url: str, variables: dict[str, str]) -> str:
-    rendered_url = _render(configured_url, variables)
+    rendered_url = render_text(configured_url, variables)
     if rendered_url.startswith(("http://", "https://")):
         return rendered_url
     if not rendered_url.startswith("/"):
@@ -57,25 +31,14 @@ def _request_url(base_url: str, configured_url: str, variables: dict[str, str]) 
 
 
 def _json_path(document: Any, expression: str) -> Any:
-    if expression == "$":
-        return document
-    if not expression.startswith("$"):
-        raise HTTPException(status_code=422, detail=f"Invalid JSONPath: {expression}")
-
-    current = document
-    position = 1
-    for match in JSON_PATH_TOKEN.finditer(expression, position):
-        if match.start() != position:
-            raise HTTPException(status_code=422, detail=f"Invalid JSONPath: {expression}")
-        key, index = match.groups()
-        try:
-            current = current[key] if key is not None else current[int(index)]
-        except (KeyError, IndexError, TypeError):
-            return None
-        position = match.end()
-    if position != len(expression):
-        raise HTTPException(status_code=422, detail=f"Invalid JSONPath: {expression}")
-    return current
+    try:
+        matches = parse_jsonpath(expression).find(document)
+    except Exception as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid JSONPath: {expression}",
+        ) from error
+    return matches[0].value if matches else None
 
 
 def _display(value: Any) -> str:
@@ -116,7 +79,12 @@ def _assertion_result(
         actual = _json_path(response_body, assertion.target)
 
     actual_text = _display(actual)
-    if assertion.comparison == "notNull":
+    if assertion.type == "responseTime":
+        try:
+            passed = response_time_ms <= int(assertion.expected)
+        except ValueError:
+            passed = False
+    elif assertion.comparison == "notNull":
         passed = actual is not None
     elif assertion.comparison == "contains":
         passed = assertion.expected in actual_text
@@ -140,11 +108,11 @@ def debug_api_case(
     base_url, timeout_ms = _environment(session, payload.environment)
     request_url = _request_url(base_url, payload.url, payload.variables)
     headers = {
-        key: _render(str(value), payload.variables)
+        key: render_text(str(value), payload.variables)
         for key, value in payload.headers.items()
     }
     params = [
-        (_render(item.key, payload.variables), _render(item.value, payload.variables))
+        (render_text(item.key, payload.variables), render_text(item.value, payload.variables))
         for item in payload.query_params
         if item.enabled and item.key.strip()
     ]
@@ -153,18 +121,20 @@ def debug_api_case(
         if payload.body_content:
             try:
                 request_kwargs["json"] = json.loads(
-                    _render(payload.body_content, payload.variables)
+                    render_text(payload.body_content, payload.variables)
                 )
             except json.JSONDecodeError as error:
                 raise HTTPException(status_code=422, detail="Request body is not valid JSON") from error
         elif payload.request_body is not None:
-            request_kwargs["json"] = _render_value(
+            request_kwargs["json"] = render_value(
                 payload.request_body,
                 payload.variables,
             )
     elif payload.body_type in {"form-data", "x-www-form-urlencoded"}:
         form_fields = {
-            _render(item.key, payload.variables): _render(item.value, payload.variables)
+            render_text(item.key, payload.variables): render_text(
+                item.value, payload.variables
+            )
             for item in payload.body_fields
             if item.enabled and item.key.strip()
         }
@@ -205,6 +175,7 @@ def debug_api_case(
         for extract in payload.extracts
     }
     return {
+        "success": all(result["passed"] for result in assertion_results),
         "requestUrl": str(response.request.url),
         "requestHeaders": dict(response.request.headers),
         "requestData": {

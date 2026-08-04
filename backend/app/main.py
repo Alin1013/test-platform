@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import DEFAULT_DATABASE_URL, create_session_factory
 from .routers.auth import router as auth_router
 from .routers.dashboard import router as dashboard_router
+from .routers.debug import router as debug_router
 from .routers.executions import router as executions_router
 from .routers.personnel import router as personnel_router
 from .routers.settings import router as settings_router
@@ -63,6 +64,7 @@ def create_app(
         return {"status": "ok"}
 
     app.include_router(dashboard_router)
+    app.include_router(debug_router)
     app.include_router(executions_router)
     app.include_router(auth_router)
     app.include_router(personnel_router)

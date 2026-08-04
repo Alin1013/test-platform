@@ -146,6 +146,144 @@ def test_api_case_debug_renders_variables_in_structured_json_body(
     }
 
 
+def test_api_debug_alias_uses_standard_jsonpath_and_response_time_threshold(
+    client: TestClient,
+) -> None:
+    client.app.state.api_debug_transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={"data": {"session": {"token": "nested-token"}}},
+        )
+    )
+
+    response = client.post(
+        "/api/v1/debug/api-run",
+        json={
+            "environment": "test",
+            "url": "/api/session",
+            "method": "GET",
+            "expected_code": 200,
+            "assertions": [
+                {
+                    "type": "jsonPath",
+                    "target": "$..token",
+                    "comparison": "equals",
+                    "expected": "nested-token",
+                },
+                {
+                    "type": "responseTime",
+                    "target": "",
+                    "comparison": "equals",
+                    "expected": "500",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["success"] is True
+    assert data["assertions"][0]["actual"] == "nested-token"
+    assert data["assertions"][1]["passed"] is True
+
+
+def test_api_debug_returns_structured_network_failure(client: TestClient) -> None:
+    def fail_request(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    client.app.state.api_debug_transport = httpx.MockTransport(fail_request)
+
+    response = client.post(
+        "/api/v1/debug/api-run",
+        json={
+            "environment": "test",
+            "url": "/api/unavailable",
+            "method": "GET",
+            "expected_code": 200,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["success"] is False
+    assert data["statusCode"] is None
+    assert data["responseBody"] is None
+    assert data["assertions"] == []
+    assert data["responseTimeMs"] >= 0
+    assert "connection refused" in data["error"]
+
+
+def test_ui_debug_renders_environment_and_variables_before_running(
+    client: TestClient,
+) -> None:
+    class DebugUiRunner:
+        def run(self, *, steps: list[dict], config: dict) -> dict:
+            assert steps == [
+                {
+                    "stepIndex": 1,
+                    "action": "navigate",
+                    "locatorType": "",
+                    "target": "",
+                    "value": "https://test-api.example.com/users/demo-user",
+                    "assertion": "none",
+                    "expected": "",
+                }
+            ]
+            assert config["browser"] == "chrome"
+            assert config["headless"] is True
+            assert config["timeoutSeconds"] == 15
+            return {
+                "status": "PASSED",
+                "durationMs": 23,
+                "stepResults": [
+                    {
+                        "stepIndex": 1,
+                        "action": "navigate",
+                        "status": "PASSED",
+                        "durationMs": 23,
+                    }
+                ],
+                "logs": ["步骤 1 执行成功"],
+                "screenshotUrl": None,
+                "videoUrl": "/uploads/executions/debug.webm",
+                "errorMessage": None,
+            }
+
+    client.app.state.ui_runner = DebugUiRunner()
+    payload = {
+        "environment": "test",
+        "variables": {"user": "demo-user"},
+        "browser": "chrome",
+        "headless": True,
+        "timeout_seconds": 15,
+        "steps": [
+            {
+                "stepIndex": 1,
+                "action": "OpenUrl",
+                "locatorType": "",
+                "selector": "",
+                "value": "{{baseUrl}}/users/{{user}}",
+            }
+        ],
+    }
+
+    response = client.post("/api/v1/debug/ui-run", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["success"] is True
+    assert data["stepResults"][0]["status"] == "PASSED"
+    assert data["videoUrl"] == "/uploads/executions/debug.webm"
+
+    unified = client.post(
+        "/api/v1/debug-run",
+        json={"type": "UI", "config": payload},
+    )
+    assert unified.status_code == 200
+    assert unified.json()["data"]["success"] is True
+
+
 def test_queued_api_execution_is_completed_by_background_worker(
     client: TestClient,
 ) -> None:

@@ -10,12 +10,15 @@
 前端
   | REST / WebSocket
 FastAPI 路由层
-  |-- test_cases: 用例管理与接口同步调试
+  |-- test_cases: 用例管理与兼容调试入口
+  |-- debug: API/UI 类型化及统一同步调试入口
   `-- executions: 执行创建、中止、摘要、明细和事件
        |
 服务层
   |-- test_cases: 用例领域校验与持久化
-  |-- api_runner: 单次 HTTP 调试、断言和变量提取
+  |-- debug_runner: 同步调试分发、UI 环境变量渲染与错误归一化
+  |-- api_runner: 单次 HTTP 调试、标准 JSONPath 断言和变量提取
+  |-- variables: API/UI 共用的递归变量渲染
   `-- executions: 执行快照与生命周期编排
        |
 SQLAlchemy / Alembic
@@ -47,6 +50,9 @@ API 进程只依赖服务接口和数据库模型。独立 Worker 领取 `execut
 | `POST /api/v1/api-cases` | 创建接口自动化用例 |
 | `POST /api/v1/ui-cases` | 创建 UI 自动化用例 |
 | `POST /api/v1/api-cases/debug` | 同步发送一次 HTTP 请求；返回请求、响应、断言和提取结果，不创建执行历史 |
+| `POST /api/v1/debug/api-run` | API 同步调试；网络错误以结构化失败结果返回 |
+| `POST /api/v1/debug/ui-run` | UI 同步调试；执行 Playwright 步骤并返回日志、步骤结果和媒体地址 |
+| `POST /api/v1/debug-run` | 通过带判别字段的请求统一分发 API/UI 同步调试 |
 | `POST /api/v1/executions/start` | 创建 UI/API 执行批次和不可变用例快照，返回执行编号 |
 | `POST /api/v1/executions/{id}/stop` | 将批次标记为 `CANCELLED`，未开始明细标记为 `SKIPPED` |
 | `GET /api/v1/executions/{id}/summary` | 返回进度、通过率、平均耗时和批次时间 |
