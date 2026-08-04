@@ -45,6 +45,7 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.upload_dir = resolved_upload_dir
     app.state.request_log_path = resolved_log_dir / LOG_FILE_NAME
+    app.state.api_debug_transport = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:56789", "http://127.0.0.1:56789"],

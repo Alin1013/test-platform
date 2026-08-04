@@ -1,6 +1,16 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -10,10 +20,11 @@ from ..schemas import (
     CaseStatus,
     CaseType,
     Priority,
+    ApiCaseDebugRequest,
     TestCaseCreate,
     TestCaseUpdate,
 )
-from ..services import case_files, test_cases
+from ..services import api_runner, case_files, test_cases
 
 router = APIRouter(prefix="/api/v1", tags=["test cases"])
 
@@ -69,6 +80,23 @@ def create_api_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
     return _create_automation_case(session, payload, "api")
+
+
+@router.post("/api-cases/debug")
+def debug_api_case(
+    payload: ApiCaseDebugRequest,
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    return {
+        "code": 200,
+        "message": "Debug request completed",
+        "data": api_runner.debug_api_case(
+            session,
+            payload,
+            transport=getattr(request.app.state, "api_debug_transport", None),
+        ),
+    }
 
 
 @router.post("/ui-cases", status_code=status.HTTP_201_CREATED)

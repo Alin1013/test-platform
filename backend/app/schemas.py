@@ -109,6 +109,13 @@ class ApiDetailsUpdate(BaseModel):
         return _normalize_legacy_automation_config(data)
 
 
+class ApiCaseDebugRequest(ApiDetailsCreate):
+    environment: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    variables: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+
 class UiStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
