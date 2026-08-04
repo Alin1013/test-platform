@@ -1,7 +1,7 @@
 # 测试管理平台项目结构与功能说明
 
-> 更新日期：2026-08-03
-> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、账号认证、用户资料维护、XMind 解析、CSV/XLSX 导入导出，以及 UI/接口自动化执行编排。
+> 更新日期：2026-08-04
+> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、账号认证、用户资料维护、XMind 解析、CSV/XLSX 导入导出、接口同步调试，以及 UI/接口自动化执行编排。
 
 ## 1. 项目定位
 
@@ -100,7 +100,7 @@ frontend/
 | 应用框架 | 全局 | 桌面侧栏、顶部项目选择器、通知入口、用户头像及移动端抽屉导航 | 已实现；全局搜索和通知仅有界面入口 |
 | 仪表盘 | `/dashboard` | 展示用例总数和类型分布、最近用例、快捷创建入口 | 前后端接口已实现 |
 | 功能用例 | `/test-cases/functional` | 按模块、关键字、优先级和状态筛选及维护功能用例 | CRUD 与文件导入导出已持久化 |
-| 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求及预期响应 | 主表与接口详情扩展表已持久化 |
+| 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求、断言和变量提取 | 完整 Runner 配置已结构化持久化；后端支持同步调试运行 |
 | UI自动化 | `/test-cases/ui` | 管理 UI 自动化步骤配置 | 主表与 UI 详情扩展表已持久化；执行引擎未接入 |
 | UI 自动化执行 | `/execution/ui-test` | 选择 UI 用例，配置环境、浏览器、无头模式与并发数，查看进度、步骤、媒体和日志 | 页面、执行记录、状态查询、中断接口及 WebSocket 快照已实现 |
 | 接口自动化执行 | `/execution/api-test` | 批量运行接口用例，配置环境、迭代、Ramp-up 和全局请求头，查看 KPI、请求、响应与断言 | 页面、执行记录、报告查询、中断及 JSON 导出已实现 |
@@ -137,6 +137,14 @@ frontend/
 
 | 方法与路径 | 职责 |
 | --- | --- |
+| `POST /api/v1/api-cases` | 创建包含请求、断言和提取规则的接口自动化用例 |
+| `POST /api/v1/ui-cases` | 创建包含步骤与运行配置的 UI 自动化用例 |
+| `POST /api/v1/api-cases/debug` | 同步调试接口配置并返回响应、断言和提取结果，不写执行历史 |
+| `POST /api/v1/executions/start` | 统一创建 UI 或 API 执行批次及用例快照 |
+| `POST /api/v1/executions/{executionId}/stop` | 按执行编号统一中止任务 |
+| `GET /api/v1/executions/{executionId}/summary` | 查询环境、状态、通过率、平均耗时和进度统计 |
+| `GET /api/v1/executions/{executionId}/details` | 查询 UI 或 API 类型化执行明细 |
+| `WS /ws/execution/{executionId}` | 推送进度、用例状态与 UI 步骤日志快照事件 |
 | `POST /api/v1/ui-test/executions` | 创建 UI 自动化执行及用例明细 |
 | `GET /api/v1/ui-test/executions/{executionId}` | 查询 UI 执行状态和结果 |
 | `POST /api/v1/ui-test/executions/{executionId}/stop` | 中断 UI 自动化执行 |
@@ -145,7 +153,7 @@ frontend/
 | `GET /api/v1/api-test/executions/{executionId}/report` | 查询接口自动化报告 |
 | `POST /api/v1/api-test/executions/{executionId}/stop` | 中断接口自动化执行 |
 
-当前实现负责执行配置校验、记录持久化、状态查询和中断。新任务以 `RUNNING` 创建，明细以 `PENDING` 创建，供后续 Celery/Worker 调用 Playwright 或 HTTP Client 后回写；仓库目前尚未包含真实浏览器和 HTTP 执行 Worker，因此不会伪造通过、失败、截图、录屏或响应数据。
+当前实现负责执行配置校验、配置快照、记录持久化、状态查询、中断和 WebSocket 事件快照。接口用例弹窗可通过同步调试接口直接调用 HTTP 服务，但批量任务仍以 `RUNNING` 创建、明细以 `PENDING` 创建，供后续 Celery/Worker 调用 Playwright 或 HTTP Client 后回写。仓库目前尚未包含 Redis/Celery、真实浏览器 Worker 或批量 HTTP Worker，因此不会伪造通过、失败、截图、录屏或响应数据。后端分层和 Worker 接入边界见 [`docs/automation-backend-architecture.md`](docs/automation-backend-architecture.md)。
 
 当前核心领域类型包括：
 

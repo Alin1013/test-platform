@@ -14,7 +14,7 @@
 | 主机与端口 | 无 |
 | ORM | SQLAlchemy 2 |
 | 迁移工具 | Alembic |
-| 仓库最新迁移版本 | `f4c29d8a6b10` |
+| 仓库最新迁移版本 | `1c5e8a7d3b42` |
 
 应用演示账号为 `jiangshan`，密码为 `Test1234`。该凭据仅限本地演示，部署前必须修改或禁用。这是测试平台的应用账号，不是数据库登录信息；密码在数据库中以 PBKDF2 哈希保存。
 
@@ -36,7 +36,7 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `auth_sessions` | 登录会话的令牌摘要、过期时间和所属用户 | 多对一关联 `users`，用户删除时级联删除 |
 | `modules` | 项目内的模块树及父子层级 | 自关联父模块，被 `test_cases` 引用 |
 | `test_cases` | 功能、接口和 UI 用例的公共字段 | 关联模块、维护人及类型扩展表 |
-| `api_case_details` | 接口用例的地址、方法、请求与预期响应 | 与 `test_cases` 一对一，删除主用例时级联删除 |
+| `api_case_details` | 接口用例的地址、方法、请求、断言与变量提取规则 | 与 `test_cases` 一对一，删除主用例时级联删除 |
 | `ui_case_details` | UI 自动化用例的步骤或脚本配置 | 与 `test_cases` 一对一，删除主用例时级联删除 |
 | `test_execution` | UI/接口自动化执行配置、状态和创建人 | 关联 `users`，一对多关联 `test_execution_detail` |
 | `test_execution_detail` | 单个 UI 用例或接口的执行状态、请求、响应和断言 | 多对一关联 `test_execution`，执行记录删除时级联删除 |
@@ -113,14 +113,24 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `method` | `GET`、`POST`、`PUT` 或 `DELETE` |
 | `expected_code` | 100 至 599 的预期 HTTP 状态码 |
 | `headers` | JSON 请求头 |
+| `query_params` | 启用状态、键和值组成的 Query 参数列表 |
+| `body_type` | `none`、`json`、`form-data` 或 `x-www-form-urlencoded` |
+| `body_content` | JSON 等文本请求体 |
+| `body_fields` | 表单请求体的启用状态、键和值列表 |
 | `request_body` | 可选 JSON 请求体 |
 | `expected_response` | 可选 JSON 预期响应 |
+| `assertions` | 状态码、JSONPath 或响应时间断言规则 |
+| `extracts` | 变量名与 JSONPath 组成的响应提取规则 |
 
 ### `ui_case_details`
 
 | 字段 | 存储内容 |
 | --- | --- |
 | `case_id` | 关联的 UI 用例 ID，同时作为主键 |
+| `description` | 用例说明与前置条件 |
+| `dependency_case_id` | 可选的前置 UI 用例 ID |
+| `browser`、`environment` | 默认浏览器与执行环境 |
+| `timeout_seconds`、`retry_count` | 超时秒数和失败重试次数 |
 | `steps` | JSON 测试步骤或脚本配置 |
 
 ### `test_execution`
@@ -131,9 +141,13 @@ export DATABASE_URL='sqlite:////absolute/path/test-platform.db'
 | `execution_code` | 唯一执行编号，如 `ui_exec_...` 或 `api_exec_...` |
 | `type` | `UI` 或 `API` |
 | `project_id` | 所属项目 ID |
+| `env_name` | 执行环境标识 |
 | `status` | `PENDING`、`RUNNING`、`COMPLETED`、`FAILED` 或 `CANCELED` |
 | `config_json` | JSON 执行配置，包括环境、浏览器、并发、迭代和全局请求头等 |
+| `total_count`、`passed_count`、`failed_count` | 批次用例总数及结果计数 |
+| `duration_ms` | 批次总耗时，单位毫秒 |
 | `created_by` | 发起执行的用户 ID |
+| `start_time`、`end_time` | 执行开始和结束时间 |
 | `created_at`、`updated_at` | 创建和更新时间 |
 
 ### `test_execution_detail`
