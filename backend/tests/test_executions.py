@@ -624,7 +624,7 @@ def test_ui_execution_honors_case_concurrency(client: TestClient) -> None:
                 active_count -= 1
             return {
                 "status": "PASSED",
-                "durationMs": 100,
+                "durationMs": 10_000,
                 "stepResults": [],
                 "logs": [],
                 "screenshotUrl": None,
@@ -657,6 +657,7 @@ def test_ui_execution_honors_case_concurrency(client: TestClient) -> None:
     ).json()["data"]
     assert max_active_count == 2
     assert summary["passedCount"] == 2
+    assert summary["durationMs"] < 5_000
 
 
 def test_api_execution_honors_case_concurrency(client: TestClient) -> None:

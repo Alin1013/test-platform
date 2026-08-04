@@ -249,8 +249,22 @@ def _finish_execution(session: Session, execution: TestExecution) -> None:
     execution.failed_count = sum(
         detail.status == "FAILED" for detail in execution.details
     )
-    execution.duration_ms = sum(detail.duration_ms for detail in execution.details)
-    execution.end_time = datetime.now(timezone.utc)
+    finished_at = (
+        execution.end_time
+        if execution.status == "CANCELLED" and execution.end_time is not None
+        else datetime.now(timezone.utc)
+    )
+    execution.end_time = finished_at
+    if execution.start_time is not None:
+        started_at = execution.start_time
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        if finished_at.tzinfo is None:
+            finished_at = finished_at.replace(tzinfo=timezone.utc)
+        execution.duration_ms = max(
+            0,
+            round((finished_at - started_at).total_seconds() * 1000),
+        )
     if execution.status != "CANCELLED":
         execution.status = "COMPLETED"
     if execution.task is not None and execution.task.status != "CANCELLED":
