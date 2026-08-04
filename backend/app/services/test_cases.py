@@ -54,8 +54,14 @@ def serialize_case(test_case: TestCase) -> dict:
             "method": test_case.api_details.method,
             "expected_code": test_case.api_details.expected_code,
             "headers": test_case.api_details.headers,
+            "query_params": test_case.api_details.query_params,
+            "body_type": test_case.api_details.body_type,
+            "body_content": test_case.api_details.body_content,
+            "body_fields": test_case.api_details.body_fields,
             "request_body": test_case.api_details.request_body,
             "expected_response": test_case.api_details.expected_response,
+            "assertions": test_case.api_details.assertions,
+            "extracts": test_case.api_details.extracts,
         }
     if test_case.ui_details:
         result["ui_details"] = {

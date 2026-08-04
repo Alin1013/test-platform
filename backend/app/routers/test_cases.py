@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -53,6 +53,29 @@ def create_test_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
     return test_cases.create_case(session, payload)
+
+
+def _create_automation_case(
+    session: Session, payload: TestCaseCreate, expected_type: Literal["api", "ui"]
+) -> dict:
+    if payload.type != expected_type:
+        label = "API" if expected_type == "api" else "UI automation"
+        raise HTTPException(status_code=422, detail=f"Only {label} cases are accepted")
+    return test_cases.create_case(session, payload)
+
+
+@router.post("/api-cases", status_code=status.HTTP_201_CREATED)
+def create_api_case(
+    payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
+) -> dict:
+    return _create_automation_case(session, payload, "api")
+
+
+@router.post("/ui-cases", status_code=status.HTTP_201_CREATED)
+def create_ui_case(
+    payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
+) -> dict:
+    return _create_automation_case(session, payload, "ui")
 
 
 @router.post("/test-cases/export")

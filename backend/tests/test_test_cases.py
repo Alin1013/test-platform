@@ -66,6 +66,123 @@ def test_api_case_can_be_created_searched_updated_and_deleted(client: TestClient
     assert client.get("/api/v1/test-cases", params={"keyword": case["code"]}).json()["total"] == 0
 
 
+def test_api_automation_case_persists_runner_configuration(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/api-cases",
+        json={
+            "title": "登录接口自动化",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P0",
+            "status": "维护中",
+            "author_id": 1,
+            "api_details": {
+                "url": "/api/auth/login",
+                "method": "POST",
+                "expected_code": 200,
+                "headers": {"Content-Type": "application/json"},
+                "query_params": [
+                    {"enabled": True, "key": "source", "value": "automation"}
+                ],
+                "body_type": "json",
+                "body_content": '{"account":"jiangshan"}',
+                "body_fields": [],
+                "assertions": [
+                    {
+                        "type": "statusCode",
+                        "target": "",
+                        "comparison": "equals",
+                        "expected": "200",
+                    },
+                    {
+                        "type": "jsonPath",
+                        "target": "$.code",
+                        "comparison": "equals",
+                        "expected": "0",
+                    },
+                ],
+                "extracts": [{"name": "accessToken", "jsonPath": "$.data.token"}],
+            },
+        },
+    )
+
+    assert created.status_code == 201
+    details = created.json()["api_details"]
+    assert details["query_params"] == [
+        {"enabled": True, "key": "source", "value": "automation"}
+    ]
+    assert details["body_type"] == "json"
+    assert details["body_content"] == '{"account":"jiangshan"}'
+    assert details["assertions"][1]["target"] == "$.code"
+    assert details["extracts"] == [
+        {"name": "accessToken", "jsonPath": "$.data.token"}
+    ]
+
+
+def test_api_case_normalizes_legacy_frontend_automation_config(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "兼容旧版配置",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P1",
+            "api_details": {
+                "url": "/api/legacy",
+                "method": "POST",
+                "expected_code": 201,
+                "request_body": {"name": "example"},
+                "expected_response": {
+                    "automation_config": {
+                        "version": 1,
+                        "query_params": [
+                            {"enabled": True, "key": "page", "value": "1"}
+                        ],
+                        "body_type": "json",
+                        "body_fields": [],
+                        "assertions": [
+                            {
+                                "type": "statusCode",
+                                "target": "",
+                                "comparison": "equals",
+                                "expected": "201",
+                            }
+                        ],
+                        "extracts": [],
+                    }
+                },
+            },
+        },
+    )
+
+    assert created.status_code == 201
+    details = created.json()["api_details"]
+    assert details["query_params"][0]["key"] == "page"
+    assert details["body_type"] == "json"
+    assert details["body_content"] == '{"name": "example"}'
+    assert details["assertions"][0]["expected"] == "201"
+
+
+def test_dedicated_ui_case_endpoint_rejects_other_case_types(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/ui-cases",
+        json={
+            "title": "错误类型",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P1",
+            "api_details": {
+                "url": "/api/example",
+                "method": "GET",
+                "expected_code": 200,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Only UI automation cases are accepted"
+
+
 def test_ui_case_creation_persists_execution_config_and_steps(client: TestClient) -> None:
     created = client.post(
         "/api/v1/test-cases",

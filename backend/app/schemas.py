@@ -1,3 +1,4 @@
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
@@ -10,24 +11,102 @@ HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 UiAction = Literal["click", "input", "navigate", "hover", "wait", "assert"]
 UiLocatorType = Literal["xpath", "css", "id", "text"]
 UiAssertion = Literal["none", "textEquals", "isVisible", "urlEquals"]
+ApiBodyType = Literal["none", "json", "form-data", "x-www-form-urlencoded"]
+ApiAssertionType = Literal["statusCode", "jsonPath", "responseTime"]
+ApiComparison = Literal["equals", "contains", "notNull"]
+
+
+class ApiKeyValueItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    key: str = Field(max_length=255)
+    value: str = Field(max_length=4000)
+
+
+class ApiResponseAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: ApiAssertionType
+    target: str = Field(default="", max_length=2048)
+    comparison: ApiComparison = "equals"
+    expected: str = Field(default="", max_length=4000)
+
+
+class ApiExtractVariable(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    jsonPath: str = Field(min_length=1, max_length=2048, pattern=r"^\$")
+
+
+def _normalize_legacy_automation_config(data: Any) -> Any:
+    if not isinstance(data, dict):
+        return data
+    normalized = dict(data)
+    expected_response = normalized.get("expected_response")
+    if not isinstance(expected_response, dict):
+        return normalized
+    automation_config = expected_response.get("automation_config")
+    if not isinstance(automation_config, dict):
+        return normalized
+
+    for field in ("query_params", "body_type", "body_fields", "assertions", "extracts"):
+        if field not in normalized and field in automation_config:
+            normalized[field] = automation_config[field]
+    if (
+        "body_content" not in normalized
+        and normalized.get("body_type") == "json"
+        and normalized.get("request_body") is not None
+    ):
+        normalized["body_content"] = json.dumps(
+            normalized["request_body"], ensure_ascii=False
+        )
+    return normalized
 
 
 class ApiDetailsCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str = Field(min_length=1, max_length=2048)
     method: HttpMethod
     expected_code: int = Field(ge=100, le=599)
     headers: dict[str, Any] = Field(default_factory=dict)
+    query_params: list[ApiKeyValueItem] = Field(default_factory=list, max_length=100)
+    body_type: ApiBodyType = "none"
+    body_content: str | None = Field(default=None, max_length=1_000_000)
+    body_fields: list[ApiKeyValueItem] = Field(default_factory=list, max_length=100)
     request_body: dict[str, Any] | list[Any] | None = None
     expected_response: dict[str, Any] | list[Any] | None = None
+    assertions: list[ApiResponseAssertion] = Field(default_factory=list, max_length=100)
+    extracts: list[ApiExtractVariable] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_config(cls, data: Any) -> Any:
+        return _normalize_legacy_automation_config(data)
 
 
 class ApiDetailsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str | None = Field(default=None, min_length=1, max_length=2048)
     method: HttpMethod | None = None
     expected_code: int | None = Field(default=None, ge=100, le=599)
     headers: dict[str, Any] | None = None
+    query_params: list[ApiKeyValueItem] | None = Field(default=None, max_length=100)
+    body_type: ApiBodyType | None = None
+    body_content: str | None = Field(default=None, max_length=1_000_000)
+    body_fields: list[ApiKeyValueItem] | None = Field(default=None, max_length=100)
     request_body: dict[str, Any] | list[Any] | None = None
     expected_response: dict[str, Any] | list[Any] | None = None
+    assertions: list[ApiResponseAssertion] | None = Field(default=None, max_length=100)
+    extracts: list[ApiExtractVariable] | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_config(cls, data: Any) -> Any:
+        return _normalize_legacy_automation_config(data)
 
 
 class UiStep(BaseModel):

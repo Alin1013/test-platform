@@ -139,6 +139,10 @@ class ApiCaseDetails(Base):
             "expected_code BETWEEN 100 AND 599",
             name="ck_api_case_details_expected_code",
         ),
+        CheckConstraint(
+            "body_type IN ('none', 'json', 'form-data', 'x-www-form-urlencoded')",
+            name="ck_api_case_details_body_type",
+        ),
         {"comment": "接口测试用例扩展信息"},
     )
 
@@ -149,9 +153,23 @@ class ApiCaseDetails(Base):
     method: Mapped[str] = mapped_column(String(8))
     expected_code: Mapped[int] = mapped_column(Integer)
     headers: Mapped[dict[str, Any]] = mapped_column(MutableDict.as_mutable(JSON), default=dict)
+    query_params: Mapped[list[dict[str, Any]]] = mapped_column(
+        MutableList.as_mutable(JSON), default=list
+    )
+    body_type: Mapped[str] = mapped_column(String(32), default="none")
+    body_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_fields: Mapped[list[dict[str, Any]]] = mapped_column(
+        MutableList.as_mutable(JSON), default=list
+    )
     request_body: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSON, nullable=True)
     expected_response: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
         JSON, nullable=True
+    )
+    assertions: Mapped[list[dict[str, Any]]] = mapped_column(
+        MutableList.as_mutable(JSON), default=list
+    )
+    extracts: Mapped[list[dict[str, Any]]] = mapped_column(
+        MutableList.as_mutable(JSON), default=list
     )
 
     test_case: Mapped[TestCase] = relationship(back_populates="api_details")
