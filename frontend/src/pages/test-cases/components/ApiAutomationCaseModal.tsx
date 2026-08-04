@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import {
   App,
+  Alert,
   Button,
   Checkbox,
   Form,
@@ -26,6 +27,7 @@ import type {
   ApiAssertionType,
   ApiAutomationCaseDetails,
   ApiBodyType,
+  ApiDebugResult,
   ApiComparison,
   ApiExtractVariable,
   ApiKeyValueItem,
@@ -36,7 +38,9 @@ import type {
   TestCaseRecord,
   TestCaseStatus,
   TestModule,
+  TestEnvironment,
 } from '../../../services/contracts';
+import { DebugVariableEditor, debugVariablesToRecord } from './DebugVariableEditor';
 import { moduleSelectOptions } from '../moduleOptions';
 import { testCaseStatusOptions } from '../testCaseOptions';
 
@@ -82,6 +86,8 @@ interface ApiCaseFormValues {
   bodyFields: ApiKeyValueItem[];
   assertions: ApiResponseAssertion[];
   extracts: ApiExtractVariable[];
+  debugEnvironment: string;
+  debugVariables: ApiKeyValueItem[];
   status?: TestCaseStatus;
 }
 
@@ -447,7 +453,11 @@ export function ApiAutomationCaseModal({
   const { message } = App.useApp();
   const service = usePlatformService();
   const [modules, setModules] = useState<TestModule[]>([]);
+  const [environments, setEnvironments] = useState<TestEnvironment[]>([]);
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugResult, setDebugResult] = useState<ApiDebugResult | null>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
   const headers = Form.useWatch('headers', form) ?? [];
   const queryParams = Form.useWatch('queryParams', form) ?? [];
   const assertions = Form.useWatch('assertions', form) ?? [];
@@ -487,10 +497,24 @@ export function ApiAutomationCaseModal({
         { type: 'jsonPath', target: '$.code', comparison: 'equals', expected: '0' },
       ],
       extracts: details?.extracts ?? [],
+      debugEnvironment: 'test',
+      debugVariables: [
+        createKeyValue('token', 'debug-token'),
+        createKeyValue('coupon_id', 'debug-coupon'),
+      ],
     });
+    setDebugResult(null);
+    setDebugError(null);
     let active = true;
     void service.listTestModules(1).then((nextModules) => {
       if (active) setModules(nextModules);
+    });
+    void service.getSystemSettings().then((settings) => {
+      if (!active) return;
+      setEnvironments(settings.execution.environments);
+      if (!form.isFieldTouched('debugEnvironment')) {
+        form.setFieldValue('debugEnvironment', settings.execution.defaultEnvironmentId);
+      }
     });
     return () => {
       active = false;
@@ -545,10 +569,39 @@ export function ApiAutomationCaseModal({
 
   const debugRequest = async () => {
     try {
-      await form.validateFields();
-      void message.success('请求配置校验通过，可以发送调试请求');
-    } catch {
-      void message.warning('请先补全必填项并修正配置错误');
+      const values = await form.validateFields();
+      const statusAssertion = values.assertions.find((assertion) => assertion.type === 'statusCode');
+      setDebugLoading(true);
+      setDebugResult(null);
+      setDebugError(null);
+      const result = await service.debugApiCase({
+        environment: values.debugEnvironment,
+        variables: debugVariablesToRecord(values.debugVariables),
+        url: values.endpoint,
+        method: values.method,
+        expectedCode: Number(statusAssertion?.expected ?? 200),
+        headers: Object.fromEntries(
+          (values.headers ?? [])
+            .filter((item) => item.enabled && item.key.trim())
+            .map((item) => [item.key.trim(), item.value]),
+        ),
+        queryParams: values.queryParams ?? [],
+        bodyType: values.bodyType,
+        bodyContent: values.bodyType === 'json' ? values.bodyContent ?? '' : undefined,
+        bodyFields: values.bodyFields ?? [],
+        assertions: values.assertions ?? [],
+        extracts: values.extracts ?? [],
+      });
+      setDebugResult(result);
+    } catch (error) {
+      const validationErrors = form.getFieldsError().some((field) => field.errors.length > 0);
+      if (validationErrors) {
+        void message.warning('请先补全必填项并修正配置错误');
+      } else {
+        setDebugError(error instanceof Error ? error.message : '调试请求失败');
+      }
+    } finally {
+      setDebugLoading(false);
     }
   };
 
@@ -644,7 +697,14 @@ export function ApiAutomationCaseModal({
         mask={{ closable: false }}
         onCancel={requestClose}
         footer={[
-          <Button key="debug" icon={<ThunderboltOutlined />} onClick={() => void debugRequest()}>
+          <Button
+            key="debug"
+            icon={<ThunderboltOutlined />}
+            aria-label="发送请求（Debug）"
+            loading={debugLoading}
+            disabled={debugLoading}
+            onClick={() => void debugRequest()}
+          >
             发送请求（Debug）
           </Button>,
           <Button key="cancel" aria-label="取消" onClick={requestClose}>
@@ -777,6 +837,98 @@ export function ApiAutomationCaseModal({
               ]}
             />
           </section>
+
+          <section className="api-case-section" aria-labelledby="api-debug-config-title">
+            <h3 id="api-debug-config-title" className="api-case-section__title">
+              调试配置
+            </h3>
+            <div className="api-debug-config">
+              <Form.Item
+                name="debugEnvironment"
+                label="运行环境"
+                rules={[{ required: true, message: '请选择运行环境' }]}
+              >
+                <Select
+                  aria-label="调试运行环境"
+                  options={environments.map((environment) => ({
+                    value: environment.id,
+                    label: environment.name,
+                  }))}
+                />
+              </Form.Item>
+              <div className="api-debug-variables">
+                <span className="api-debug-variables__label">临时变量</span>
+                <DebugVariableEditor />
+              </div>
+            </div>
+          </section>
+
+          {debugResult || debugError ? (
+            <section className="api-case-section api-debug-console" aria-labelledby="api-debug-result-title">
+              <div className="api-debug-console__heading">
+                <h3 id="api-debug-result-title" className="api-case-section__title">
+                  响应结果 (Response Console)
+                </h3>
+                {debugResult ? (
+                  <div className="api-debug-console__metrics">
+                    <Tag color={debugResult.statusCode && debugResult.statusCode < 400 ? 'success' : 'error'}>
+                      Status: {debugResult.statusCode ?? '--'}
+                    </Tag>
+                    <span>Time: {debugResult.responseTimeMs} ms</span>
+                  </div>
+                ) : null}
+              </div>
+              {debugError || debugResult?.error ? (
+                <Alert type="error" showIcon title={debugError ?? debugResult?.error} />
+              ) : null}
+              {debugResult ? (
+                <>
+                  <div
+                    className={`api-debug-assertion-summary ${debugResult.success ? 'is-success' : 'is-failed'}`}
+                  >
+                    断言通过 {debugResult.assertions.filter((item) => item.passed).length}/
+                    {debugResult.assertions.length}
+                  </div>
+                  {debugResult.assertions.length ? (
+                    <div className="api-debug-assertions" aria-label="断言结果">
+                      {debugResult.assertions.map((assertion, index) => (
+                        <div className="api-debug-assertion" key={`${assertion.expression}-${index}`}>
+                          <Tag color={assertion.passed ? 'success' : 'error'}>
+                            {assertion.passed ? '通过' : '失败'}
+                          </Tag>
+                          <code>{assertion.expression}</code>
+                          <span>实际值：{assertion.actual}</span>
+                          <span>期望值：{assertion.expected}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="api-debug-payloads">
+                    <div>
+                      <span className="api-debug-payloads__label">Response Headers</span>
+                      <pre>{JSON.stringify(debugResult.responseHeaders, null, 2)}</pre>
+                    </div>
+                    <div>
+                      <span className="api-debug-payloads__label">Response Body</span>
+                      <pre>
+                        {typeof debugResult.responseBody === 'string'
+                          ? debugResult.responseBody
+                          : JSON.stringify(debugResult.responseBody, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                  {Object.keys(debugResult.extracts).length ? (
+                    <div className="api-debug-extracts">
+                      <span className="api-debug-payloads__label">提取变量</span>
+                      {Object.entries(debugResult.extracts).map(([key, value]) => (
+                        <code key={key}>{`${key} = ${typeof value === 'string' ? value : JSON.stringify(value)}`}</code>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
         </Form>
       </Modal>
 

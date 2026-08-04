@@ -4,13 +4,15 @@ import {
   DeleteOutlined,
   HolderOutlined,
   PlusOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
-import { App, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
+import { Alert, App, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../services/AuthContext';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
 import type {
   CreateTestCaseInput,
+  ApiKeyValueItem,
   Priority,
   TestCaseRecord,
   TestCaseStatus,
@@ -18,7 +20,9 @@ import type {
   UiAction,
   UiAssertion,
   UiAutomationStep,
+  UiDebugResult,
 } from '../../../services/contracts';
+import { DebugVariableEditor, debugVariablesToRecord } from './DebugVariableEditor';
 import { moduleSelectOptions } from '../moduleOptions';
 import { testCaseStatusOptions } from '../testCaseOptions';
 
@@ -75,6 +79,7 @@ interface UiCaseFormValues {
   timeoutSeconds: number;
   retryCount: number;
   steps: UiAutomationStep[];
+  debugVariables: ApiKeyValueItem[];
   status?: TestCaseStatus;
 }
 
@@ -218,6 +223,9 @@ export function UiAutomationCaseModal({
   const [modules, setModules] = useState<TestModule[]>([]);
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [draggedStep, setDraggedStep] = useState<number | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugResult, setDebugResult] = useState<UiDebugResult | null>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
   const steps = Form.useWatch('steps', form) ?? [];
 
   useEffect(() => {
@@ -237,7 +245,10 @@ export function UiAutomationCaseModal({
       timeoutSeconds: details?.timeoutSeconds ?? 30,
       retryCount: details?.retryCount ?? 1,
       steps: details?.steps?.length ? details.steps : [createStep()],
+      debugVariables: [],
     });
+    setDebugResult(null);
+    setDebugError(null);
     let active = true;
     void Promise.all([service.listTestCases({ type: 'ui' }), service.listTestModules(1)]).then(
       ([cases, nextModules]) => {
@@ -283,6 +294,37 @@ export function UiAutomationCaseModal({
     void message.success(`UI自动化已${initialCase ? '更新' : '创建'}：${created.name}`);
   };
 
+  const debugRequest = async () => {
+    try {
+      const values = await form.validateFields();
+      setDebugLoading(true);
+      setDebugResult(null);
+      setDebugError(null);
+      const result = await service.debugUiCase({
+        environment: values.environment,
+        variables: debugVariablesToRecord(values.debugVariables),
+        browser: values.browser,
+        headless: true,
+        timeoutSeconds: values.timeoutSeconds,
+        steps: values.steps.map((step, index) => ({
+          ...step,
+          stepIndex: index + 1,
+          value: step.action === 'navigate' ? step.target : step.value,
+        })),
+      });
+      setDebugResult(result);
+    } catch (error) {
+      const validationErrors = form.getFieldsError().some((field) => field.errors.length > 0);
+      if (validationErrors) {
+        void message.warning('请先补全必填项并修正配置错误');
+      } else {
+        setDebugError(error instanceof Error ? error.message : 'UI 调试运行失败');
+      }
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
   return (
     <>
       <Modal
@@ -295,6 +337,17 @@ export function UiAutomationCaseModal({
         mask={{ closable: false }}
         onCancel={requestClose}
         footer={[
+          <Button
+            key="debug"
+            className="ui-debug-button"
+            icon={<ThunderboltOutlined />}
+            aria-label="调试运行"
+            loading={debugLoading}
+            disabled={debugLoading}
+            onClick={() => void debugRequest()}
+          >
+            调试运行
+          </Button>,
           <Button key="cancel" aria-label="取消" onClick={requestClose}>
             取消
           </Button>,
@@ -405,6 +458,10 @@ export function UiAutomationCaseModal({
                 <InputNumber aria-label="失败重试次数" min={0} max={3} controls className="ui-case-number" />
               </Form.Item>
             </div>
+            <div className="ui-debug-variables">
+              <span className="ui-debug-variables__label">临时变量</span>
+              <DebugVariableEditor />
+            </div>
           </section>
 
           <section className="ui-case-section" aria-labelledby="ui-step-editor-title">
@@ -501,6 +558,68 @@ export function UiAutomationCaseModal({
               )}
             </Form.List>
           </section>
+
+          {debugResult || debugError ? (
+            <section className="ui-case-section ui-debug-result" aria-labelledby="ui-debug-result-title">
+              <div className="ui-debug-result__heading">
+                <h3 id="ui-debug-result-title" className="ui-case-section__title">
+                  调试结果
+                </h3>
+                {debugResult ? (
+                  <div className="ui-debug-result__metrics">
+                    <Tag color={debugResult.success ? 'success' : 'error'}>{debugResult.status}</Tag>
+                    <span>{debugResult.durationMs} ms</span>
+                  </div>
+                ) : null}
+              </div>
+              {debugError || debugResult?.errorMessage ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  title={debugError ?? debugResult?.errorMessage}
+                />
+              ) : null}
+              {debugResult ? (
+                <>
+                  <div className="ui-debug-steps" aria-label="调试步骤结果">
+                    {debugResult.stepResults.map((step) => {
+                      const action = step.action
+                        ? `${step.action.charAt(0).toUpperCase()}${step.action.slice(1)}`
+                        : 'Step';
+                      return (
+                        <div className="ui-debug-step" key={`${step.stepIndex}-${step.action ?? 'unknown'}`}>
+                          <Tag color={step.status === 'PASSED' ? 'success' : 'error'}>{step.status}</Tag>
+                          <strong>{`步骤 ${step.stepIndex} · ${action}`}</strong>
+                          <span>{step.durationMs} ms</span>
+                          {step.errorMessage ? <span className="ui-debug-step__error">{step.errorMessage}</span> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {debugResult.logs.length ? (
+                    <div className="ui-debug-logs">
+                      <span className="ui-debug-logs__label">执行日志</span>
+                      <pre>{debugResult.logs.join('\n')}</pre>
+                    </div>
+                  ) : null}
+                  {debugResult.screenshotUrl || debugResult.videoUrl ? (
+                    <div className="ui-debug-artifacts">
+                      {debugResult.screenshotUrl ? (
+                        <a href={debugResult.screenshotUrl} target="_blank" rel="noreferrer">
+                          查看截图
+                        </a>
+                      ) : null}
+                      {debugResult.videoUrl ? (
+                        <a href={debugResult.videoUrl} target="_blank" rel="noreferrer">
+                          查看录屏
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
         </Form>
       </Modal>
 

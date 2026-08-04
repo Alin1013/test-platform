@@ -100,8 +100,8 @@ frontend/
 | 应用框架 | 全局 | 桌面侧栏、顶部项目选择器、通知入口、用户头像及移动端抽屉导航 | 已实现；全局搜索和通知仅有界面入口 |
 | 仪表盘 | `/dashboard` | 展示用例总数和类型分布、最近用例、快捷创建入口 | 前后端接口已实现 |
 | 功能用例 | `/test-cases/functional` | 按模块、关键字、优先级和状态筛选及维护功能用例 | CRUD 与文件导入导出已持久化 |
-| 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求、断言和变量提取 | 完整 Runner 配置已结构化持久化；后端支持同步调试运行 |
-| UI自动化 | `/test-cases/ui` | 管理 UI 自动化步骤配置 | 主表与 UI 详情扩展表已持久化；执行引擎未接入 |
+| 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求、断言和变量提取 | 配置已持久化；弹窗可同步调试并展示响应、断言和提取变量 |
+| UI自动化 | `/test-cases/ui` | 管理 UI 自动化步骤配置 | 配置已持久化；弹窗可通过 Playwright 调试并展示步骤、日志和媒体 |
 | UI 自动化执行 | `/execution/ui-test` | 选择 UI 用例，配置环境、浏览器、无头模式与并发数，查看进度、步骤、媒体和日志 | 页面、执行记录、状态查询、中断接口及 WebSocket 快照已实现 |
 | 接口自动化执行 | `/execution/api-test` | 批量运行接口用例，配置环境、迭代、Ramp-up 和全局请求头，查看 KPI、请求、响应与断言 | 页面、执行记录、报告查询、中断及 JSON 导出已实现 |
 | 用例生成器 | `/xmind` | 上传并解析 XMind 节点树，生成结构化用例预览 | 支持新版 JSON 与 XMind 8 XML 格式 |
@@ -130,6 +130,8 @@ frontend/
 | `startApiExecution(input)` | 创建接口自动化执行记录 |
 | `getApiExecutionReport(executionId)` | 查询接口执行报告和请求分析 |
 | `stopApiExecution(executionId)` | 中断接口自动化执行 |
+| `debugApiCase(input)` | 同步调试当前 API 表单配置并返回请求、响应、断言和提取结果 |
+| `debugUiCase(input)` | 同步调试当前 UI 步骤并返回逐步结果、日志和媒体地址 |
 
 `PlatformServiceContext` 负责向页面注入具体服务。未配置环境变量时使用内存 Mock；设置 `VITE_API_BASE_URL` 后使用 `apiPlatformService` 调用真实后端，页面层不依赖具体传输协议。
 

@@ -548,6 +548,152 @@ body.is-resizing-module-panel {
   gap: 4px;
 }
 
+.debug-variable-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.debug-variable-editor__header,
+.debug-variable-row {
+  display: grid;
+  grid-template-columns: 48px minmax(150px, 0.8fr) minmax(220px, 1.4fr) 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-variable-editor__header {
+  padding-inline: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.debug-variable-row > .ant-checkbox-wrapper {
+  justify-self: center;
+}
+
+.api-debug-config {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.api-debug-variables__label,
+.ui-debug-variables__label,
+.api-debug-payloads__label,
+.ui-debug-logs__label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.api-debug-console__heading,
+.ui-debug-result__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-debug-console__metrics,
+.ui-debug-result__metrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.api-debug-assertion-summary {
+  margin: 10px 0;
+  padding: 7px 10px;
+  border-left: 3px solid #d4380d;
+  color: #ad2102;
+  background: #fff2e8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.api-debug-assertion-summary.is-success {
+  border-left-color: #389e0d;
+  color: #237804;
+  background: #f6ffed;
+}
+
+.api-debug-assertions,
+.ui-debug-steps {
+  border-block: 1px solid var(--border);
+}
+
+.api-debug-assertion,
+.ui-debug-step {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  color: #41556b;
+  font-size: 12px;
+}
+
+.api-debug-assertion + .api-debug-assertion,
+.ui-debug-step + .ui-debug-step {
+  border-top: 1px solid #f0f0f0;
+}
+
+.api-debug-assertion code,
+.api-debug-extracts code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.api-debug-payloads {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.api-debug-payloads pre,
+.ui-debug-logs pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 5px;
+  color: #d7dee9;
+  background: #202630;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.api-debug-extracts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.api-debug-extracts .api-debug-payloads__label {
+  margin: 0;
+}
+
+.api-debug-extracts code {
+  padding: 3px 6px;
+  border: 1px solid #b7eb8f;
+  border-radius: 3px;
+  color: #237804;
+  background: #f6ffed;
+  font-size: 12px;
+}
+
 .ui-case-modal {
   max-width: calc(100vw - 32px);
 }
@@ -560,6 +706,16 @@ body.is-resizing-module-panel {
 
 .ui-case-modal .ant-form-item {
   margin-bottom: 16px;
+}
+
+.ui-case-modal .ant-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-case-modal .ant-modal-footer .ui-debug-button {
+  margin-right: auto;
 }
 
 .ui-case-section + .ui-case-section {
@@ -622,6 +778,30 @@ body.is-resizing-module-panel {
 
 .ui-case-number {
   width: 100%;
+}
+
+.ui-debug-variables {
+  padding-top: 2px;
+}
+
+.ui-debug-step {
+  grid-template-columns: 70px minmax(180px, 1fr) 80px minmax(200px, 1.4fr);
+}
+
+.ui-debug-step__error {
+  color: #b42318;
+}
+
+.ui-debug-logs {
+  margin-top: 12px;
+}
+
+.ui-debug-artifacts {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 12px;
 }
 
 .ui-case-modal .ant-select-selection-item .ant-tag {
@@ -769,6 +949,17 @@ body.is-resizing-module-panel {
   .api-rule-row--extract > :last-child {
     justify-self: end;
   }
+
+  .api-debug-config,
+  .api-debug-payloads {
+    grid-template-columns: 1fr;
+  }
+
+  .api-debug-assertion,
+  .ui-debug-step {
+    grid-template-columns: 70px 1fr;
+    padding-block: 8px;
+  }
 }
 
 @media (max-width: 620px) {
@@ -815,6 +1006,15 @@ body.is-resizing-module-panel {
     max-height: calc(100vh - 170px);
   }
 
+  .ui-case-modal .ant-modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .ui-case-modal .ant-modal-footer .ui-debug-button {
+    width: 100%;
+    margin-right: 0;
+  }
+
   .ui-case-basic-grid,
   .ui-case-config-grid,
   .ui-step-row__fields {
@@ -848,6 +1048,7 @@ body.is-resizing-module-panel {
 
   .api-case-basic-grid,
   .api-kv-row,
+  .debug-variable-row,
   .api-rule-row--assertion,
   .api-rule-row--extract {
     grid-template-columns: 1fr;
@@ -860,6 +1061,32 @@ body.is-resizing-module-panel {
 
   .api-kv-editor__header {
     display: none;
+  }
+
+  .debug-variable-editor__header {
+    display: none;
+  }
+
+  .debug-variable-row {
+    position: relative;
+    padding: 10px 42px 10px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+  }
+
+  .debug-variable-row > .ant-checkbox-wrapper {
+    justify-self: start;
+  }
+
+  .debug-variable-row > :last-child {
+    position: absolute;
+    top: 8px;
+    right: 4px;
+  }
+
+  .api-debug-console__heading,
+  .ui-debug-result__heading {
+    flex-direction: column;
   }
 
   .api-kv-row {

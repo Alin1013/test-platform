@@ -268,6 +268,78 @@ export interface ApiExecutionReport {
   results: ApiExecutionResult[];
 }
 
+export interface ApiDebugInput {
+  environment?: string;
+  variables: Record<string, string>;
+  url: string;
+  method: HttpMethod;
+  expectedCode: number;
+  headers: Record<string, string>;
+  queryParams: ApiKeyValueItem[];
+  bodyType: ApiBodyType;
+  bodyContent?: string;
+  bodyFields: ApiKeyValueItem[];
+  assertions: ApiResponseAssertion[];
+  extracts: ApiExtractVariable[];
+}
+
+export interface ApiDebugAssertionResult {
+  type: ApiAssertionType;
+  expression: string;
+  expected: string;
+  actual: string;
+  passed: boolean;
+}
+
+export interface ApiDebugResult {
+  success: boolean;
+  error?: string;
+  requestData: {
+    method: HttpMethod;
+    url: string;
+    headers: Record<string, string>;
+    body: unknown;
+  } | null;
+  statusCode: number | null;
+  responseTimeMs: number;
+  responseHeaders: Record<string, string>;
+  responseBody: unknown;
+  assertions: ApiDebugAssertionResult[];
+  extracts: Record<string, unknown>;
+}
+
+export interface UiDebugStep extends UiAutomationStep {
+  stepIndex: number;
+}
+
+export interface UiDebugInput {
+  environment: string;
+  variables: Record<string, string>;
+  browser: 'chrome' | 'firefox' | 'safari' | 'edge';
+  headless: boolean;
+  timeoutSeconds: number;
+  steps: UiDebugStep[];
+}
+
+export interface UiDebugStepResult {
+  stepIndex: number;
+  action?: UiAction;
+  status: ExecutionDetailStatus;
+  durationMs: number;
+  errorMessage?: string | null;
+}
+
+export interface UiDebugResult {
+  success: boolean;
+  status: ExecutionDetailStatus;
+  durationMs: number;
+  stepResults: UiDebugStepResult[];
+  logs: string[];
+  screenshotUrl: string | null;
+  videoUrl: string | null;
+  errorMessage: string | null;
+}
+
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestModules(projectId?: number): Promise<TestModule[]>;
@@ -292,4 +364,6 @@ export interface PlatformService {
   startApiExecution(input: ApiExecutionInput): Promise<ExecutionStart>;
   getApiExecutionReport(executionId: string): Promise<ApiExecutionReport>;
   stopApiExecution(executionId: string): Promise<void>;
+  debugApiCase(input: ApiDebugInput): Promise<ApiDebugResult>;
+  debugUiCase(input: UiDebugInput): Promise<UiDebugResult>;
 }

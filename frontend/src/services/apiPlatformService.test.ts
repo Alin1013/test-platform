@@ -388,3 +388,147 @@ test('uses the dedicated API execution report and stop endpoints', async () => {
 
   expect(report.summary.pendingApi).toBe(1);
 });
+
+test('sends API debug configuration to the dedicated endpoint and unwraps the result', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('/api/v1/debug/api-run');
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      environment: 'test',
+      variables: { token: 'debug-token' },
+      url: '/api/profile',
+      method: 'POST',
+      expected_code: 200,
+      headers: { Authorization: 'Bearer {{token}}' },
+      query_params: [{ enabled: true, key: 'expand', value: 'roles' }],
+      body_type: 'json',
+      body_content: '{"name":"demo"}',
+      body_fields: [],
+      assertions: [
+        { type: 'statusCode', target: '', comparison: 'equals', expected: '200' },
+      ],
+      extracts: [{ name: 'userId', jsonPath: '$.data.id' }],
+    });
+    return jsonResponse({
+      code: 200,
+      message: 'Debug run completed',
+      data: {
+        success: true,
+        requestData: {
+          method: 'POST',
+          url: 'https://test.example.com/api/profile?expand=roles',
+          headers: { authorization: 'Bearer debug-token' },
+          body: { name: 'demo' },
+        },
+        statusCode: 200,
+        responseTimeMs: 18,
+        responseHeaders: { 'content-type': 'application/json' },
+        responseBody: { data: { id: 42 } },
+        assertions: [
+          {
+            type: 'statusCode',
+            expression: '',
+            expected: '200',
+            actual: '200',
+            passed: true,
+          },
+        ],
+        extracts: { userId: 42 },
+      },
+    });
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  const result = await service.debugApiCase({
+    environment: 'test',
+    variables: { token: 'debug-token' },
+    url: '/api/profile',
+    method: 'POST',
+    expectedCode: 200,
+    headers: { Authorization: 'Bearer {{token}}' },
+    queryParams: [{ enabled: true, key: 'expand', value: 'roles' }],
+    bodyType: 'json',
+    bodyContent: '{"name":"demo"}',
+    bodyFields: [],
+    assertions: [
+      { type: 'statusCode', target: '', comparison: 'equals', expected: '200' },
+    ],
+    extracts: [{ name: 'userId', jsonPath: '$.data.id' }],
+  });
+
+  expect(result).toMatchObject({
+    success: true,
+    statusCode: 200,
+    responseTimeMs: 18,
+    responseBody: { data: { id: 42 } },
+    extracts: { userId: 42 },
+  });
+});
+
+test('sends UI debug configuration to the dedicated endpoint and unwraps step results', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('http://localhost:8001/api/v1/debug/ui-run');
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      environment: 'staging',
+      variables: { user: 'demo-user' },
+      browser: 'firefox',
+      headless: true,
+      timeout_seconds: 45,
+      steps: [
+        {
+          stepIndex: 1,
+          action: 'navigate',
+          locatorType: 'css',
+          target: '{{baseUrl}}/login',
+          value: '{{baseUrl}}/login',
+          assertion: 'none',
+          expected: '',
+        },
+      ],
+    });
+    return jsonResponse({
+      code: 200,
+      message: 'Debug run completed',
+      data: {
+        success: true,
+        status: 'PASSED',
+        durationMs: 31,
+        stepResults: [
+          { stepIndex: 1, action: 'navigate', status: 'PASSED', durationMs: 31 },
+        ],
+        logs: ['步骤 1 执行成功'],
+        screenshotUrl: null,
+        videoUrl: '/uploads/executions/debug.webm',
+        errorMessage: null,
+      },
+    });
+  });
+  const service = createApiPlatformService({ baseUrl: 'http://localhost:8001/api/v1', fetcher });
+
+  const result = await service.debugUiCase({
+    environment: 'staging',
+    variables: { user: 'demo-user' },
+    browser: 'firefox',
+    headless: true,
+    timeoutSeconds: 45,
+    steps: [
+      {
+        stepIndex: 1,
+        action: 'navigate',
+        locatorType: 'css',
+        target: '{{baseUrl}}/login',
+        value: '{{baseUrl}}/login',
+        assertion: 'none',
+        expected: '',
+      },
+    ],
+  });
+
+  expect(result).toMatchObject({
+    success: true,
+    status: 'PASSED',
+    durationMs: 31,
+    videoUrl: 'http://localhost:8001/uploads/executions/debug.webm',
+  });
+});

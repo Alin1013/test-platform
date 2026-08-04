@@ -8,6 +8,7 @@ import {
 import type {
   ApiExecutionInput,
   ApiExecutionReport,
+  ApiDebugInput,
   CreateTestCaseInput,
   CreateUserInput,
   SystemSettings,
@@ -17,6 +18,7 @@ import type {
   UpdateTestCaseInput,
   UiExecutionInput,
   UiExecutionResult,
+  UiDebugInput,
   UserRecord,
 } from './contracts';
 
@@ -281,6 +283,69 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       );
       execution.summary.pendingApi = 0;
       await respond(undefined);
+    },
+
+    async debugApiCase(input: ApiDebugInput) {
+      const statusAssertion = input.assertions.find((assertion) => assertion.type === 'statusCode');
+      const statusCode = Number(statusAssertion?.expected || input.expectedCode);
+      const assertions = input.assertions.map((assertion) => ({
+        type: assertion.type,
+        expression:
+          assertion.type === 'statusCode'
+            ? 'response.status'
+            : assertion.type === 'responseTime'
+              ? 'response.time_ms'
+              : assertion.target,
+        expected: assertion.expected,
+        actual:
+          assertion.type === 'statusCode'
+            ? String(statusCode)
+            : assertion.type === 'responseTime'
+              ? '36'
+              : assertion.expected,
+        passed: true,
+      }));
+      return respond({
+        success: true,
+        requestData: {
+          method: input.method,
+          url: input.url,
+          headers: input.headers,
+          body: input.bodyType === 'json' && input.bodyContent
+            ? JSON.parse(input.bodyContent)
+            : null,
+        },
+        statusCode,
+        responseTimeMs: 36,
+        responseHeaders: { 'content-type': 'application/json' },
+        responseBody: {
+          code: 0,
+          message: 'success',
+          data: { requestId: 'debug-request-001' },
+        },
+        assertions,
+        extracts: Object.fromEntries(
+          input.extracts.map((item) => [item.name, `mock:${item.jsonPath}`]),
+        ),
+      });
+    },
+
+    async debugUiCase(input: UiDebugInput) {
+      return respond({
+        success: true,
+        status: 'PASSED' as const,
+        durationMs: input.steps.length * 24,
+        stepResults: input.steps.map((step) => ({
+          stepIndex: step.stepIndex,
+          action: step.action,
+          status: 'PASSED' as const,
+          durationMs: 24,
+        })),
+        logs: input.steps.map((step) => `步骤 ${step.stepIndex} 执行成功`),
+        screenshotUrl: null,
+        videoUrl: '/uploads/executions/debug-demo.webm',
+        errorMessage: null,
+      });
     },
   };
 }

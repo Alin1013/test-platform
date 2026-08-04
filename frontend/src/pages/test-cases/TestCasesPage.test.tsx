@@ -118,6 +118,61 @@ it('校验 JSON 并创建接口用例', async () => {
   });
 });
 
+it('接口调试运行后展示真实响应、断言和提取结果', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/api?create=1');
+  const dialog = await screen.findByRole('dialog', { name: '新建接口用例' });
+
+  await user.type(within(dialog).getByLabelText('用例名称'), '调试用户资料接口');
+  await user.type(within(dialog).getByLabelText('接口地址'), '/api/profile');
+  await user.click(within(dialog).getByRole('button', { name: '发送请求（Debug）' }));
+
+  expect(within(dialog).getByRole('button', { name: '发送请求（Debug）' })).toBeDisabled();
+  expect(await within(dialog).findByText('响应结果 (Response Console)')).toBeInTheDocument();
+  expect(within(dialog).getByText('Status: 200')).toBeInTheDocument();
+  expect(within(dialog).getByText('Time: 36 ms')).toBeInTheDocument();
+  expect(within(dialog).getByText('断言通过 2/2')).toBeInTheDocument();
+  expect(within(dialog).getByText('实际值：200')).toBeInTheDocument();
+  expect(within(dialog).getByText('期望值：200')).toBeInTheDocument();
+  expect(within(dialog).getByText(/"requestId": "debug-request-001"/)).toBeInTheDocument();
+});
+
+it('接口调试请求失败时在响应控制台展示后端错误', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  vi.spyOn(service, 'debugApiCase').mockRejectedValue(new Error('环境 test 未配置'));
+  renderTestCasesPageWithService(service, '/test-cases/api?create=1');
+  const dialog = await screen.findByRole('dialog', { name: '新建接口用例' });
+
+  await user.type(within(dialog).getByLabelText('用例名称'), '错误环境调试');
+  await user.type(within(dialog).getByLabelText('接口地址'), '/api/profile');
+  await user.click(within(dialog).getByRole('button', { name: '发送请求（Debug）' }));
+
+  expect(await within(dialog).findByText('响应结果 (Response Console)')).toBeInTheDocument();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('环境 test 未配置');
+});
+
+it('UI 调试运行后展示逐步结果、日志和录屏链接', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/ui?create=1');
+  const dialog = await screen.findByRole('dialog', { name: '新建UI自动化' });
+
+  await user.type(within(dialog).getByLabelText('用例名称'), '调试登录页面');
+  await user.type(within(dialog).getByLabelText('步骤 1 元素定位值'), '{{baseUrl}}/login');
+  await user.click(within(dialog).getByRole('button', { name: '调试运行' }));
+
+  expect(within(dialog).getByRole('button', { name: '调试运行' })).toBeDisabled();
+  expect(await within(dialog).findByText('调试结果')).toBeInTheDocument();
+  expect(within(dialog).getAllByText('PASSED')).toHaveLength(2);
+  expect(within(dialog).getByText('步骤 1 · Navigate')).toBeInTheDocument();
+  expect(within(dialog).getAllByText('24 ms')).toHaveLength(2);
+  expect(within(dialog).getByText('步骤 1 执行成功')).toBeInTheDocument();
+  expect(within(dialog).getByRole('link', { name: '查看录屏' })).toHaveAttribute(
+    'href',
+    '/uploads/executions/debug-demo.webm',
+  );
+});
+
 it('切换模块后过滤用例', async () => {
   const user = userEvent.setup();
   renderApp('/test-cases/api');

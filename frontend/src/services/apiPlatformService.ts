@@ -1,6 +1,8 @@
 import type {
   CreateTestCaseInput,
   CreateUserInput,
+  ApiDebugInput,
+  ApiDebugResult,
   ApiExecutionInput,
   ApiExecutionReport,
   DashboardData,
@@ -15,6 +17,8 @@ import type {
   TestModule,
   UiExecutionInput,
   UiExecutionResult,
+  UiDebugInput,
+  UiDebugResult,
   UpdateTestCaseInput,
   UserRecord,
 } from './contracts';
@@ -250,6 +254,10 @@ export function createApiPlatformService({
   fetcher = globalThis.fetch.bind(globalThis),
 }: ApiPlatformServiceOptions): PlatformService {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const resolveArtifactUrl = (url: string | null) => {
+    if (!url || !/^https?:\/\//.test(normalizedBaseUrl)) return url;
+    return new URL(url, normalizedBaseUrl).toString();
+  };
 
   const request = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     const headers = new Headers(init.headers);
@@ -443,6 +451,46 @@ export function createApiPlatformService({
       await request(`/api-test/executions/${encodeURIComponent(executionId)}/stop`, {
         method: 'POST',
       });
+    },
+
+    async debugApiCase(input: ApiDebugInput) {
+      const response = await request<ApiEnvelope<ApiDebugResult>>('/debug/api-run', {
+        method: 'POST',
+        body: JSON.stringify({
+          environment: input.environment,
+          variables: input.variables,
+          url: input.url,
+          method: input.method,
+          expected_code: input.expectedCode,
+          headers: input.headers,
+          query_params: input.queryParams,
+          body_type: input.bodyType,
+          body_content: input.bodyContent,
+          body_fields: input.bodyFields,
+          assertions: input.assertions,
+          extracts: input.extracts,
+        }),
+      });
+      return response.data;
+    },
+
+    async debugUiCase(input: UiDebugInput) {
+      const response = await request<ApiEnvelope<UiDebugResult>>('/debug/ui-run', {
+        method: 'POST',
+        body: JSON.stringify({
+          environment: input.environment,
+          variables: input.variables,
+          browser: input.browser,
+          headless: input.headless,
+          timeout_seconds: input.timeoutSeconds,
+          steps: input.steps,
+        }),
+      });
+      return {
+        ...response.data,
+        screenshotUrl: resolveArtifactUrl(response.data.screenshotUrl),
+        videoUrl: resolveArtifactUrl(response.data.videoUrl),
+      };
     },
   };
 }
