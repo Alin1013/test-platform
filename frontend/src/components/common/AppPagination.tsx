@@ -1,6 +1,7 @@
 import { InputNumber, Pagination } from 'antd';
 import type { PaginationProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import './AppPagination.css';
 
 export const PAGINATION_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 

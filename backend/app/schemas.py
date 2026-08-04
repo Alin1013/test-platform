@@ -7,6 +7,9 @@ CaseType = Literal["functional", "api", "ui"]
 Priority = Literal["P0", "P1", "P2", "P3"]
 CaseStatus = Literal["维护中", "已通过", "草稿", "已失败", "已停用"]
 HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
+UiAction = Literal["click", "input", "navigate", "hover", "wait", "assert"]
+UiLocatorType = Literal["xpath", "css", "id", "text"]
+UiAssertion = Literal["none", "textEquals", "isVisible", "urlEquals"]
 
 
 class ApiDetailsCreate(BaseModel):
@@ -27,8 +30,33 @@ class ApiDetailsUpdate(BaseModel):
     expected_response: dict[str, Any] | list[Any] | None = None
 
 
+class UiStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: UiAction
+    locatorType: UiLocatorType
+    target: str = Field(max_length=2048)
+    value: str = Field(max_length=4000)
+    assertion: UiAssertion = "none"
+    expected: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def assert_action_requires_assertion(self) -> "UiStep":
+        if self.action == "assert" and self.assertion == "none":
+            raise ValueError("Assert steps must specify an assertion")
+        return self
+
+
 class UiDetailsCreate(BaseModel):
-    steps: list[dict[str, Any]] | list[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(default="", max_length=4000)
+    dependency_case_id: int | None = Field(default=None, gt=0)
+    browser: Literal["chrome", "firefox"] = "chrome"
+    environment: Literal["staging", "test"] = "test"
+    timeout_seconds: int = Field(default=30, ge=1, le=3600)
+    retry_count: int = Field(default=1, ge=0, le=3)
+    steps: list[UiStep] = Field(default_factory=list)
 
 
 class TestCaseCreate(BaseModel):
@@ -65,6 +93,40 @@ class TestCaseUpdate(BaseModel):
     author_id: int | None = None
     api_details: ApiDetailsUpdate | None = None
     ui_details: UiDetailsCreate | None = None
+
+
+class UiExecutionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    projectId: int = Field(gt=0)
+    suiteIds: list[int] = Field(min_length=1, max_length=100)
+    environment: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    browser: Literal["chrome", "firefox", "safari", "edge"]
+    headless: bool = True
+    concurrency: int = Field(default=1, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def suites_are_unique(self) -> "UiExecutionCreate":
+        if len(self.suiteIds) != len(set(self.suiteIds)):
+            raise ValueError("suiteIds must be unique")
+        return self
+
+
+class ApiExecutionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    projectId: int = Field(gt=0)
+    suiteIds: list[int] = Field(min_length=1, max_length=100)
+    envId: int = Field(gt=0)
+    globalHeaders: dict[str, str] = Field(default_factory=dict)
+    iterations: int = Field(default=1, ge=1, le=100)
+    rampUpTime: int = Field(default=0, ge=0, le=60000)
+
+    @model_validator(mode="after")
+    def suites_are_unique(self) -> "ApiExecutionCreate":
+        if len(self.suiteIds) != len(set(self.suiteIds)):
+            raise ValueError("suiteIds must be unique")
+        return self
 
 
 class UserCreate(BaseModel):

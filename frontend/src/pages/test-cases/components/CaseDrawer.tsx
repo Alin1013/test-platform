@@ -1,7 +1,14 @@
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, Drawer, Form, Input, Modal, Select, Space } from 'antd';
+import { App, Button, Drawer, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
-import type { CreateTestCaseInput, TestCaseRecord, TestCaseType } from '../../../services/contracts';
+import type {
+  CreateTestCaseInput,
+  TestCaseRecord,
+  TestCaseStatus,
+  TestCaseType,
+} from '../../../services/contracts';
+import { ApiAutomationCaseModal } from './ApiAutomationCaseModal';
+import { UiAutomationCaseModal } from './UiAutomationCaseModal';
+import { testCaseStatusOptions } from '../testCaseOptions';
 
 const { TextArea } = Input;
 
@@ -15,6 +22,7 @@ interface CaseDrawerProps {
   type: TestCaseType;
   open: boolean;
   defaultModule: string;
+  initialCase?: TestCaseRecord;
   onClose: () => void;
   onSubmit: (input: CreateTestCaseInput) => Promise<TestCaseRecord>;
 }
@@ -23,36 +31,62 @@ interface CaseFormValues {
   name: string;
   moduleId: string;
   priority: CreateTestCaseInput['priority'];
-  endpoint?: string;
-  method?: CreateTestCaseInput['method'];
-  headers?: Array<{ key?: string; value?: string }>;
-  requestBody?: string;
-  assertions?: string;
+  status: TestCaseStatus;
   precondition?: string;
   steps?: string;
   expected?: string;
-  pageUrl?: string;
-  selector?: string;
-  environment?: string;
 }
 
-export function CaseDrawer({ type, open, defaultModule, onClose, onSubmit }: CaseDrawerProps) {
+export function CaseDrawer(props: CaseDrawerProps) {
+  if (props.type === 'api') {
+    return (
+      <ApiAutomationCaseModal
+        open={props.open}
+        defaultModule={props.defaultModule}
+        initialCase={props.initialCase}
+        onClose={props.onClose}
+        onSubmit={props.onSubmit}
+      />
+    );
+  }
+
+  if (props.type === 'ui') {
+    return (
+      <UiAutomationCaseModal
+        open={props.open}
+        defaultModule={props.defaultModule}
+        initialCase={props.initialCase}
+        onClose={props.onClose}
+        onSubmit={props.onSubmit}
+      />
+    );
+  }
+
+  return <FunctionalCaseDrawer {...props} />;
+}
+
+function FunctionalCaseDrawer({
+  open,
+  defaultModule,
+  initialCase,
+  onClose,
+  onSubmit,
+}: CaseDrawerProps) {
   const [form] = Form.useForm<CaseFormValues>();
   const { message } = App.useApp();
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
-  const title = `新建${typeLabels[type]}`;
+  const title = `${initialCase ? '编辑' : '新建'}${typeLabels.functional}`;
 
   useEffect(() => {
     if (open) {
       form.setFieldsValue({
-        moduleId: defaultModule === 'all' ? 'auth' : defaultModule,
-        priority: 'P1',
-        method: 'POST',
-        headers: [{ key: 'Content-Type', value: 'application/json' }],
-        environment: '测试环境',
+        name: initialCase?.name,
+        moduleId: initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule),
+        priority: initialCase?.priority ?? 'P1',
+        status: initialCase?.status ?? '维护中',
       });
     }
-  }, [defaultModule, form, open, type]);
+  }, [defaultModule, form, initialCase, open]);
 
   const closeDrawer = () => {
     if (!form.isFieldsTouched()) {
@@ -71,18 +105,15 @@ export function CaseDrawer({ type, open, defaultModule, onClose, onSubmit }: Cas
 
   const submit = async (values: CaseFormValues) => {
     const created = await onSubmit({
-      type,
+      type: 'functional',
       moduleId: values.moduleId,
       name: values.name,
       priority: values.priority,
-      status: '维护中',
-      endpoint: type === 'api' ? values.endpoint : undefined,
-      method: type === 'api' ? values.method : undefined,
-      expectedStatus: type === 'api' ? 200 : undefined,
+      status: values.status,
     });
     form.resetFields();
     onClose();
-    void message.success(`${typeLabels[type]}已创建：${created.name}`);
+    void message.success(`${typeLabels.functional}已${initialCase ? '更新' : '创建'}：${created.name}`);
   };
 
   return (
@@ -101,8 +132,12 @@ export function CaseDrawer({ type, open, defaultModule, onClose, onSubmit }: Cas
             <Button aria-label="取消" onClick={closeDrawer}>
               取消
             </Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              创建用例
+            <Button
+              type="primary"
+              aria-label={initialCase ? '保存' : '创建用例'}
+              onClick={() => form.submit()}
+            >
+              {initialCase ? '保存' : '创建用例'}
             </Button>
           </div>
         }
@@ -134,109 +169,41 @@ export function CaseDrawer({ type, open, defaultModule, onClose, onSubmit }: Cas
                 options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))}
               />
             </Form.Item>
-          </div>
-
-          {type === 'api' ? (
-            <>
-              <Form.Item
-                name="endpoint"
-                label="接口地址"
-                rules={[{ required: true, message: '请输入接口地址' }]}
-              >
-                <Input prefix="URL" placeholder="/api/example" />
-              </Form.Item>
-              <Form.Item name="method" label="HTTP 方法">
+            {initialCase ? (
+              <Form.Item name="status" label="状态" rules={[{ required: true }]}>
                 <Select
-                  id="case-method-select"
-                  options={['GET', 'POST', 'PUT', 'DELETE'].map((value) => ({ value, label: value }))}
+                  aria-label="状态"
+                  options={testCaseStatusOptions.map((value) => ({
+                    value,
+                    label: value,
+                  }))}
                 />
               </Form.Item>
-              <Form.List name="headers">
-                {(fields, { add, remove }) => (
-                  <Form.Item label="请求头">
-                    <div className="case-drawer__headers">
-                      {fields.map(({ key, name }) => (
-                        <Space.Compact key={key} block>
-                          <Form.Item name={[name, 'key']} noStyle>
-                            <Input aria-label={`请求头键 ${name + 1}`} placeholder="键" />
-                          </Form.Item>
-                          <Form.Item name={[name, 'value']} noStyle>
-                            <Input aria-label={`请求头值 ${name + 1}`} placeholder="值" />
-                          </Form.Item>
-                          <Button
-                            icon={<DeleteOutlined />}
-                            aria-label={`删除请求头 ${name + 1}`}
-                            onClick={() => remove(name)}
-                          />
-                        </Space.Compact>
-                      ))}
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        aria-label="添加请求头"
-                        onClick={() => add({ key: '', value: '' })}
-                        block
-                      >
-                        添加请求头
-                      </Button>
-                    </div>
-                  </Form.Item>
-                )}
-              </Form.List>
-              <Form.Item
-                name="requestBody"
-                label="请求体"
-                rules={[
-                  {
-                    validator: async (_, value?: string) => {
-                      if (!value?.trim()) return;
-                      try {
-                        JSON.parse(value);
-                      } catch {
-                        throw new Error('请输入有效的 JSON');
-                      }
-                    },
-                  },
-                ]}
-              >
-                <TextArea className="case-drawer__code" rows={7} placeholder={'{\n  "key": "value"\n}'} />
-              </Form.Item>
-              <Form.Item name="assertions" label="断言规则">
-                <TextArea rows={3} placeholder="例如：响应状态等于 200" />
-              </Form.Item>
-            </>
-          ) : null}
+            ) : null}
+          </div>
 
-          {type === 'functional' ? (
+          {!initialCase ? (
             <>
               <Form.Item name="precondition" label="前置条件">
                 <TextArea rows={3} placeholder="描述执行用例前需要满足的条件" />
               </Form.Item>
-              <Form.Item name="steps" label="测试步骤" rules={[{ required: true, message: '请输入测试步骤' }]}>
+              <Form.Item
+                name="steps"
+                label="测试步骤"
+                rules={[{ required: true, message: '请输入测试步骤' }]}
+              >
                 <TextArea rows={6} placeholder="每行输入一个操作步骤" />
               </Form.Item>
-              <Form.Item name="expected" label="预期结果" rules={[{ required: true, message: '请输入预期结果' }]}>
+              <Form.Item
+                name="expected"
+                label="预期结果"
+                rules={[{ required: true, message: '请输入预期结果' }]}
+              >
                 <TextArea rows={4} placeholder="描述预期的业务结果" />
               </Form.Item>
             </>
           ) : null}
 
-          {type === 'ui' ? (
-            <>
-              <Form.Item name="pageUrl" label="页面地址" rules={[{ required: true, message: '请输入页面地址' }]}>
-                <Input placeholder="https://example.com/login" />
-              </Form.Item>
-              <Form.Item name="selector" label="定位方式" rules={[{ required: true, message: '请输入定位方式' }]}>
-                <Input placeholder="例如：data-testid=login-button" />
-              </Form.Item>
-              <Form.Item name="environment" label="执行环境">
-                <Select
-                  id="case-environment-select"
-                  options={['测试环境', '预发布环境', '生产镜像环境'].map((value) => ({ value, label: value }))}
-                />
-              </Form.Item>
-            </>
-          ) : null}
         </Form>
       </Drawer>
       <Modal

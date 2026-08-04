@@ -1,6 +1,7 @@
 import { initialAuthProfile } from '../mocks/authFixtures';
 
 export interface AuthUser {
+  id: number;
   account: string;
   name: string;
   avatar?: string;
@@ -97,6 +98,7 @@ const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 function mapUser(user: ApiUser): AuthUser {
   return {
+    id: user.id,
     account: user.account,
     name: user.name,
     avatar: user.avatar ?? undefined,
@@ -201,8 +203,10 @@ interface MemoryProfile extends AuthUser {
 
 export function createMemoryAuthClient(): AuthClient {
   const profiles: MemoryProfile[] = [{ ...initialAuthProfile }];
+  let userSequence = Math.max(...profiles.map((profile) => profile.id)) + 1;
 
   const publicUser = (profile: MemoryProfile): AuthUser => ({
+    id: profile.id,
     account: profile.account,
     name: profile.name,
     avatar: profile.avatar,
@@ -234,6 +238,7 @@ export function createMemoryAuthClient(): AuthClient {
         );
       }
       const profile: MemoryProfile = {
+        id: userSequence++,
         account,
         name: input.name.trim(),
         email,

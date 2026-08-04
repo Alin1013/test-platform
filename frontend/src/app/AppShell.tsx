@@ -6,6 +6,7 @@ import {
   EditOutlined,
   LogoutOutlined,
   MenuOutlined,
+  PlayCircleOutlined,
   SettingOutlined,
   SwapOutlined,
   TeamOutlined,
@@ -29,6 +30,15 @@ const menuItems = [
       { key: '/test-cases/functional', label: '功能用例' },
       { key: '/test-cases/api', label: '接口用例' },
       { key: '/test-cases/ui', label: 'UI自动化' },
+    ],
+  },
+  {
+    key: 'execution',
+    icon: <PlayCircleOutlined aria-hidden="true" />,
+    label: '执行测试用例',
+    children: [
+      { key: '/execution/ui-test', label: 'UI 自动化' },
+      { key: '/execution/api-test', label: '接口自动化' },
     ],
   },
   { key: '/xmind', icon: <BulbOutlined aria-hidden="true" />, label: '用例生成器' },
@@ -61,7 +71,13 @@ function Navigation({ onNavigate }: NavigationProps) {
       theme="dark"
       items={menuItems}
       selectedKeys={[selectedKey]}
-      defaultOpenKeys={location.pathname.startsWith('/test-cases') ? ['test-cases'] : []}
+      defaultOpenKeys={
+        location.pathname.startsWith('/test-cases')
+          ? ['test-cases']
+          : location.pathname.startsWith('/execution')
+            ? ['execution']
+            : []
+      }
       onClick={({ key }) => {
         navigate(key);
         onNavigate?.();

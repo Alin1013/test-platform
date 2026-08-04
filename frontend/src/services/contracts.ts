@@ -2,6 +2,12 @@ export type TestCaseType = 'functional' | 'api' | 'ui';
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
 export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已失败' | '已停用';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type ApiBodyType = 'none' | 'json' | 'form-data' | 'x-www-form-urlencoded';
+export type ApiAssertionType = 'statusCode' | 'jsonPath' | 'responseTime';
+export type ApiComparison = 'equals' | 'contains' | 'notNull';
+export type UiAction = 'click' | 'input' | 'navigate' | 'hover' | 'wait' | 'assert';
+export type UiLocatorType = 'xpath' | 'css' | 'id' | 'text';
+export type UiAssertion = 'none' | 'textEquals' | 'isVisible' | 'urlEquals';
 export type UserRole = '测试负责人' | '测试工程师' | '开发人员';
 export type PermissionKey =
   | 'caseView'
@@ -11,6 +17,7 @@ export type PermissionKey =
   | 'systemSettings';
 
 export interface TestCaseRecord {
+  storageId: number;
   id: string;
   type: TestCaseType;
   moduleId: string;
@@ -23,6 +30,62 @@ export interface TestCaseRecord {
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
+  apiDetails?: ApiAutomationCaseDetails;
+  uiDetails?: UiAutomationCaseDetails;
+}
+
+export interface TestModule {
+  id: string;
+  name: string;
+  projectId: number;
+  children: TestModule[];
+}
+
+export interface ApiKeyValueItem {
+  enabled: boolean;
+  key: string;
+  value: string;
+}
+
+export interface ApiResponseAssertion {
+  type: ApiAssertionType;
+  target: string;
+  comparison: ApiComparison;
+  expected: string;
+}
+
+export interface ApiExtractVariable {
+  name: string;
+  jsonPath: string;
+}
+
+export interface ApiAutomationCaseDetails {
+  headers: ApiKeyValueItem[];
+  queryParams: ApiKeyValueItem[];
+  bodyType: ApiBodyType;
+  bodyContent: string;
+  bodyFields: ApiKeyValueItem[];
+  assertions: ApiResponseAssertion[];
+  extracts: ApiExtractVariable[];
+}
+
+export interface UiAutomationStep {
+  action: UiAction;
+  locatorType: UiLocatorType;
+  target: string;
+  value: string;
+  assertion: UiAssertion;
+  expected: string;
+}
+
+export interface UiAutomationCaseDetails {
+  description: string;
+  dependencyCaseId?: number;
+  browser: 'chrome' | 'firefox';
+  environment: 'staging' | 'test';
+  timeoutSeconds: number;
+  retryCount: number;
+  steps: UiAutomationStep[];
 }
 
 export interface TestCaseQuery {
@@ -35,6 +98,7 @@ export interface TestCaseQuery {
 
 export interface CreateTestCaseInput {
   type: TestCaseType;
+  authorId?: number;
   moduleId: string;
   name: string;
   priority: Priority;
@@ -42,7 +106,11 @@ export interface CreateTestCaseInput {
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
+  apiDetails?: ApiAutomationCaseDetails;
+  uiDetails?: UiAutomationCaseDetails;
 }
+
+export type UpdateTestCaseInput = Omit<CreateTestCaseInput, 'type'>;
 
 export interface UserRecord {
   id: string;
@@ -111,10 +179,102 @@ export interface TestConnectionResult {
   message: string;
 }
 
+export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELED';
+export type ExecutionDetailStatus = 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED' | 'SKIPPED';
+
+export interface UiExecutionInput {
+  projectId: number;
+  suiteIds: number[];
+  environment: string;
+  browser: 'chrome' | 'firefox' | 'safari' | 'edge';
+  headless: boolean;
+  concurrency: number;
+}
+
+export interface ExecutionStart {
+  executionId: string;
+  status: ExecutionStatus;
+  startTime?: string;
+}
+
+export interface UiExecutionCase {
+  caseId: number;
+  caseName: string;
+  browser: UiExecutionInput['browser'];
+  status: ExecutionDetailStatus;
+  durationMs: number;
+  errorMessage?: string | null;
+  screenshotUrl?: string | null;
+  videoUrl?: string | null;
+  steps?: Array<Record<string, unknown> | string>;
+  logs?: string[];
+}
+
+export interface UiExecutionResult {
+  executionId: string;
+  status: ExecutionStatus;
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    running: number;
+    pending: number;
+    durationMs: number;
+  };
+  cases: UiExecutionCase[];
+}
+
+export interface ApiExecutionInput {
+  projectId: number;
+  suiteIds: number[];
+  envId: number;
+  globalHeaders: Record<string, string>;
+  iterations: number;
+  rampUpTime: number;
+}
+
+export interface ApiAssertionResult {
+  expression: string;
+  passed: boolean;
+  actual?: string;
+}
+
+export interface ApiExecutionResult {
+  apiId: number;
+  name: string;
+  method: HttpMethod;
+  url: string;
+  responseCode: number | null;
+  responseTimeMs: number;
+  status: ExecutionDetailStatus;
+  requestData: {
+    headers: Record<string, string>;
+    body: unknown;
+  };
+  responseData: unknown;
+  assertions: ApiAssertionResult[];
+}
+
+export interface ApiExecutionReport {
+  executionId: string;
+  status: ExecutionStatus;
+  summary: {
+    totalApi: number;
+    passedApi: number;
+    failedApi: number;
+    pendingApi: number;
+    avgResponseTimeMs: number;
+  };
+  results: ApiExecutionResult[];
+}
+
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
+  listTestModules(projectId?: number): Promise<TestModule[]>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
+  updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;
+  deleteTestCase(storageId: number): Promise<void>;
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
@@ -126,4 +286,10 @@ export interface PlatformService {
   getSystemSettings(): Promise<SystemSettings>;
   updateSystemSettings(settings: SystemSettings): Promise<SystemSettings>;
   testWebhookConnection(input: TestWebhookConnectionInput): Promise<TestConnectionResult>;
+  startUiExecution(input: UiExecutionInput): Promise<ExecutionStart>;
+  getUiExecution(executionId: string): Promise<UiExecutionResult>;
+  stopUiExecution(executionId: string): Promise<void>;
+  startApiExecution(input: ApiExecutionInput): Promise<ExecutionStart>;
+  getApiExecutionReport(executionId: string): Promise<ApiExecutionReport>;
+  stopApiExecution(executionId: string): Promise<void>;
 }

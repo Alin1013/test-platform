@@ -1,7 +1,14 @@
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { Button, Empty, Input, Select, Skeleton, Table, Tabs, Tag } from 'antd';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  MenuUnfoldOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import { App, Button, Empty, Input, Select, Skeleton, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties, Key } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { PersonAvatar } from '../../components/PersonAvatar';
@@ -18,6 +25,7 @@ import type {
 } from '../../services/contracts';
 import { CaseDrawer } from './components/CaseDrawer';
 import { ModuleTreePanel } from './components/ModuleTreePanel';
+import { testCaseStatusOptions } from './testCaseOptions';
 import './test-cases.css';
 
 const typeLabels: Record<TestCaseType, string> = {
@@ -34,6 +42,7 @@ export function TestCasesPage() {
   const params = useParams();
   const type = isTestCaseType(params.type) ? params.type : 'api';
   const service = usePlatformService();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedModule, setSelectedModule] = useState('all');
@@ -44,6 +53,10 @@ export function TestCasesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [drawerOpen, setDrawerOpen] = useState(searchParams.get('create') === '1');
+  const [editingCase, setEditingCase] = useState<TestCaseRecord | null>(null);
+  const [selectedStorageIds, setSelectedStorageIds] = useState<Key[]>([]);
+  const [modulePanelWidth, setModulePanelWidth] = useState(248);
+  const [isModulePanelCollapsed, setIsModulePanelCollapsed] = useState(false);
   const query = useMemo<TestCaseQuery>(
     () => ({
       type,
@@ -73,6 +86,7 @@ export function TestCasesPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedStorageIds([]);
   }, [query]);
 
   const totalPages = rows ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
@@ -87,7 +101,61 @@ export function TestCasesPage() {
     return rows.slice(start, start + pageSize);
   }, [page, pageSize, rows]);
 
-  const columns = useMemo<ColumnsType<TestCaseRecord>>(() => {
+  const refreshRows = async () => {
+    const nextRows = await service.listTestCases(query);
+    setRows(nextRows);
+    return nextRows;
+  };
+
+  const deleteCases = (cases: TestCaseRecord[]) => {
+    if (!cases.length) return;
+    const isBulk = cases.length > 1;
+    modal.confirm({
+      title: isBulk ? `删除已选的 ${cases.length} 条用例？` : `删除用例 ${cases[0].id}？`,
+      content: '删除后无法恢复，请确认是否继续。',
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true, 'aria-label': '删除' },
+      cancelButtonProps: { 'aria-label': '取消' },
+      async onOk() {
+        try {
+          const results = await Promise.allSettled(
+            cases.map((testCase) => service.deleteTestCase(testCase.storageId)),
+          );
+          const nextRows = await refreshRows();
+          const failedStorageIds = cases
+            .filter((_, index) => results[index].status === 'rejected')
+            .map((testCase) => testCase.storageId)
+            .filter((storageId) =>
+              nextRows.some((testCase) => testCase.storageId === storageId),
+            );
+          setSelectedStorageIds((currentIds) =>
+            isBulk
+              ? failedStorageIds
+              : currentIds.filter((storageId) =>
+                  nextRows.some((testCase) => testCase.storageId === storageId),
+                ),
+          );
+
+          if (failedStorageIds.length) {
+            const deletedCount = cases.length - failedStorageIds.length;
+            void message.error(
+              deletedCount
+                ? `已删除 ${deletedCount} 条，${failedStorageIds.length} 条删除失败`
+                : '删除失败，请重试',
+            );
+            return;
+          }
+          void message.success(isBulk ? `已删除 ${cases.length} 条用例` : '用例已删除');
+        } catch (error) {
+          void message.error(error instanceof Error ? error.message : '删除用例失败');
+          throw error;
+        }
+      },
+    });
+  };
+
+  const columns: ColumnsType<TestCaseRecord> = (() => {
     const base: ColumnsType<TestCaseRecord> = [
       { title: '编号', dataIndex: 'id', width: 124 },
       { title: '用例名称', dataIndex: 'name', ellipsis: true },
@@ -128,9 +196,38 @@ export function TestCasesPage() {
         width: 96,
         render: (value: TestCaseStatus) => <StatusBadge status={value} />,
       },
+      {
+        title: '操作',
+        key: 'actions',
+        width: 96,
+        fixed: 'right',
+        render: (_, record) => (
+          <div className="case-row-actions">
+            <Tooltip title="编辑">
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                aria-label={`编辑 ${record.id}`}
+                onClick={() => setEditingCase(record)}
+              />
+            </Tooltip>
+            <Tooltip title="删除">
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={`删除 ${record.id}`}
+                onClick={() => deleteCases([record])}
+              />
+            </Tooltip>
+          </div>
+        ),
+      },
     );
     return base;
-  }, [type]);
+  })();
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -141,9 +238,23 @@ export function TestCasesPage() {
 
   const createCase = async (input: CreateTestCaseInput) => {
     const created = await service.createTestCase(input);
-    setRows(await service.listTestCases(query));
+    await refreshRows();
     return created;
   };
+
+  const updateCase = async ({ type: _type, ...input }: CreateTestCaseInput) => {
+    if (!editingCase) throw new Error('没有正在编辑的用例');
+    const updated = await service.updateTestCase(editingCase.storageId, input);
+    const nextRows = await refreshRows();
+    setSelectedStorageIds((currentIds) =>
+      currentIds.filter((storageId) =>
+        nextRows.some((testCase) => testCase.storageId === storageId),
+      ),
+    );
+    return updated;
+  };
+
+  const selectedCases = rows?.filter((row) => selectedStorageIds.includes(row.storageId)) ?? [];
 
   const listLabel = `${typeLabels[type]}列表`;
 
@@ -171,12 +282,36 @@ export function TestCasesPage() {
         onChange={(key) => navigate(`/test-cases/${key}`)}
       />
 
-      <div className="test-cases-layout">
-        <ModuleTreePanel selectedModule={selectedModule} onSelect={setSelectedModule} />
+      <div
+        className={`test-cases-layout${isModulePanelCollapsed ? ' is-module-panel-collapsed' : ''}`}
+        style={{ '--module-panel-width': `${modulePanelWidth}px` } as CSSProperties}
+      >
+        <ModuleTreePanel
+          selectedModule={selectedModule}
+          width={modulePanelWidth}
+          hidden={isModulePanelCollapsed}
+          onSelect={setSelectedModule}
+          onWidthChange={setModulePanelWidth}
+          onCollapse={() => setIsModulePanelCollapsed(true)}
+        />
 
         <div className="case-list-panel">
-          <div className="case-list-toolbar">
+          <div
+            className={`case-list-toolbar${isModulePanelCollapsed ? ' has-module-panel-toggle' : ''}`}
+          >
+            {isModulePanelCollapsed ? (
+              <Tooltip title="显示模块栏">
+                <Button
+                  type="text"
+                  className="case-list-toolbar__module-toggle"
+                  aria-label="显示模块栏"
+                  icon={<MenuUnfoldOutlined />}
+                  onClick={() => setIsModulePanelCollapsed(false)}
+                />
+              </Tooltip>
+            ) : null}
             <Input
+              className="case-list-toolbar__search"
               prefix={<SearchOutlined />}
               placeholder="搜索编号、名称或接口地址"
               allowClear
@@ -198,10 +333,25 @@ export function TestCasesPage() {
               placeholder="状态"
               allowClear
               value={status}
-              options={['维护中', '已通过', '草稿', '已停用'].map((value) => ({ value, label: value }))}
+              options={testCaseStatusOptions.map((value) => ({ value, label: value }))}
               onChange={setStatus}
             />
           </div>
+
+          {selectedStorageIds.length ? (
+            <div className="case-bulk-actions" role="toolbar" aria-label="批量操作">
+              <span>已选择 {selectedStorageIds.length} 项</span>
+              <Button
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                aria-label={`删除已选 ${selectedStorageIds.length} 项`}
+                onClick={() => deleteCases(selectedCases)}
+              >
+                删除
+              </Button>
+            </div>
+          ) : null}
 
           <div
             role={rows ? 'region' : undefined}
@@ -211,12 +361,18 @@ export function TestCasesPage() {
             {rows ? (
               rows.length ? (
                 <Table
-                  rowKey="id"
+                  rowKey="storageId"
                   columns={columns}
                   dataSource={visibleRows}
                   size="small"
                   pagination={false}
-                  scroll={{ x: type === 'api' ? 1080 : 760 }}
+                  rowSelection={{
+                    selectedRowKeys: selectedStorageIds,
+                    columnWidth: 48,
+                    onChange: setSelectedStorageIds,
+                    getCheckboxProps: (record) => ({ 'aria-label': `选择 ${record.id}` }),
+                  }}
+                  scroll={{ x: type === 'api' ? 1180 : 900 }}
                 />
               ) : (
                 <Empty description="没有符合条件的测试用例" />
@@ -245,6 +401,14 @@ export function TestCasesPage() {
         defaultModule={selectedModule}
         onClose={closeDrawer}
         onSubmit={createCase}
+      />
+      <CaseDrawer
+        type={editingCase?.type ?? type}
+        open={editingCase !== null}
+        defaultModule={editingCase?.moduleId ?? selectedModule}
+        initialCase={editingCase ?? undefined}
+        onClose={() => setEditingCase(null)}
+        onSubmit={updateCase}
       />
     </section>
   );

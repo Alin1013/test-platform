@@ -6,7 +6,7 @@ import {
   PlusOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Modal, Segmented, Skeleton, Table, Tag } from 'antd';
+import { App, Button, Card, Modal, Skeleton, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
 import { Cell, Pie, PieChart } from 'recharts';
@@ -223,8 +223,10 @@ export function DashboardPage() {
       </Card>
 
       <Modal
+        className="dashboard-export-modal"
         title="导出电子表格"
         open={exportDialogOpen}
+        centered
         okText="导出"
         cancelText="取消"
         okButtonProps={{ 'aria-label': '导出' }}
@@ -234,17 +236,27 @@ export function DashboardPage() {
         onOk={() => void exportCases()}
         onCancel={() => setExportDialogOpen(false)}
       >
-        <p>选择导出文件格式</p>
-        <Segmented<ExportFormat>
-          block
-          aria-label="导出文件格式"
-          value={exportFormat}
-          options={[
-            { label: 'CSV', value: 'csv' },
-            { label: 'XLSX', value: 'xlsx' },
-          ]}
-          onChange={setExportFormat}
-        />
+        <p className="dashboard-export-modal__prompt">选择导出文件格式</p>
+        <div className="dashboard-export-formats" role="group" aria-label="导出文件格式">
+          <Button
+            aria-label="CSV"
+            aria-pressed={exportFormat === 'csv'}
+            type={exportFormat === 'csv' ? 'primary' : 'default'}
+            icon={<FileTextOutlined aria-hidden="true" />}
+            onClick={() => setExportFormat('csv')}
+          >
+            CSV
+          </Button>
+          <Button
+            aria-label="XLSX"
+            aria-pressed={exportFormat === 'xlsx'}
+            type={exportFormat === 'xlsx' ? 'primary' : 'default'}
+            icon={<FileExcelOutlined aria-hidden="true" />}
+            onClick={() => setExportFormat('xlsx')}
+          >
+            XLSX
+          </Button>
+        </div>
       </Modal>
     </section>
   );

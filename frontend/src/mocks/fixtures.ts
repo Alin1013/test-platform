@@ -1,4 +1,23 @@
-import type { PermissionRole, SystemSettings, TestCaseRecord, UserRecord } from '../services/contracts';
+import type {
+  PermissionRole,
+  SystemSettings,
+  TestCaseRecord,
+  TestModule,
+  UserRecord,
+} from '../services/contracts';
+
+export const initialTestModules: TestModule[] = [
+  {
+    id: 'core',
+    name: '核心模块',
+    projectId: 1,
+    children: [
+      { id: 'auth', name: '鉴权', projectId: 1, children: [] },
+      { id: 'payments', name: '支付', projectId: 1, children: [] },
+      { id: 'profile', name: '用户资料', projectId: 1, children: [] },
+    ],
+  },
+];
 
 export const initialSystemSettings: SystemSettings = {
   general: {
@@ -29,6 +48,7 @@ export const initialSystemSettings: SystemSettings = {
 
 export const initialTestCases: TestCaseRecord[] = [
   {
+    storageId: 1,
     id: 'FUN-12583',
     type: 'functional',
     moduleId: 'auth',
@@ -40,6 +60,7 @@ export const initialTestCases: TestCaseRecord[] = [
     updatedAt: '8 分钟前',
   },
   {
+    storageId: 2,
     id: 'UI-13533',
     type: 'ui',
     moduleId: 'auth',
@@ -51,6 +72,7 @@ export const initialTestCases: TestCaseRecord[] = [
     updatedAt: '24 分钟前',
   },
   {
+    storageId: 3,
     id: 'API-253301',
     type: 'api',
     moduleId: 'auth',
@@ -65,6 +87,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedStatus: 200,
   },
   {
+    storageId: 4,
     id: 'API-253302',
     type: 'api',
     moduleId: 'payments',
@@ -79,6 +102,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedStatus: 201,
   },
   {
+    storageId: 5,
     id: 'API-253303',
     type: 'api',
     moduleId: 'auth',
@@ -93,6 +117,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedStatus: 200,
   },
   {
+    storageId: 6,
     id: 'FUN-12584',
     type: 'functional',
     moduleId: 'payments',
@@ -104,6 +129,7 @@ export const initialTestCases: TestCaseRecord[] = [
     updatedAt: '昨天 18:10',
   },
   {
+    storageId: 7,
     id: 'UI-13534',
     type: 'ui',
     moduleId: 'payments',

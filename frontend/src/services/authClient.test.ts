@@ -50,7 +50,7 @@ test('register sends the auth request and maps the created user', async () => {
       email: 'newtester@example.com',
       password: 'Register123',
     }),
-  ).resolves.toEqual({ account: 'newtester', name: '新测试员', avatar: undefined });
+  ).resolves.toEqual({ id: 8, account: 'newtester', name: '新测试员', avatar: undefined });
 });
 
 test('register surfaces backend conflict details', async () => {

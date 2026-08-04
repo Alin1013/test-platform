@@ -1,7 +1,10 @@
 import type {
   CreateTestCaseInput,
   CreateUserInput,
+  ApiExecutionInput,
+  ApiExecutionReport,
   DashboardData,
+  ExecutionStart,
   PermissionRole,
   PlatformService,
   SystemSettings,
@@ -9,6 +12,10 @@ import type {
   TestCaseRecord,
   TestCaseStatus,
   TestCaseType,
+  TestModule,
+  UiExecutionInput,
+  UiExecutionResult,
+  UpdateTestCaseInput,
   UserRecord,
 } from './contracts';
 
@@ -28,6 +35,28 @@ interface ApiCaseDetails {
   url: string;
   method: TestCaseRecord['method'];
   expected_code: number;
+  headers?: Record<string, string>;
+  request_body?: unknown;
+  expected_response?: {
+    automation_config?: {
+      version: 1;
+      query_params: NonNullable<TestCaseRecord['apiDetails']>['queryParams'];
+      body_type: NonNullable<TestCaseRecord['apiDetails']>['bodyType'];
+      body_fields: NonNullable<TestCaseRecord['apiDetails']>['bodyFields'];
+      assertions: NonNullable<TestCaseRecord['apiDetails']>['assertions'];
+      extracts: NonNullable<TestCaseRecord['apiDetails']>['extracts'];
+    };
+  } | null;
+}
+
+interface ApiUiCaseDetails {
+  description: string;
+  dependency_case_id?: number | null;
+  browser: NonNullable<TestCaseRecord['uiDetails']>['browser'];
+  environment: NonNullable<TestCaseRecord['uiDetails']>['environment'];
+  timeout_seconds: number;
+  retry_count: number;
+  steps: NonNullable<TestCaseRecord['uiDetails']>['steps'];
 }
 
 interface ApiTestCase {
@@ -41,6 +70,14 @@ interface ApiTestCase {
   author_name: string;
   updated_at: string;
   api_details?: ApiCaseDetails | null;
+  ui_details?: ApiUiCaseDetails | null;
+}
+
+interface ApiTestModule {
+  id: string;
+  name: string;
+  project_id: number;
+  children: ApiTestModule[];
 }
 
 interface ApiUser {
@@ -56,10 +93,17 @@ type ApiRole = Omit<PermissionRole, 'id'> & {
   id: number;
 };
 
+interface ApiEnvelope<T> {
+  code: number;
+  message?: string;
+  data: T;
+}
+
 function mapCase(testCase: ApiTestCase): TestCaseRecord {
   // 传输层使用蛇形字段，页面层继续消费既有的驼峰领域对象。
   const updatedDate = new Date(testCase.updated_at);
   return {
+    storageId: testCase.id,
     id: testCase.code,
     type: testCase.type,
     moduleId: testCase.module_id,
@@ -74,6 +118,47 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
     endpoint: testCase.api_details?.url,
     method: testCase.api_details?.method,
     expectedStatus: testCase.api_details?.expected_code,
+    apiDetails: testCase.api_details
+      ? {
+          headers: Object.entries(testCase.api_details.headers ?? {}).map(([key, value]) => ({
+            enabled: true,
+            key,
+            value,
+          })),
+          queryParams:
+            testCase.api_details.expected_response?.automation_config?.query_params ?? [],
+          bodyType:
+            testCase.api_details.expected_response?.automation_config?.body_type ??
+            (testCase.api_details.request_body == null ? 'none' : 'json'),
+          bodyContent:
+            testCase.api_details.request_body == null
+              ? ''
+              : JSON.stringify(testCase.api_details.request_body, null, 2),
+          bodyFields:
+            testCase.api_details.expected_response?.automation_config?.body_fields ?? [],
+          assertions:
+            testCase.api_details.expected_response?.automation_config?.assertions ?? [
+              {
+                type: 'statusCode',
+                target: '',
+                comparison: 'equals',
+                expected: String(testCase.api_details.expected_code),
+              },
+            ],
+          extracts: testCase.api_details.expected_response?.automation_config?.extracts ?? [],
+        }
+      : undefined,
+    uiDetails: testCase.ui_details
+      ? {
+          description: testCase.ui_details.description,
+          dependencyCaseId: testCase.ui_details.dependency_case_id ?? undefined,
+          browser: testCase.ui_details.browser,
+          environment: testCase.ui_details.environment,
+          timeoutSeconds: testCase.ui_details.timeout_seconds,
+          retryCount: testCase.ui_details.retry_count,
+          steps: testCase.ui_details.steps,
+        }
+      : undefined,
   };
 }
 
@@ -88,11 +173,75 @@ function mapUser(user: ApiUser): UserRecord {
   };
 }
 
+function mapModule(module: ApiTestModule): TestModule {
+  return {
+    id: module.id,
+    name: module.name,
+    projectId: module.project_id,
+    children: module.children.map(mapModule),
+  };
+}
+
+function mapUiDetailsToApi(uiDetails: NonNullable<CreateTestCaseInput['uiDetails']>): ApiUiCaseDetails {
+  return {
+    description: uiDetails.description,
+    dependency_case_id: uiDetails.dependencyCaseId,
+    browser: uiDetails.browser,
+    environment: uiDetails.environment,
+    timeout_seconds: uiDetails.timeoutSeconds,
+    retry_count: uiDetails.retryCount,
+    steps: uiDetails.steps,
+  };
+}
+
 function mapRole(role: ApiRole): PermissionRole {
   return {
     id: String(role.id),
     name: role.name,
     permissions: role.permissions,
+  };
+}
+
+function mapApiDetailsInput(input: CreateTestCaseInput | UpdateTestCaseInput) {
+  if (!input.endpoint) return undefined;
+  const enabledHeaders = input.apiDetails?.headers.filter((item) => item.enabled && item.key.trim());
+  const requestBody = (() => {
+    if (input.apiDetails?.bodyType === 'none') return null;
+    if (!input.apiDetails) return undefined;
+    if (input.apiDetails.bodyType === 'json') {
+      return input.apiDetails.bodyContent.trim()
+        ? (JSON.parse(input.apiDetails.bodyContent) as unknown)
+        : null;
+    }
+    return Object.fromEntries(
+      input.apiDetails.bodyFields
+        .filter((item) => item.enabled && item.key.trim())
+        .map((item) => [item.key.trim(), item.value]),
+    );
+  })();
+
+  return {
+    url: input.endpoint,
+    method: input.method ?? 'POST',
+    expected_code: input.expectedStatus ?? 200,
+    ...(input.apiDetails
+      ? {
+          headers: Object.fromEntries(
+            (enabledHeaders ?? []).map((item) => [item.key.trim(), item.value]),
+          ),
+          request_body: requestBody,
+          expected_response: {
+            automation_config: {
+              version: 1 as const,
+              query_params: input.apiDetails.queryParams,
+              body_type: input.apiDetails.bodyType,
+              body_fields: input.apiDetails.bodyFields,
+              assertions: input.apiDetails.assertions,
+              extracts: input.apiDetails.extracts,
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -140,6 +289,14 @@ export function createApiPlatformService({
       };
     },
 
+    async listTestModules(projectId?: number) {
+      const path = projectId === undefined
+        ? '/modules'
+        : `/modules?project_id=${encodeURIComponent(projectId)}`;
+      const modules = await request<ApiTestModule[]>(path);
+      return modules.map(mapModule);
+    },
+
     async listTestCases(query: TestCaseQuery = {}) {
       const params = new URLSearchParams({ page_size: '100' });
       if (query.type) params.set('type', query.type);
@@ -153,14 +310,7 @@ export function createApiPlatformService({
 
     async createTestCase(input: CreateTestCaseInput) {
       const apiDetails =
-        input.type === 'api'
-          ? {
-              url: input.endpoint,
-              method: input.method ?? 'POST',
-              expected_code: input.expectedStatus ?? 200,
-              headers: {},
-            }
-          : undefined;
+        input.type === 'api' ? mapApiDetailsInput(input) : undefined;
       const created = await request<ApiTestCase>('/test-cases', {
         method: 'POST',
         body: JSON.stringify({
@@ -169,12 +319,37 @@ export function createApiPlatformService({
           module_id: input.moduleId,
           priority: input.priority,
           status: input.status,
-          author_id: 1,
+          author_id: input.authorId ?? 1,
           api_details: apiDetails,
-          ui_details: input.type === 'ui' ? { steps: [] } : undefined,
+          ui_details:
+            input.type === 'ui' && input.uiDetails
+              ? mapUiDetailsToApi(input.uiDetails)
+              : input.type === 'ui'
+                ? { steps: [] }
+                : undefined,
         }),
       });
       return mapCase(created);
+    },
+
+    async updateTestCase(storageId: number, input: UpdateTestCaseInput) {
+      const apiDetails = mapApiDetailsInput(input);
+      const updated = await request<ApiTestCase>(`/test-cases/${storageId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: input.name,
+          module_id: input.moduleId,
+          priority: input.priority,
+          status: input.status,
+          api_details: apiDetails,
+          ui_details: input.uiDetails ? mapUiDetailsToApi(input.uiDetails) : undefined,
+        }),
+      });
+      return mapCase(updated);
+    },
+
+    async deleteTestCase(storageId: number) {
+      await request(`/test-cases/${storageId}`, { method: 'DELETE' });
     },
 
     async listUsers() {
@@ -225,6 +400,48 @@ export function createApiPlatformService({
       return request('/settings/test-webhook', {
         method: 'POST',
         body: JSON.stringify(input),
+      });
+    },
+
+    async startUiExecution(input: UiExecutionInput) {
+      const response = await request<ApiEnvelope<ExecutionStart>>('/ui-test/executions', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return response.data;
+    },
+
+    async getUiExecution(executionId: string) {
+      const response = await request<ApiEnvelope<UiExecutionResult>>(
+        `/ui-test/executions/${encodeURIComponent(executionId)}`,
+      );
+      return response.data;
+    },
+
+    async stopUiExecution(executionId: string) {
+      await request(`/ui-test/executions/${encodeURIComponent(executionId)}/stop`, {
+        method: 'POST',
+      });
+    },
+
+    async startApiExecution(input: ApiExecutionInput) {
+      const response = await request<ApiEnvelope<ExecutionStart>>('/api-test/executions', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return response.data;
+    },
+
+    async getApiExecutionReport(executionId: string) {
+      const response = await request<ApiEnvelope<ApiExecutionReport>>(
+        `/api-test/executions/${encodeURIComponent(executionId)}/report`,
+      );
+      return response.data;
+    },
+
+    async stopApiExecution(executionId: string) {
+      await request(`/api-test/executions/${encodeURIComponent(executionId)}/stop`, {
+        method: 'POST',
       });
     },
   };

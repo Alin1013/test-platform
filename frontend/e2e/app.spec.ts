@@ -4,6 +4,8 @@ import type { Page } from '@playwright/test';
 const pages = [
   { path: '/dashboard', title: '仪表盘', slug: 'dashboard', screenshot: true },
   { path: '/test-cases/api', title: '测试用例', slug: 'test-cases', screenshot: true },
+  { path: '/execution/ui-test', title: 'UI 自动化', slug: 'ui-execution', screenshot: true },
+  { path: '/execution/api-test', title: '接口自动化', slug: 'api-execution', screenshot: true },
   { path: '/xmind', title: '用例生成器', slug: 'xmind', screenshot: true },
   { path: '/personnel', title: '人员管理', slug: 'personnel', screenshot: true },
   { path: '/settings', title: '系统设置', slug: 'settings', screenshot: false },
@@ -62,6 +64,14 @@ async function expectGridColumns(page: Page, selector: string, columns: number) 
     getComputedStyle(element).gridTemplateColumns.split(' ').length,
   );
   expect(count).toBe(columns);
+}
+
+async function loginWithDemoAccount(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('textbox', { name: '账号' }).fill('jiangshan');
+  await page.getByRole('textbox', { name: '密码' }).fill('Test1234');
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page.getByRole('heading', { name: '仪表盘' })).toBeVisible();
 }
 
 async function waitForDashboardChart(page: Page) {
@@ -248,6 +258,25 @@ test('桌面端可完成新建用例入口、XMind 解析和添加用户入口',
   await page.goto('/personnel');
   await page.getByRole('button', { name: '添加用户' }).click();
   await expect(page.getByRole('dialog', { name: '添加用户' })).toBeVisible();
+  expect(browserErrors).toEqual([]);
+});
+
+test('桌面端可启动 UI 与接口自动化执行', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const browserErrors = collectBrowserErrors(page);
+
+  await loginWithDemoAccount(page);
+  await page.getByRole('menuitem', { name: '执行测试用例' }).click();
+  await page.getByRole('menuitem', { name: 'UI 自动化' }).click();
+  await page.getByRole('checkbox', { name: '选择 UI-13533 登录表单校验' }).check();
+  await page.getByRole('button', { name: '立即执行' }).click();
+  await expect(page.getByRole('region', { name: 'UI 执行进度' })).toBeVisible();
+
+  await page.getByRole('menuitem', { name: '接口自动化' }).click();
+  await page.getByRole('checkbox', { name: '选择 API-253301 用户资料查询' }).check();
+  await page.getByRole('button', { name: '开始执行' }).click();
+  await expect(page.getByRole('region', { name: '接口执行指标' })).toBeVisible();
+
   expect(browserErrors).toEqual([]);
 });
 

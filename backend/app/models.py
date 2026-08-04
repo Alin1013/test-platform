@@ -57,6 +57,7 @@ class User(Base, TimestampMixin):
     auth_sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    test_executions: Mapped[list[TestExecution]] = relationship(back_populates="creator")
 
 
 class AuthSession(Base):
@@ -121,7 +122,10 @@ class TestCase(Base, TimestampMixin):
         back_populates="test_case", cascade="all, delete-orphan", uselist=False
     )
     ui_details: Mapped[UiCaseDetails | None] = relationship(
-        back_populates="test_case", cascade="all, delete-orphan", uselist=False
+        back_populates="test_case",
+        cascade="all, delete-orphan",
+        foreign_keys="UiCaseDetails.case_id",
+        uselist=False,
     )
 
 
@@ -155,16 +159,97 @@ class ApiCaseDetails(Base):
 
 class UiCaseDetails(Base):
     __tablename__ = "ui_case_details"
-    __table_args__ = {"comment": "UI 自动化用例扩展信息"}
+    __table_args__ = (
+        CheckConstraint(
+            "browser IN ('chrome', 'firefox')", name="ck_ui_case_details_browser"
+        ),
+        CheckConstraint(
+            "environment IN ('staging', 'test')", name="ck_ui_case_details_environment"
+        ),
+        CheckConstraint(
+            "timeout_seconds BETWEEN 1 AND 3600",
+            name="ck_ui_case_details_timeout_seconds",
+        ),
+        CheckConstraint(
+            "retry_count BETWEEN 0 AND 3", name="ck_ui_case_details_retry_count"
+        ),
+        {"comment": "UI 自动化用例扩展信息"},
+    )
 
     case_id: Mapped[int] = mapped_column(
         ForeignKey("test_cases.id", ondelete="CASCADE"), primary_key=True
     )
+    description: Mapped[str] = mapped_column(Text, default="")
+    dependency_case_id: Mapped[int | None] = mapped_column(
+        ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True
+    )
+    browser: Mapped[str] = mapped_column(String(16), default="chrome")
+    environment: Mapped[str] = mapped_column(String(16), default="test")
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=30)
+    retry_count: Mapped[int] = mapped_column(Integer, default=1)
     steps: Mapped[list[dict[str, Any]] | list[str]] = mapped_column(
         MutableList.as_mutable(JSON), default=list
     )
 
-    test_case: Mapped[TestCase] = relationship(back_populates="ui_details")
+    test_case: Mapped[TestCase] = relationship(
+        back_populates="ui_details", foreign_keys=[case_id]
+    )
+
+
+class TestExecution(Base, TimestampMixin):
+    __tablename__ = "test_execution"
+    __table_args__ = (
+        CheckConstraint("type IN ('UI', 'API')", name="ck_test_execution_type"),
+        CheckConstraint(
+            "status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED')",
+            name="ck_test_execution_status",
+        ),
+        {"comment": "自动化测试执行主记录"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    type: Mapped[str] = mapped_column(String(8), index=True)
+    project_id: Mapped[int] = mapped_column(Integer, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+
+    creator: Mapped[User] = relationship(back_populates="test_executions")
+    details: Mapped[list[TestExecutionDetail]] = relationship(
+        back_populates="execution",
+        cascade="all, delete-orphan",
+        order_by="TestExecutionDetail.id",
+    )
+
+
+class TestExecutionDetail(Base):
+    __tablename__ = "test_execution_detail"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED')",
+            name="ck_test_execution_detail_status",
+        ),
+        {"comment": "自动化测试执行明细"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(
+        ForeignKey("test_execution.id", ondelete="CASCADE"), index=True
+    )
+    target_id: Mapped[int] = mapped_column(Integer, index=True)
+    target_name: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    request_payload: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    response_payload: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    assertion_results: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+
+    execution: Mapped[TestExecution] = relationship(back_populates="details")
 
 
 class XMindRecord(Base):

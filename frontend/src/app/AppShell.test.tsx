@@ -22,6 +22,18 @@ it('侧栏可进入人员管理', async () => {
   expect(await screen.findByRole('heading', { name: '人员管理' })).toBeInTheDocument();
 });
 
+it('侧栏执行测试用例菜单进入两类自动化工作台', async () => {
+  const user = userEvent.setup();
+  renderApp('/dashboard');
+
+  await user.click(screen.getByRole('menuitem', { name: '执行测试用例' }));
+  await user.click(screen.getByRole('menuitem', { name: 'UI 自动化' }));
+  expect(await screen.findByRole('heading', { name: 'UI 自动化' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('menuitem', { name: '接口自动化' }));
+  expect(await screen.findByRole('heading', { name: '接口自动化' })).toBeInTheDocument();
+});
+
 it('菜单按钮打开移动端导航抽屉', async () => {
   const user = userEvent.setup();
   renderApp('/dashboard');

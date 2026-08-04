@@ -9,6 +9,8 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
 import { XMindPage } from '../pages/xmind/XMindPage';
 import { LoginPage } from '../pages/login/LoginPage';
+import { UiTestExecutionPage } from '../pages/execution/ui/UiTestExecutionPage';
+import { ApiTestExecutionPage } from '../pages/execution/api/ApiTestExecutionPage';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 
 interface AppProps {
@@ -26,6 +28,8 @@ function AppRoutes() {
       <Route element={user ? <AppShell /> : <Navigate to="/login" replace />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
+        <Route path="/execution/ui-test" element={<UiTestExecutionPage />} />
+        <Route path="/execution/api-test" element={<ApiTestExecutionPage />} />
         <Route path="/xmind" element={<XMindPage />} />
         <Route path="/personnel" element={<PersonnelPage />} />
         <Route path="/settings" element={<SettingsPage />} />

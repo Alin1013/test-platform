@@ -21,6 +21,8 @@ EXPECTED_TABLE_COMMENTS = {
     "ui_case_details": "UI 自动化用例扩展信息",
     "xmind_records": "XMind 文件上传与解析记录",
     "system_configs": "系统全局配置",
+    "test_execution": "自动化测试执行主记录",
+    "test_execution_detail": "自动化测试执行明细",
 }
 
 
@@ -42,7 +44,7 @@ def test_comment_migration_emits_native_table_comment_sql(
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/test_platform")
     config = Config("alembic.ini", output_buffer=output)
 
-    command.upgrade(config, "d84e2b7f6a19:e91f4c6a2d30", sql=True)
+    command.upgrade(config, "d84e2b7f6a19:head", sql=True)
 
     generated_sql = output.getvalue()
     for table_name, comment in EXPECTED_TABLE_COMMENTS.items():

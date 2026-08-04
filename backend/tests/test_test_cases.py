@@ -64,3 +64,87 @@ def test_api_case_can_be_created_searched_updated_and_deleted(client: TestClient
     deleted = client.delete(f"/api/v1/test-cases/{case['id']}")
     assert deleted.status_code == 204
     assert client.get("/api/v1/test-cases", params={"keyword": case["code"]}).json()["total"] == 0
+
+
+def test_ui_case_creation_persists_execution_config_and_steps(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "用户登录 - 密码错误提示校验",
+            "type": "ui",
+            "module_id": "auth",
+            "priority": "P0",
+            "status": "维护中",
+            "author_id": 1,
+            "ui_details": {
+                "description": "验证错误密码提示与登录按钮状态",
+                "dependency_case_id": 2,
+                "browser": "chrome",
+                "environment": "test",
+                "timeout_seconds": 45,
+                "retry_count": 1,
+                "steps": [
+                    {
+                        "action": "input",
+                        "locatorType": "id",
+                        "target": "password",
+                        "value": "wrong-password",
+                        "assertion": "none",
+                        "expected": "",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert created.status_code == 201
+    details = created.json()["ui_details"]
+    assert details == {
+        "description": "验证错误密码提示与登录按钮状态",
+        "dependency_case_id": 2,
+        "browser": "chrome",
+        "environment": "test",
+        "timeout_seconds": 45,
+        "retry_count": 1,
+        "steps": [
+            {
+                "action": "input",
+                "locatorType": "id",
+                "target": "password",
+                "value": "wrong-password",
+                "assertion": "none",
+                "expected": "",
+            }
+        ],
+    }
+
+    listed = client.get("/api/v1/test-cases", params={"type": "ui"})
+    persisted = next(item for item in listed.json()["items"] if item["id"] == created.json()["id"])
+    assert persisted["ui_details"] == details
+
+
+def test_ui_assert_step_requires_a_meaningful_assertion(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "校验登录提示",
+            "type": "ui",
+            "module_id": "auth",
+            "priority": "P1",
+            "author_id": 1,
+            "ui_details": {
+                "steps": [
+                    {
+                        "action": "assert",
+                        "locatorType": "css",
+                        "target": "#login-message",
+                        "value": "",
+                        "assertion": "none",
+                        "expected": "",
+                    }
+                ]
+            },
+        },
+    )
+
+    assert response.status_code == 422

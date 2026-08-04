@@ -1,11 +1,11 @@
 # 测试管理平台项目结构与功能说明
 
 > 更新日期：2026-08-03
-> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、账号认证、用户资料维护、XMind 解析及 CSV/XLSX 导入导出。
+> 当前阶段：React 前端与 FastAPI 后端均可运行；支持 SQLite 持久化、账号认证、用户资料维护、XMind 解析、CSV/XLSX 导入导出，以及 UI/接口自动化执行编排。
 
 ## 1. 项目定位
 
-本项目是一个面向测试团队的测试管理平台，用于统一管理功能用例、接口用例、UI自动化用例、XMind 用例转换、人员和角色权限。
+本项目是一个面向测试团队的测试管理平台，用于统一管理功能用例、接口用例、UI 自动化用例、自动化执行记录、XMind 用例转换、人员和角色权限。
 
 当前采用前后端分离结构：
 
@@ -67,6 +67,7 @@ frontend/
 │   │   │       ├── CaseDrawer.tsx         # 分类用例创建抽屉
 │   │   │       └── ModuleTreePanel.tsx    # 业务模块筛选树
 │   │   ├── xmind/                         # XMind 转换工作流
+│   │   ├── execution/                     # UI 与接口自动化执行工作台
 │   │   ├── personnel/                     # 用户、角色和权限管理
 │   │   │   └── components/
 │   │   │       ├── PermissionMatrix.tsx   # 角色权限矩阵
@@ -101,6 +102,8 @@ frontend/
 | 功能用例 | `/test-cases/functional` | 按模块、关键字、优先级和状态筛选及维护功能用例 | CRUD 与文件导入导出已持久化 |
 | 接口用例 | `/test-cases/api` | 维护接口地址、HTTP 方法、请求及预期响应 | 主表与接口详情扩展表已持久化 |
 | UI自动化 | `/test-cases/ui` | 管理 UI 自动化步骤配置 | 主表与 UI 详情扩展表已持久化；执行引擎未接入 |
+| UI 自动化执行 | `/execution/ui-test` | 选择 UI 用例，配置环境、浏览器、无头模式与并发数，查看进度、步骤、媒体和日志 | 页面、执行记录、状态查询、中断接口及 WebSocket 快照已实现 |
+| 接口自动化执行 | `/execution/api-test` | 批量运行接口用例，配置环境、迭代、Ramp-up 和全局请求头，查看 KPI、请求、响应与断言 | 页面、执行记录、报告查询、中断及 JSON 导出已实现 |
 | 用例生成器 | `/xmind` | 上传并解析 XMind 节点树，生成结构化用例预览 | 支持新版 JSON 与 XMind 8 XML 格式 |
 | 人员管理 | `/personnel` | 查询、新增、启停用户并维护角色权限 | 后端筛选、密码哈希和权限更新已实现 |
 | 系统设置 | `/settings` | 维护平台、环境、通知和 AI 配置 | 结构化配置持久化已实现 |
@@ -121,8 +124,28 @@ frontend/
 | `addUser(input)` | 新增用户 |
 | `setUserEnabled(id, enabled)` | 启用或停用用户 |
 | `listRoles()` | 获取角色及权限矩阵 |
+| `startUiExecution(input)` | 创建 UI 自动化执行记录 |
+| `getUiExecution(executionId)` | 查询 UI 执行进度、用例状态和详情 |
+| `stopUiExecution(executionId)` | 中断 UI 自动化执行 |
+| `startApiExecution(input)` | 创建接口自动化执行记录 |
+| `getApiExecutionReport(executionId)` | 查询接口执行报告和请求分析 |
+| `stopApiExecution(executionId)` | 中断接口自动化执行 |
 
 `PlatformServiceContext` 负责向页面注入具体服务。未配置环境变量时使用内存 Mock；设置 `VITE_API_BASE_URL` 后使用 `apiPlatformService` 调用真实后端，页面层不依赖具体传输协议。
+
+自动化执行后端提供以下公共接口：
+
+| 方法与路径 | 职责 |
+| --- | --- |
+| `POST /api/v1/ui-test/executions` | 创建 UI 自动化执行及用例明细 |
+| `GET /api/v1/ui-test/executions/{executionId}` | 查询 UI 执行状态和结果 |
+| `POST /api/v1/ui-test/executions/{executionId}/stop` | 中断 UI 自动化执行 |
+| `WS /ws/ui-test/execution/{executionId}` | 推送当前 UI 用例步骤状态快照 |
+| `POST /api/v1/api-test/executions` | 创建接口自动化执行及接口明细 |
+| `GET /api/v1/api-test/executions/{executionId}/report` | 查询接口自动化报告 |
+| `POST /api/v1/api-test/executions/{executionId}/stop` | 中断接口自动化执行 |
+
+当前实现负责执行配置校验、记录持久化、状态查询和中断。新任务以 `RUNNING` 创建，明细以 `PENDING` 创建，供后续 Celery/Worker 调用 Playwright 或 HTTP Client 后回写；仓库目前尚未包含真实浏览器和 HTTP 执行 Worker，因此不会伪造通过、失败、截图、录屏或响应数据。
 
 当前核心领域类型包括：
 

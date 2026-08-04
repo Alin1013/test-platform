@@ -1,0 +1,20 @@
+.app-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 32px;
+  margin-top: 14px;
+}
+
+.app-pagination__jumper {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.app-pagination__jumper .ant-input-number {
+  width: 48px;
+}

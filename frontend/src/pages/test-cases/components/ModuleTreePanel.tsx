@@ -1,7 +1,16 @@
-import { EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CaretDownOutlined,
+  CaretRightOutlined,
+  EllipsisOutlined,
+  MenuFoldOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { Button, Dropdown, Input, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { usePlatformService } from '../../../services/PlatformServiceContext';
+import type { TestModule } from '../../../services/contracts';
+import { visibleModuleTree } from '../moduleOptions';
 
 interface ModuleNode {
   id: string;
@@ -11,20 +20,32 @@ interface ModuleNode {
 
 interface ModuleTreePanelProps {
   selectedModule: string;
+  width: number;
+  hidden: boolean;
   onSelect: (moduleId: string) => void;
+  onWidthChange: (width: number) => void;
+  onCollapse: () => void;
 }
 
-const initialModuleTree: ModuleNode[] = [
-  {
-    id: 'core',
-    label: '核心模块',
-    children: [
-      { id: 'auth', label: '鉴权' },
-      { id: 'payments', label: '支付' },
-      { id: 'profile', label: '用户资料' },
-    ],
-  },
-];
+const MIN_PANEL_WIDTH = 220;
+const MAX_PANEL_WIDTH = 420;
+const KEYBOARD_RESIZE_STEP = 16;
+
+function clampPanelWidth(width: number) {
+  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
+}
+
+function FolderIcon() {
+  return <span className="module-panel__folder-icon" aria-hidden="true" />;
+}
+
+function toModuleNodes(modules: TestModule[]): ModuleNode[] {
+  return visibleModuleTree(modules).map((module) => ({
+    id: module.id,
+    label: module.name,
+    children: toModuleNodes(module.children),
+  }));
+}
 
 type DialogState =
   | { type: 'rename'; node: ModuleNode }
@@ -32,10 +53,6 @@ type DialogState =
   | { type: 'addRoot' }
   | { type: 'delete'; node: ModuleNode }
   | null;
-
-function countNodes(nodes: ModuleNode[]): number {
-  return nodes.reduce((count, node) => count + 1 + countNodes(node.children ?? []), 0);
-}
 
 function updateNode(nodes: ModuleNode[], nodeId: string, update: (node: ModuleNode) => ModuleNode): ModuleNode[] {
   return nodes.map((node) => {
@@ -60,15 +77,53 @@ function findNode(nodes: ModuleNode[], nodeId: string): ModuleNode | undefined {
   return undefined;
 }
 
-export function ModuleTreePanel({ selectedModule, onSelect }: ModuleTreePanelProps) {
-  const [moduleTree, setModuleTree] = useState(initialModuleTree);
+export function ModuleTreePanel({
+  selectedModule,
+  width,
+  hidden,
+  onSelect,
+  onWidthChange,
+  onCollapse,
+}: ModuleTreePanelProps) {
+  const service = usePlatformService();
+  const [moduleTree, setModuleTree] = useState<ModuleNode[]>([]);
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<DialogState>(null);
   const [draftName, setDraftName] = useState('');
+  const resizeOrigin = useRef<{ pointerX: number; width: number } | null>(null);
 
-  const moduleCount = useMemo(
-    () => Math.max(0, countNodes(moduleTree) - moduleTree.length),
-    [moduleTree],
-  );
+  useEffect(() => {
+    let active = true;
+    void service.listTestModules(1).then((modules) => {
+      if (active) setModuleTree(toModuleNodes(modules));
+    });
+    return () => {
+      active = false;
+    };
+  }, [service]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!resizeOrigin.current) return;
+      onWidthChange(
+        clampPanelWidth(resizeOrigin.current.width + event.clientX - resizeOrigin.current.pointerX),
+      );
+    };
+    const stopResizing = () => {
+      resizeOrigin.current = null;
+      document.body.classList.remove('is-resizing-module-panel');
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopResizing);
+    window.addEventListener('pointercancel', stopResizing);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopResizing);
+      window.removeEventListener('pointercancel', stopResizing);
+      document.body.classList.remove('is-resizing-module-panel');
+    };
+  }, [onWidthChange]);
 
   const openDialog = (type: Exclude<DialogState, null>['type'], node: ModuleNode) => {
     setDraftName(type === 'rename' ? node.label : '');
@@ -116,6 +171,7 @@ export function ModuleTreePanel({ selectedModule, onSelect }: ModuleTreePanelPro
           children: [...(node.children ?? []), child],
         })),
       );
+      setExpandedNodeIds((currentIds) => new Set(currentIds).add(dialog.node.id));
     }
     setDialog(null);
   };
@@ -123,6 +179,11 @@ export function ModuleTreePanel({ selectedModule, onSelect }: ModuleTreePanelPro
   const deleteNode = () => {
     if (!dialog || dialog.type !== 'delete') return;
     setModuleTree((nodes) => removeNode(nodes, dialog.node.id));
+    setExpandedNodeIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(dialog.node.id);
+      return nextIds;
+    });
     if (selectedModule === dialog.node.id || findNode([dialog.node], selectedModule)) onSelect('all');
     setDialog(null);
   };
@@ -140,31 +201,58 @@ export function ModuleTreePanel({ selectedModule, onSelect }: ModuleTreePanelPro
     </Dropdown>
   );
 
-  const renderNode = (node: ModuleNode, level: number) => (
-    <div key={node.id} className="module-panel__branch">
-      <div className="module-panel__item-row">
-        <button
-          type="button"
-          role="treeitem"
-          aria-selected={selectedModule === node.id}
-          className={`module-panel__item${selectedModule === node.id ? ' is-selected' : ''}`}
-          style={{ paddingInlineStart: 14 + level * 18 }}
-          onClick={() => onSelect(node.id)}
-        >
-          <span className="module-panel__node" />
-          <span className="module-panel__label">{node.label}</span>
-        </button>
-        {renderActions(node)}
+  const renderNode = (node: ModuleNode, depth = 0) => {
+    const hasChildren = Boolean(node.children?.length);
+    const isExpanded = hasChildren && expandedNodeIds.has(node.id);
+
+    return (
+      <div key={node.id} className="module-panel__branch">
+        <div className="module-panel__item-row" style={{ paddingInlineStart: depth * 18 }}>
+          {hasChildren ? (
+            <Button
+              type="text"
+              size="small"
+              className="module-panel__tree-toggle"
+              aria-label={`${isExpanded ? '折叠' : '展开'} ${node.label}`}
+              icon={isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+              onClick={() => {
+                setExpandedNodeIds((currentIds) => {
+                  const nextIds = new Set(currentIds);
+                  if (isExpanded) nextIds.delete(node.id);
+                  else nextIds.add(node.id);
+                  return nextIds;
+                });
+              }}
+            />
+          ) : (
+            <span className="module-panel__tree-toggle-spacer" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            role="treeitem"
+            aria-level={depth + 1}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+            aria-selected={selectedModule === node.id}
+            className={`module-panel__item${selectedModule === node.id ? ' is-selected' : ''}`}
+            onClick={() => onSelect(node.id)}
+          >
+            <FolderIcon />
+            <span className="module-panel__label">{node.label}</span>
+          </button>
+          {renderActions(node)}
+        </div>
+        {isExpanded ? (
+          <div role="group">{node.children?.map((child) => renderNode(child, depth + 1))}</div>
+        ) : null}
       </div>
-      {node.children?.map((child) => renderNode(child, level + 1))}
-    </div>
-  );
+    );
+  };
 
   return (
-    <aside className="module-panel" aria-label="模块树">
+    <aside className="module-panel" aria-label="模块树" hidden={hidden}>
       <div className="module-panel__title">
         <h2>模块</h2>
-        <span className="module-panel__count">{moduleCount} 个业务模块</span>
+        <span className="module-panel__count">{moduleTree.length} 个根目录</span>
         <Tooltip title="新增根目录">
           <Button
             type="text"
@@ -178,29 +266,57 @@ export function ModuleTreePanel({ selectedModule, onSelect }: ModuleTreePanelPro
             }}
           />
         </Tooltip>
+        <Tooltip title="隐藏模块栏">
+          <Button
+            type="text"
+            size="small"
+            className="module-panel__collapse"
+            aria-label="隐藏模块栏"
+            icon={<MenuFoldOutlined />}
+            onClick={onCollapse}
+          />
+        </Tooltip>
       </div>
       <div role="tree" aria-label="用例模块">
         <button
           type="button"
           role="treeitem"
           aria-selected={selectedModule === 'all'}
-          className={`module-panel__item${selectedModule === 'all' ? ' is-selected' : ''}`}
-          style={{ paddingInlineStart: 14 }}
+          className={`module-panel__item module-panel__all-item${selectedModule === 'all' ? ' is-selected' : ''}`}
           onClick={() => onSelect('all')}
         >
-          <span className="module-panel__node" />
+          <FolderIcon />
           <span className="module-panel__label">全部模块</span>
         </button>
-        {moduleTree.map((rootNode) => (
-          <div key={rootNode.id} className="module-panel__group">
-            <div className="module-panel__group-row">
-              <span className="module-panel__label">{rootNode.label}</span>
-              {renderActions(rootNode)}
-            </div>
-            {rootNode.children?.map((node) => renderNode(node, 1))}
-          </div>
-        ))}
+        {moduleTree.map((node) => renderNode(node))}
       </div>
+
+      <div
+        role="separator"
+        aria-label="调整模块栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_PANEL_WIDTH}
+        aria-valuemax={MAX_PANEL_WIDTH}
+        aria-valuenow={width}
+        className="module-panel__resize-handle"
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          resizeOrigin.current = { pointerX: event.clientX, width };
+          document.body.classList.add('is-resizing-module-panel');
+        }}
+        onKeyDown={(event) => {
+          const nextWidth = {
+            ArrowLeft: clampPanelWidth(width - KEYBOARD_RESIZE_STEP),
+            ArrowRight: clampPanelWidth(width + KEYBOARD_RESIZE_STEP),
+            Home: MIN_PANEL_WIDTH,
+            End: MAX_PANEL_WIDTH,
+          }[event.key];
+          if (nextWidth === undefined) return;
+          event.preventDefault();
+          onWidthChange(nextWidth);
+        }}
+      />
 
       <Modal
         title={

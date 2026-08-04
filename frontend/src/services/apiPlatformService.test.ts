@@ -58,6 +58,37 @@ test('maps dashboard and case responses to the platform contract', async () => {
   );
 });
 
+test('maps the project module tree to the platform contract', async () => {
+  const fetcher = vi.fn(async () =>
+    jsonResponse([
+      {
+        id: 'core',
+        name: '核心模块',
+        project_id: 1,
+        children: [
+          { id: 'auth', name: '鉴权', project_id: 1, children: [] },
+        ],
+      },
+    ]),
+  );
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(service.listTestModules()).resolves.toEqual([
+    {
+      id: 'core',
+      name: '核心模块',
+      projectId: 1,
+      children: [
+        { id: 'auth', name: '鉴权', projectId: 1, children: [] },
+      ],
+    },
+  ]);
+  expect(fetcher).toHaveBeenCalledWith(
+    '/api/v1/modules',
+    expect.any(Object),
+  );
+});
+
 test('sends contract mutations in the backend request shape', async () => {
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -113,6 +144,81 @@ test('sends contract mutations in the backend request shape', async () => {
   );
 });
 
+test('sends and maps the complete UI automation case details', async () => {
+  const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    expect(body.ui_details).toEqual({
+      description: '验证错误密码提示与登录按钮状态',
+      dependency_case_id: 2,
+      browser: 'chrome',
+      environment: 'test',
+      timeout_seconds: 45,
+      retry_count: 1,
+      steps: [
+        {
+          action: 'input',
+          locatorType: 'id',
+          target: 'password',
+          value: 'wrong-password',
+          assertion: 'none',
+          expected: '',
+        },
+      ],
+    });
+    return jsonResponse(
+      {
+        id: 9,
+        code: 'UI-000009',
+        title: body.title,
+        type: body.type,
+        module_id: body.module_id,
+        priority: body.priority,
+        status: body.status,
+        author_name: '江珊',
+        updated_at: '2026-08-03T08:00:00Z',
+        ui_details: body.ui_details,
+      },
+      201,
+    );
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  const created = await service.createTestCase({
+    type: 'ui',
+    authorId: 8,
+    moduleId: 'auth',
+    name: '用户登录 - 密码错误提示校验',
+    priority: 'P0',
+    status: '维护中',
+    uiDetails: {
+      description: '验证错误密码提示与登录按钮状态',
+      dependencyCaseId: 2,
+      browser: 'chrome',
+      environment: 'test',
+      timeoutSeconds: 45,
+      retryCount: 1,
+      steps: [
+        {
+          action: 'input',
+          locatorType: 'id',
+          target: 'password',
+          value: 'wrong-password',
+          assertion: 'none',
+          expected: '',
+        },
+      ],
+    },
+  });
+
+  expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({ author_id: 8 });
+
+  expect(created.uiDetails).toMatchObject({
+    description: '验证错误密码提示与登录按钮状态',
+    dependencyCaseId: 2,
+    timeoutSeconds: 45,
+  });
+});
+
 test('surfaces backend validation details', async () => {
   const service = createApiPlatformService({
     baseUrl: '/api/v1',
@@ -120,4 +226,165 @@ test('surfaces backend validation details', async () => {
   });
 
   await expect(service.listUsers()).rejects.toThrow('Email already exists');
+});
+
+test('updates a test case with the backend request shape and maps its response', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('/api/v1/test-cases/8');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      title: '刷新访问令牌',
+      module_id: 'auth',
+      priority: 'P1',
+      status: '已通过',
+      api_details: {
+        url: '/api/token/refresh',
+        method: 'PUT',
+        expected_code: 204,
+      },
+    });
+    return jsonResponse({
+      id: 8,
+      code: 'API-000008',
+      title: '刷新访问令牌',
+      type: 'api',
+      module_id: 'auth',
+      priority: 'P1',
+      status: '已通过',
+      author_name: '江珊',
+      updated_at: '2026-08-03T08:00:00Z',
+      api_details: { url: '/api/token/refresh', method: 'PUT', expected_code: 204 },
+    });
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  const updated = await service.updateTestCase(8, {
+    moduleId: 'auth',
+    name: '刷新访问令牌',
+    priority: 'P1',
+    status: '已通过',
+    endpoint: '/api/token/refresh',
+    method: 'PUT',
+    expectedStatus: 204,
+  });
+
+  expect(updated).toMatchObject({
+    storageId: 8,
+    id: 'API-000008',
+    status: '已通过',
+    method: 'PUT',
+    expectedStatus: 204,
+  });
+});
+
+test('deletes a test case through the backend endpoint', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('/api/v1/test-cases/8');
+    expect(init?.method).toBe('DELETE');
+    return new Response(null, { status: 204 });
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(service.deleteTestCase(8)).resolves.toBeUndefined();
+});
+
+test('uses the dedicated UI execution endpoints and request shape', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/ui-test/executions')) {
+      expect(JSON.parse(String(init?.body))).toEqual({
+        projectId: 1,
+        suiteIds: [2],
+        environment: 'test',
+        browser: 'chrome',
+        headless: true,
+        concurrency: 2,
+      });
+      return jsonResponse({
+        code: 200,
+        message: 'success',
+        data: {
+          executionId: 'ui_exec_20260803_001',
+          status: 'RUNNING',
+          startTime: '2026-08-03T14:50:00Z',
+        },
+      });
+    }
+    if (url.endsWith('/ui-test/executions/ui_exec_20260803_001')) {
+      return jsonResponse({
+        code: 200,
+        data: {
+          executionId: 'ui_exec_20260803_001',
+          status: 'RUNNING',
+          summary: { total: 1, passed: 0, failed: 0, running: 0, pending: 1, durationMs: 0 },
+          cases: [],
+        },
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  const started = await service.startUiExecution({
+    projectId: 1,
+    suiteIds: [2],
+    environment: 'test',
+    browser: 'chrome',
+    headless: true,
+    concurrency: 2,
+  });
+  const result = await service.getUiExecution(started.executionId);
+
+  expect(started.status).toBe('RUNNING');
+  expect(result.summary.pending).toBe(1);
+});
+
+test('uses the dedicated API execution report and stop endpoints', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/api-test/executions')) {
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        projectId: 1,
+        suiteIds: [3],
+        envId: 3,
+        globalHeaders: { Authorization: 'Bearer token' },
+        iterations: 1,
+      });
+      return jsonResponse({
+        code: 200,
+        message: 'Execution started',
+        data: { executionId: 'api_exec_20260803_088', status: 'RUNNING' },
+      });
+    }
+    if (url.endsWith('/api-test/executions/api_exec_20260803_088/report')) {
+      return jsonResponse({
+        code: 200,
+        data: {
+          executionId: 'api_exec_20260803_088',
+          status: 'RUNNING',
+          summary: { totalApi: 1, passedApi: 0, failedApi: 0, pendingApi: 1, avgResponseTimeMs: 0 },
+          results: [],
+        },
+      });
+    }
+    if (url.endsWith('/api-test/executions/api_exec_20260803_088/stop')) {
+      expect(init?.method).toBe('POST');
+      return jsonResponse({ code: 200, message: 'Execution stopped successfully' });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  const started = await service.startApiExecution({
+    projectId: 1,
+    suiteIds: [3],
+    envId: 3,
+    globalHeaders: { Authorization: 'Bearer token' },
+    iterations: 1,
+    rampUpTime: 0,
+  });
+  const report = await service.getApiExecutionReport(started.executionId);
+  await service.stopApiExecution(started.executionId);
+
+  expect(report.summary.pendingApi).toBe(1);
 });

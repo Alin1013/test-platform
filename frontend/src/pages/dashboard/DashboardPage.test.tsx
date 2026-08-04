@@ -23,8 +23,15 @@ it('导出电子表格前选择文件格式', async () => {
   await user.click(screen.getByRole('button', { name: /导出电子表格/ }));
 
   const dialog = screen.getByRole('dialog', { name: '导出电子表格' });
-  expect(within(dialog).getByRole('radio', { name: 'CSV' })).toBeChecked();
-  expect(within(dialog).getByRole('radio', { name: 'XLSX' })).toBeInTheDocument();
+  const csvButton = within(dialog).getByRole('button', { name: 'CSV' });
+  const xlsxButton = within(dialog).getByRole('button', { name: 'XLSX' });
+  expect(csvButton).toHaveAttribute('aria-pressed', 'true');
+  expect(xlsxButton).toHaveAttribute('aria-pressed', 'false');
+
+  await user.click(xlsxButton);
+
+  expect(csvButton).toHaveAttribute('aria-pressed', 'false');
+  expect(xlsxButton).toHaveAttribute('aria-pressed', 'true');
   expect(within(dialog).getByRole('button', { name: '导出' })).toBeInTheDocument();
 });
 
@@ -41,7 +48,7 @@ it('选择 XLSX 后下载工作簿', async () => {
   await screen.findByText('用例总数');
   await user.click(screen.getByRole('button', { name: '导出电子表格' }));
   const dialog = screen.getByRole('dialog', { name: '导出电子表格' });
-  await user.click(within(dialog).getByText('XLSX'));
+  await user.click(within(dialog).getByRole('button', { name: 'XLSX' }));
   await user.click(within(dialog).getByRole('button', { name: '导出' }));
 
   await waitFor(() => {

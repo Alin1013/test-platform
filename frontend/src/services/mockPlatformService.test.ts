@@ -1,5 +1,19 @@
 import { createMockPlatformService } from './mockPlatformService';
 
+it('返回项目测试用例目录树', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  await expect(service.listTestModules()).resolves.toEqual([
+    expect.objectContaining({
+      id: 'core',
+      name: '核心模块',
+      children: expect.arrayContaining([
+        expect.objectContaining({ id: 'auth', name: '鉴权' }),
+      ]),
+    }),
+  ]);
+});
+
 it('创建接口用例后返回在列表首行', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const created = await service.createTestCase({
@@ -15,6 +29,108 @@ it('创建接口用例后返回在列表首行', async () => {
   const rows = await service.listTestCases({ type: 'api', moduleId: 'auth' });
 
   expect(rows[0]).toMatchObject({ id: created.id, name: '刷新访问令牌' });
+});
+
+it('创建 UI 自动化用例后保留执行配置和步骤', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const uiDetails = {
+    description: '登录失败场景',
+    browser: 'firefox' as const,
+    environment: 'staging' as const,
+    timeoutSeconds: 60,
+    retryCount: 1,
+    steps: [
+      {
+        action: 'navigate' as const,
+        locatorType: 'css' as const,
+        target: 'https://staging.example.com/login',
+        value: '',
+        assertion: 'urlEquals' as const,
+        expected: 'https://staging.example.com/login',
+      },
+    ],
+  };
+
+  const created = await service.createTestCase({
+    type: 'ui',
+    moduleId: 'auth',
+    name: '登录失败',
+    priority: 'P1',
+    status: '维护中',
+    uiDetails,
+  });
+
+  expect(created.uiDetails).toEqual(uiDetails);
+  await expect(service.listTestCases({ type: 'ui', keyword: '登录失败' })).resolves.toContainEqual(created);
+});
+
+it('按 storageId 更新功能用例并反映在关键词查询中', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  const updated = await service.updateTestCase(1, {
+    moduleId: 'profile',
+    name: '用户登录并进入资料页',
+    priority: 'P2',
+    status: '已通过',
+  });
+
+  expect(updated).toMatchObject({
+    storageId: 1,
+    id: 'FUN-12583',
+    type: 'functional',
+    moduleId: 'profile',
+    name: '用户登录并进入资料页',
+    priority: 'P2',
+    status: '已通过',
+    updatedAt: '刚刚',
+  });
+  await expect(service.listTestCases({ keyword: '进入资料页' })).resolves.toEqual([updated]);
+});
+
+it('更新 API 用例的公共字段时保留显式 undefined 的 API 详情', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const existing = (await service.listTestCases({ keyword: 'API-253301' }))[0];
+
+  const updated = await service.updateTestCase(existing.storageId, {
+    moduleId: 'profile',
+    name: '用户资料查询更新',
+    priority: 'P2',
+    status: '已通过',
+    endpoint: undefined,
+    method: undefined,
+    expectedStatus: undefined,
+  });
+
+  expect(updated).toMatchObject({
+    moduleId: 'profile',
+    name: '用户资料查询更新',
+    priority: 'P2',
+    endpoint: '/api/users/profile',
+    method: 'GET',
+    expectedStatus: 200,
+  });
+  await expect(service.listTestCases({ keyword: '用户资料查询更新' })).resolves.toEqual([updated]);
+});
+
+it('按 storageId 删除功能用例后显示编号查询不到记录', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  await service.deleteTestCase(1);
+
+  await expect(service.listTestCases({ keyword: 'FUN-12583' })).resolves.toEqual([]);
+});
+
+it('更新或删除不存在的用例时抛出明确错误', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const input = {
+    moduleId: 'auth',
+    name: '不存在的用例',
+    priority: 'P1' as const,
+    status: '维护中' as const,
+  };
+
+  await expect(service.updateTestCase(999, input)).rejects.toThrow('测试用例不存在');
+  await expect(service.deleteTestCase(999)).rejects.toThrow('测试用例不存在');
 });
 
 it('新增用户并切换启用状态', async () => {
@@ -38,6 +154,39 @@ it('返回角色与权限列表', async () => {
   const roles = await service.listRoles();
 
   expect(roles.map((role) => role.name)).toEqual(['测试负责人', '测试工程师', '开发人员']);
+});
+
+it('模拟 UI 自动化执行的启动、查询和中断', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const started = await service.startUiExecution({
+    projectId: 1,
+    suiteIds: [2],
+    environment: 'staging',
+    browser: 'chrome',
+    headless: true,
+    concurrency: 1,
+  });
+
+  expect((await service.getUiExecution(started.executionId)).summary.pending).toBe(1);
+  await service.stopUiExecution(started.executionId);
+  expect((await service.getUiExecution(started.executionId)).status).toBe('CANCELED');
+});
+
+it('模拟接口自动化执行报告', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const started = await service.startApiExecution({
+    projectId: 1,
+    suiteIds: [3],
+    envId: 3,
+    globalHeaders: {},
+    iterations: 1,
+    rampUpTime: 0,
+  });
+
+  const report = await service.getApiExecutionReport(started.executionId);
+
+  expect(report.summary).toMatchObject({ totalApi: 1, pendingApi: 1 });
+  expect(report.results[0]).toMatchObject({ name: '用户资料查询', method: 'GET' });
 });
 
 it('保存系统设置后再次读取时返回最新配置', async () => {

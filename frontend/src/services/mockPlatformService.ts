@@ -1,11 +1,22 @@
-import { initialRoles, initialSystemSettings, initialTestCases, initialUsers } from '../mocks/fixtures';
+import {
+  initialRoles,
+  initialSystemSettings,
+  initialTestCases,
+  initialTestModules,
+  initialUsers,
+} from '../mocks/fixtures';
 import type {
+  ApiExecutionInput,
+  ApiExecutionReport,
   CreateTestCaseInput,
   CreateUserInput,
   SystemSettings,
   PlatformService,
   TestCaseQuery,
   TestCaseRecord,
+  UpdateTestCaseInput,
+  UiExecutionInput,
+  UiExecutionResult,
   UserRecord,
 } from './contracts';
 
@@ -23,8 +34,12 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let users = copy(initialUsers);
   let roles = copy(initialRoles);
   let caseSequence = 260000;
+  let storageIdSequence = Math.max(...testCases.map((testCase) => testCase.storageId)) + 1;
   let userSequence = 2000;
   let systemSettings = copy(initialSystemSettings);
+  let executionSequence = 1;
+  const uiExecutions = new Map<string, UiExecutionResult>();
+  const apiExecutions = new Map<string, ApiExecutionReport>();
 
   const respond = async <T,>(value: T): Promise<T> => {
     if (delay > 0) {
@@ -45,6 +60,14 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         total: counts.functional + counts.api + counts.ui,
         recentCases: testCases.slice(0, 6),
       });
+    },
+
+    async listTestModules(projectId?: number) {
+      return respond(
+        projectId === undefined
+          ? initialTestModules
+          : initialTestModules.filter((module) => module.projectId === projectId),
+      );
     },
 
     async listTestCases(query: TestCaseQuery = {}) {
@@ -70,6 +93,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async createTestCase(input: CreateTestCaseInput) {
       const created: TestCaseRecord = {
         ...input,
+        storageId: storageIdSequence++,
         id: `${input.type.toUpperCase()}-${caseSequence++}`,
         creator: '江珊',
         maintainer: '江珊',
@@ -77,6 +101,31 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       };
       testCases = [created, ...testCases];
       return respond(created);
+    },
+
+    async updateTestCase(storageId: number, input: UpdateTestCaseInput) {
+      const existing = testCases.find((testCase) => testCase.storageId === storageId);
+      if (!existing) throw new Error('测试用例不存在');
+
+      const { endpoint, method, expectedStatus, ...commonInput } = input;
+      const updated: TestCaseRecord = {
+        ...existing,
+        ...commonInput,
+        ...(endpoint === undefined ? {} : { endpoint }),
+        ...(method === undefined ? {} : { method }),
+        ...(expectedStatus === undefined ? {} : { expectedStatus }),
+        updatedAt: '刚刚',
+      };
+      testCases = testCases.map((testCase) => (testCase.storageId === storageId ? updated : testCase));
+      return respond(updated);
+    },
+
+    async deleteTestCase(storageId: number) {
+      if (!testCases.some((testCase) => testCase.storageId === storageId)) {
+        throw new Error('测试用例不存在');
+      }
+      testCases = testCases.filter((testCase) => testCase.storageId !== storageId);
+      await respond(undefined);
     },
 
     async listUsers() {
@@ -128,6 +177,110 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         success: true,
         message: `已成功连接 ${new URL(webhookUrl).host}`,
       });
+    },
+
+    async startUiExecution(input: UiExecutionInput) {
+      const executionId = `ui_exec_demo_${String(executionSequence++).padStart(3, '0')}`;
+      const selectedCases = input.suiteIds.map((suiteId) => {
+        const testCase = testCases.find((item) => item.storageId === suiteId && item.type === 'ui');
+        if (!testCase) throw new Error('UI 自动化用例不存在');
+        return testCase;
+      });
+      uiExecutions.set(executionId, {
+        executionId,
+        status: 'RUNNING',
+        summary: {
+          total: selectedCases.length,
+          passed: 0,
+          failed: 0,
+          running: 0,
+          pending: selectedCases.length,
+          durationMs: 0,
+        },
+        cases: selectedCases.map((testCase) => ({
+          caseId: testCase.storageId!,
+          caseName: testCase.name,
+          browser: input.browser,
+          status: 'PENDING',
+          durationMs: 0,
+          steps: [],
+          logs: ['测试用例已加入执行队列'],
+          screenshotUrl: null,
+          videoUrl: null,
+        })),
+      });
+      return respond({ executionId, status: 'RUNNING' as const, startTime: new Date().toISOString() });
+    },
+
+    async getUiExecution(executionId: string) {
+      const execution = uiExecutions.get(executionId);
+      if (!execution) throw new Error('执行任务不存在');
+      return respond(execution);
+    },
+
+    async stopUiExecution(executionId: string) {
+      const execution = uiExecutions.get(executionId);
+      if (!execution) throw new Error('执行任务不存在');
+      execution.status = 'CANCELED';
+      execution.cases = execution.cases.map((item) =>
+        item.status === 'PENDING' || item.status === 'RUNNING'
+          ? { ...item, status: 'SKIPPED' }
+          : item,
+      );
+      execution.summary.pending = 0;
+      await respond(undefined);
+    },
+
+    async startApiExecution(input: ApiExecutionInput) {
+      const executionId = `api_exec_demo_${String(executionSequence++).padStart(3, '0')}`;
+      const selectedCases = input.suiteIds.map((suiteId) => {
+        const testCase = testCases.find((item) => item.storageId === suiteId && item.type === 'api');
+        if (!testCase) throw new Error('接口自动化用例不存在');
+        return testCase;
+      });
+      apiExecutions.set(executionId, {
+        executionId,
+        status: 'RUNNING',
+        summary: {
+          totalApi: selectedCases.length,
+          passedApi: 0,
+          failedApi: 0,
+          pendingApi: selectedCases.length,
+          avgResponseTimeMs: 0,
+        },
+        results: selectedCases.map((testCase) => ({
+          apiId: testCase.storageId!,
+          name: testCase.name,
+          method: testCase.method ?? 'GET',
+          url: testCase.endpoint ?? '',
+          responseCode: null,
+          responseTimeMs: 0,
+          status: 'PENDING',
+          requestData: { headers: input.globalHeaders, body: null },
+          responseData: null,
+          assertions: [],
+        })),
+      });
+      return respond({ executionId, status: 'RUNNING' as const });
+    },
+
+    async getApiExecutionReport(executionId: string) {
+      const execution = apiExecutions.get(executionId);
+      if (!execution) throw new Error('执行任务不存在');
+      return respond(execution);
+    },
+
+    async stopApiExecution(executionId: string) {
+      const execution = apiExecutions.get(executionId);
+      if (!execution) throw new Error('执行任务不存在');
+      execution.status = 'CANCELED';
+      execution.results = execution.results.map((item) =>
+        item.status === 'PENDING' || item.status === 'RUNNING'
+          ? { ...item, status: 'SKIPPED' }
+          : item,
+      );
+      execution.summary.pendingApi = 0;
+      await respond(undefined);
     },
   };
 }

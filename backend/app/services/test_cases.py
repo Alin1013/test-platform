@@ -58,7 +58,15 @@ def serialize_case(test_case: TestCase) -> dict:
             "expected_response": test_case.api_details.expected_response,
         }
     if test_case.ui_details:
-        result["ui_details"] = {"steps": test_case.ui_details.steps}
+        result["ui_details"] = {
+            "description": test_case.ui_details.description,
+            "dependency_case_id": test_case.ui_details.dependency_case_id,
+            "browser": test_case.ui_details.browser,
+            "environment": test_case.ui_details.environment,
+            "timeout_seconds": test_case.ui_details.timeout_seconds,
+            "retry_count": test_case.ui_details.retry_count,
+            "steps": test_case.ui_details.steps,
+        }
     return result
 
 
@@ -140,6 +148,10 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
         raise HTTPException(status_code=404, detail="Module not found")
     if session.get(User, payload.author_id) is None:
         raise HTTPException(status_code=404, detail="Author not found")
+    if payload.type == "ui" and payload.ui_details and payload.ui_details.dependency_case_id:
+        dependency = session.get(TestCase, payload.ui_details.dependency_case_id)
+        if dependency is None or dependency.type != "ui":
+            raise HTTPException(status_code=422, detail="UI dependency case not found")
 
     prefix = {"functional": "FUN", "api": "API", "ui": "UI"}[payload.type]
     test_case = TestCase(
@@ -190,10 +202,16 @@ def update_case(session: Session, case_id: int, payload: TestCaseUpdate) -> dict
     if payload.ui_details is not None:
         if test_case.type != "ui":
             raise HTTPException(status_code=422, detail="UI details are only valid for UI cases")
+        if payload.ui_details.dependency_case_id:
+            dependency = session.get(TestCase, payload.ui_details.dependency_case_id)
+            if dependency is None or dependency.type != "ui" or dependency.id == test_case.id:
+                raise HTTPException(status_code=422, detail="UI dependency case not found")
+        details = payload.ui_details.model_dump()
         if test_case.ui_details is None:
-            test_case.ui_details = UiCaseDetails(steps=payload.ui_details.steps)
+            test_case.ui_details = UiCaseDetails(**details)
         else:
-            test_case.ui_details.steps = payload.ui_details.steps
+            for field, value in details.items():
+                setattr(test_case.ui_details, field, value)
 
     session.commit()
     return serialize_case(test_case)
