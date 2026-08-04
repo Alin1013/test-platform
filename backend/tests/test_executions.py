@@ -659,6 +659,106 @@ def test_ui_execution_honors_case_concurrency(client: TestClient) -> None:
     assert summary["passedCount"] == 2
 
 
+def test_api_execution_honors_case_concurrency(client: TestClient) -> None:
+    case_ids = []
+    for suffix in ("a", "b"):
+        created = client.post(
+            "/api/v1/api-cases",
+            json={
+                "title": f"并发接口 {suffix}",
+                "type": "api",
+                "module_id": "auth",
+                "priority": "P1",
+                "api_details": {
+                    "url": f"/api/concurrent/{suffix}",
+                    "method": "GET",
+                    "expected_code": 200,
+                },
+            },
+        ).json()
+        case_ids.append(created["id"])
+
+    active_count = 0
+    max_active_count = 0
+    active_lock = Lock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal active_count, max_active_count
+        with active_lock:
+            active_count += 1
+            max_active_count = max(max_active_count, active_count)
+        sleep(0.1)
+        with active_lock:
+            active_count -= 1
+        return httpx.Response(200, request=request, json={"ok": True})
+
+    started = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "API",
+            "projectId": 1,
+            "caseIds": case_ids,
+            "envName": "test",
+            "config": {
+                "globalHeaders": {},
+                "variables": {},
+                "iterations": 1,
+                "rampUpTime": 0,
+                "concurrency": 2,
+            },
+        },
+    )
+
+    assert started.status_code == 202
+    execution_worker.run_next_execution(
+        client.app.state.session_factory,
+        api_transport=httpx.MockTransport(handler),
+    )
+    assert max_active_count == 2
+
+
+def test_api_execution_rejects_concurrency_with_extraction_chain(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/v1/api-cases",
+        json={
+            "title": "变量提取链",
+            "type": "api",
+            "module_id": "auth",
+            "priority": "P1",
+            "api_details": {
+                "url": "/api/token",
+                "method": "GET",
+                "expected_code": 200,
+                "extracts": [{"name": "token", "jsonPath": "$.token"}],
+            },
+        },
+    ).json()
+
+    response = client.post(
+        "/api/v1/executions/start",
+        json={
+            "type": "API",
+            "projectId": 1,
+            "caseIds": [created["id"]],
+            "envName": "test",
+            "config": {
+                "globalHeaders": {},
+                "variables": {},
+                "iterations": 1,
+                "rampUpTime": 0,
+                "concurrency": 2,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "API concurrency requires cases without extraction rules"
+    )
+
+
 def test_ui_step_log_is_persisted_before_case_finishes(client: TestClient) -> None:
     first_step_recorded = Event()
     release_runner = Event()

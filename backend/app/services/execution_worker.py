@@ -329,6 +329,22 @@ def run_execution(
                 futures = [executor.submit(run_detail, detail_id) for detail_id in detail_ids]
                 for future in futures:
                     future.result()
+        elif concurrency > 1:
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = [
+                    executor.submit(
+                        _execute_detail,
+                        session_factory,
+                        execution_code,
+                        detail_id,
+                        dict(variables),
+                        api_transport,
+                        ui_runner,
+                    )
+                    for detail_id in detail_ids
+                ]
+                for future in futures:
+                    future.result()
         else:
             for detail_id in detail_ids:
                 if _is_cancelled(session_factory, execution_code):

@@ -67,7 +67,7 @@ RUNNING
                        `-> SKIPPED（批次被中止）
 ```
 
-控制面以 `PENDING` 状态原子创建批次、明细和队列任务。Worker 领取后切换为 `RUNNING`：UI 批次按 `concurrency` 限制并发运行用例，API 批次按用例顺序传播提取变量；结束时统一更新批次计数、耗时和终态。WebSocket 服务轮询持久化状态并只发送发生变化的事件，终态后主动关闭连接。
+控制面以 `PENDING` 状态原子创建批次、明细和队列任务。Worker 领取后切换为 `RUNNING`：UI 批次按 `concurrency` 限制并发运行用例；API 批次在没有提取规则时可按 `concurrency` 并发，存在提取链时强制顺序运行并向后传播变量。结束时统一更新批次计数、耗时和终态。WebSocket 服务轮询持久化状态并只发送发生变化的事件，终态后主动关闭连接。
 
 ## 6. Runner 接入约束
 

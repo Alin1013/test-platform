@@ -264,6 +264,7 @@ class ApiExecutionConfig(BaseModel):
     variables: dict[str, str] = Field(default_factory=dict, max_length=100)
     iterations: int = Field(default=1, ge=1, le=100)
     rampUpTime: int = Field(default=0, ge=0, le=60000)
+    concurrency: int = Field(default=1, ge=1, le=20)
 
 
 class ExecutionStartRequest(BaseModel):

@@ -27,6 +27,19 @@ def _render(value: str, variables: dict[str, str]) -> str:
     return VARIABLE_PATTERN.sub(replace, value)
 
 
+def _render_value(value: Any, variables: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return _render(value, variables)
+    if isinstance(value, list):
+        return [_render_value(item, variables) for item in value]
+    if isinstance(value, dict):
+        return {
+            _render(str(key), variables): _render_value(item, variables)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _environment(session: Session, environment_id: str | None) -> tuple[str, int]:
     execution_settings = get_settings(session)["execution"]
     selected_id = environment_id or execution_settings["defaultEnvironmentId"]
@@ -145,7 +158,10 @@ def debug_api_case(
             except json.JSONDecodeError as error:
                 raise HTTPException(status_code=422, detail="Request body is not valid JSON") from error
         elif payload.request_body is not None:
-            request_kwargs["json"] = payload.request_body
+            request_kwargs["json"] = _render_value(
+                payload.request_body,
+                payload.variables,
+            )
     elif payload.body_type in {"form-data", "x-www-form-urlencoded"}:
         form_fields = {
             _render(item.key, payload.variables): _render(item.value, payload.variables)

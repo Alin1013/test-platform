@@ -147,6 +147,7 @@ def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
         iterations=payload.iterations,
         ramp_up_time=payload.rampUpTime,
         variables={},
+        concurrency=1,
     )
 
 
@@ -160,6 +161,7 @@ def _start_api_execution(
     iterations: int,
     ramp_up_time: int,
     variables: dict[str, str],
+    concurrency: int,
     initial_status: str = "RUNNING",
 ) -> dict:
     cases = _selected_cases(
@@ -168,6 +170,14 @@ def _start_api_execution(
         suite_ids=case_ids,
         case_type="api",
     )
+    if concurrency > 1 and any(
+        test_case.api_details and test_case.api_details.extracts
+        for test_case in cases
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="API concurrency requires cases without extraction rules",
+        )
     config = {
         "projectId": project_id,
         "suiteIds": case_ids,
@@ -176,6 +186,7 @@ def _start_api_execution(
         "variables": variables,
         "iterations": iterations,
         "rampUpTime": ramp_up_time,
+        "concurrency": concurrency,
     }
     execution = TestExecution(
         execution_code=_execution_code("api_exec"),
@@ -264,6 +275,7 @@ def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
         iterations=config.iterations,
         ramp_up_time=config.rampUpTime,
         variables=config.variables,
+        concurrency=config.concurrency,
         initial_status="PENDING",
     )
 

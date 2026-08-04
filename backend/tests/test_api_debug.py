@@ -114,6 +114,38 @@ def test_api_case_debug_rejects_unknown_variables_before_sending(client: TestCli
     assert response.json()["detail"] == "Undefined variable: missing"
 
 
+def test_api_case_debug_renders_variables_in_structured_json_body(
+    client: TestClient,
+) -> None:
+    def handle_request(request: httpx.Request) -> httpx.Response:
+        assert request.content == b'{"account":{"id":"user-42"},"roles":["admin","user-42"]}'
+        return httpx.Response(200, request=request, json={"ok": True})
+
+    client.app.state.api_debug_transport = httpx.MockTransport(handle_request)
+
+    response = client.post(
+        "/api/v1/api-cases/debug",
+        json={
+            "environment": "test",
+            "variables": {"user_id": "user-42"},
+            "url": "/api/users",
+            "method": "POST",
+            "expected_code": 200,
+            "body_type": "json",
+            "request_body": {
+                "account": {"id": "{{ user_id }}"},
+                "roles": ["admin", "{{user_id}}"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["requestData"]["body"] == {
+        "account": {"id": "user-42"},
+        "roles": ["admin", "user-42"],
+    }
+
+
 def test_queued_api_execution_is_completed_by_background_worker(
     client: TestClient,
 ) -> None:
