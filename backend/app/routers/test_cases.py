@@ -10,7 +10,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..case_file_schemas import TestCaseExportRequest
@@ -22,6 +22,7 @@ from ..schemas import (
     ApiCaseDebugRequest,
     TestCaseCreate,
     TestCaseUpdate,
+    TestModuleCreate,
 )
 from ..services import case_files, debug_runner, test_cases
 
@@ -33,6 +34,14 @@ def modules(
     session: Annotated[Session, Depends(get_session)], project_id: int = 1
 ) -> list[dict]:
     return test_cases.module_tree(session, project_id)
+
+
+@router.post("/modules")
+def create_module(
+    payload: TestModuleCreate, session: Annotated[Session, Depends(get_session)]
+) -> JSONResponse:
+    module, created = test_cases.create_module(session, payload)
+    return JSONResponse(status_code=201 if created else 200, content=module)
 
 
 @router.get("/test-cases")

@@ -22,6 +22,7 @@ interface ModuleTreePanelProps {
   selectedModule: string;
   width: number;
   hidden: boolean;
+  refreshToken?: number;
   onSelect: (moduleId: string) => void;
   onWidthChange: (width: number) => void;
   onCollapse: () => void;
@@ -81,6 +82,7 @@ export function ModuleTreePanel({
   selectedModule,
   width,
   hidden,
+  refreshToken = 0,
   onSelect,
   onWidthChange,
   onCollapse,
@@ -100,7 +102,7 @@ export function ModuleTreePanel({
     return () => {
       active = false;
     };
-  }, [service]);
+  }, [refreshToken, service]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {

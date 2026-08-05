@@ -247,8 +247,15 @@ def _normalize_alias(value: Any, aliases: dict[str, str], default: str | None = 
     return aliases.get(text, text)
 
 
+def _canonical_row(raw_row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        HEADER_ALIASES.get(str(key).strip(), str(key).strip()): value
+        for key, value in raw_row.items()
+    }
+
+
 def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
-    row = {HEADER_ALIASES.get(str(key).strip(), str(key).strip()): value for key, value in raw_row.items()}
+    row = _canonical_row(raw_row)
     case_type = _normalize_alias(row.get("type"), TYPE_ALIASES)
     common = {
         "code": row.get("code") or None,
@@ -307,9 +314,14 @@ def import_cases(session: Session, filename: str, content: bytes, module_id: str
     selected_module_id = module_id.strip() if module_id and module_id.strip() else None
     for index, row in enumerate(rows, start=2):
         try:
+            row = _canonical_row(row)
             if selected_module_id:
                 row = {**row, "module_id": selected_module_id}
-            normalized_module = str(row.get("用例目录") or row.get("module_id") or "").strip()
+            normalized_module = str(row.get("module_id") or "").strip()
+            if not normalized_module:
+                raise ValueError(
+                    "module_id is required; fill in the module column or select a module"
+                )
             if normalized_module:
                 module = session.get(Module, normalized_module)
                 if module is None:

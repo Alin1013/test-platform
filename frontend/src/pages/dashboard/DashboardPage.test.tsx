@@ -1,6 +1,12 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { App as AntdApp, ConfigProvider } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
+import { MemoryRouter } from 'react-router-dom';
 import { renderApp } from '../../tests/renderApp';
+import { PlatformServiceProvider } from '../../services/PlatformServiceContext';
+import { createMockPlatformService } from '../../services/mockPlatformService';
+import { DashboardPage } from './DashboardPage';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -13,6 +19,32 @@ it('展示用例总数与最近用例', async () => {
   expect(screen.getByRole('region', { name: '最近用例' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '新建UI自动化' })).toBeInTheDocument();
   expect(screen.getAllByText('UI自动化')).not.toHaveLength(0);
+});
+
+it('仪表盘请求失败时显示错误态并允许重试', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const getDashboard = vi.spyOn(service, 'getDashboard');
+  getDashboard.mockRejectedValueOnce(new Error('dashboard unavailable'));
+  getDashboard.mockResolvedValueOnce(await createMockPlatformService({ delay: 0 }).getDashboard());
+
+  const user = userEvent.setup();
+  render(
+    <ConfigProvider locale={zhCN}>
+      <AntdApp>
+        <PlatformServiceProvider service={service}>
+          <MemoryRouter>
+            <DashboardPage />
+          </MemoryRouter>
+        </PlatformServiceProvider>
+      </AntdApp>
+    </ConfigProvider>,
+  );
+
+  expect(await screen.findByText('仪表盘数据加载失败')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '重试加载' }));
+
+  expect(await screen.findByText('用例总数')).toBeInTheDocument();
+  expect(getDashboard).toHaveBeenCalledTimes(2);
 });
 
 it('导出电子表格前选择文件格式', async () => {

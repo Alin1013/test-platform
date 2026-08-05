@@ -4,9 +4,10 @@ import {
   FileExcelOutlined,
   FileTextOutlined,
   PlusOutlined,
+  ReloadOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Modal, Skeleton, Table, Tag } from 'antd';
+import { Alert, App, Button, Card, Modal, Skeleton, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
 import { Cell, Pie, PieChart } from 'recharts';
@@ -80,13 +81,30 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    void service.getDashboard().then(setData);
-  }, [service]);
+    let active = true;
+    setData(null);
+    setLoadError(false);
+
+    void service
+      .getDashboard()
+      .then((nextData) => {
+        if (active) setData(nextData);
+      })
+      .catch(() => {
+        if (active) setLoadError(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadToken, service]);
 
   const openCreate = (type: TestCaseType) => navigate(`/test-cases/${type}?create=1`);
 
@@ -127,7 +145,24 @@ export function DashboardPage() {
     return (
       <section className="page-section">
         <PageHeader title="仪表盘" description="测试资产与协作进度总览" />
-        <Skeleton active paragraph={{ rows: 9 }} />
+        {loadError ? (
+          <Alert
+            type="error"
+            showIcon
+            title="仪表盘数据加载失败"
+            action={
+              <Button
+                aria-label="重试加载"
+                icon={<ReloadOutlined />}
+                onClick={() => setReloadToken((current) => current + 1)}
+              >
+                重试
+              </Button>
+            }
+          />
+        ) : (
+          <Skeleton active paragraph={{ rows: 9 }} />
+        )}
       </section>
     );
   }

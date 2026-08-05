@@ -116,6 +116,14 @@ class ApiCaseDebugRequest(ApiDetailsCreate):
     variables: dict[str, str] = Field(default_factory=dict, max_length=100)
 
 
+class TestModuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+    parent_id: str | None = Field(default=None, max_length=64)
+    project_id: int = Field(default=1, gt=0)
+
+
 class UiStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

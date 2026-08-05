@@ -242,6 +242,59 @@ it('可以将 Apifox OpenAPI JSON 导入当前模块', async () => {
   expect(await screen.findByText('已导入 1 条接口用例')).toBeInTheDocument();
 });
 
+it('未选择具体模块时不上传功能用例文件', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  const importTestCases = vi.spyOn(service, 'importTestCases');
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  const upload = screen.getByLabelText('导入功能用例');
+  const file = new File(
+    [
+      [
+        '用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属',
+        ',缺少模块,REQ-MISSING-MODULE,,,,功能用例,草稿,P1,江珊,,,测试平台',
+      ].join('\n'),
+    ],
+    'missing-module.csv',
+    {
+      type: 'text/csv',
+    },
+  );
+
+  await user.upload(upload, file);
+
+  expect(await screen.findByText('请先选择具体模块')).toBeInTheDocument();
+  expect(importTestCases).not.toHaveBeenCalled();
+});
+
+it('全部模块下按文件中的用例目录导入功能用例', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  const importTestCases = vi
+    .spyOn(service, 'importTestCases')
+    .mockResolvedValue({ importedCount: 1, codes: ['FUN-MODULE'] });
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  const upload = screen.getByLabelText('导入功能用例');
+  const file = new File(
+    [
+      [
+        '用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属',
+        '鉴权,按行模块导入,REQ-MODULE,,,,功能用例,草稿,P1,江珊,,,测试平台',
+      ].join('\n'),
+    ],
+    'with-module.csv',
+    { type: 'text/csv' },
+  );
+
+  await user.upload(upload, file);
+
+  await waitFor(() => {
+    expect(importTestCases).toHaveBeenCalledWith(file, undefined);
+  });
+});
+
 it('导入功能用例时使用当前选中的模块', async () => {
   const user = userEvent.setup();
   const service = createMockPlatformService({ delay: 0 });
@@ -410,6 +463,80 @@ it('新建用例的所属模块不显示固定的核心模块路径', async () =
   const dialog = await screen.findByRole('dialog', { name: '新建UI自动化' });
   expect(await within(dialog).findByText('鉴权')).toBeInTheDocument();
   expect(within(dialog).queryByText('核心模块 / 鉴权')).not.toBeInTheDocument();
+});
+
+it('项目归属使用侧边栏模块并自动创建缺失目录后归类功能用例', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  await user.click(screen.getByRole('button', { name: '新建功能用例' }));
+  const dialog = await screen.findByRole('dialog', { name: '新建功能用例' });
+  const projectInput = within(dialog).getByRole('combobox', { name: '项目归属' });
+  await user.click(projectInput);
+  expect(await screen.findByRole('option', { name: '鉴权' })).toBeInTheDocument();
+
+  await user.clear(projectInput);
+  await user.type(projectInput, '结算');
+  await user.type(within(dialog).getByLabelText('用例名称'), '结算成功');
+  await user.type(within(dialog).getByLabelText('用例步骤'), '提交结算申请');
+  await user.type(within(dialog).getByLabelText('预期结果'), '结算完成');
+  await user.click(within(dialog).getByRole('button', { name: '创建用例' }));
+
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+  expect(await within(list).findByText('结算成功')).toBeInTheDocument();
+  expect(await screen.findByRole('treeitem', { name: '结算' })).toBeInTheDocument();
+  await user.click(screen.getByRole('treeitem', { name: '结算' }));
+  expect(await within(list).findByText('结算成功')).toBeInTheDocument();
+});
+
+it('选择已有项目归属模块时使用对应目录 ID 创建功能用例', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  const createTestCase = vi.spyOn(service, 'createTestCase');
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  await user.click(screen.getByRole('button', { name: '新建功能用例' }));
+  const dialog = await screen.findByRole('dialog', { name: '新建功能用例' });
+  const projectInput = within(dialog).getByRole('combobox', { name: '项目归属' });
+  await user.click(projectInput);
+  await user.clear(projectInput);
+  await user.type(projectInput, '支付');
+  await user.keyboard('{ArrowDown}{Enter}');
+  await user.type(within(dialog).getByLabelText('用例名称'), '支付退款');
+  await user.type(within(dialog).getByLabelText('用例步骤'), '提交退款申请');
+  await user.type(within(dialog).getByLabelText('预期结果'), '退款成功');
+  await user.click(within(dialog).getByRole('button', { name: '创建用例' }));
+
+  await waitFor(() => {
+    expect(createTestCase).toHaveBeenCalledWith(
+      expect.objectContaining({ moduleId: 'payments', projectName: '支付' }),
+    );
+  });
+});
+
+it('只选择用例目录时同步项目归属并使用对应模块 ID', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  const createTestCase = vi.spyOn(service, 'createTestCase');
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  await user.click(screen.getByRole('button', { name: '新建功能用例' }));
+  const dialog = await screen.findByRole('dialog', { name: '新建功能用例' });
+  await user.click(within(dialog).getByRole('combobox', { name: '用例目录' }));
+  await screen.findByRole('option', { name: '支付' });
+  await user.click(screen.getByTitle('支付'));
+  expect(within(dialog).getByRole('combobox', { name: '项目归属' })).toHaveValue('支付');
+  await user.type(within(dialog).getByLabelText('用例名称'), '支付退款目录用例');
+  await user.type(within(dialog).getByLabelText('用例步骤'), '提交退款申请');
+  await user.type(within(dialog).getByLabelText('预期结果'), '退款成功');
+  await user.click(within(dialog).getByRole('button', { name: '创建用例' }));
+
+  await waitFor(() => {
+    expect(createTestCase).toHaveBeenCalledWith(
+      expect.objectContaining({ moduleId: 'payments', projectName: '支付' }),
+    );
+  });
 });
 
 it('模块目录支持重命名、删除和新增子目录', async () => {

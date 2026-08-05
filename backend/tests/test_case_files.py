@@ -103,3 +103,20 @@ def test_functional_import_uses_selected_module_and_apifox_enums(
     assert imported["priority"] == "P1"
     assert imported["status"] == "维护中"
     assert imported["is_smoke"] is False
+
+
+def test_import_rejects_rows_without_a_module_with_actionable_error(
+    client: TestClient,
+) -> None:
+    headers = "用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属"
+    row = ",缺少模块的用例,REQ-MISSING-MODULE,,,,功能用例,草稿,P1,江珊,,,测试平台"
+
+    response = client.post(
+        "/api/v1/test-cases/import",
+        files={"file": ("missing-module.csv", f"{headers}\n{row}".encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Invalid row 2: module_id is required; fill in the module column or select a module"
+    )

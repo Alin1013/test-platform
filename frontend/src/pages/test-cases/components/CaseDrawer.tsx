@@ -1,4 +1,4 @@
-import { App, Button, Checkbox, Form, Input, Modal, Select } from 'antd';
+import { App, AutoComplete, Button, Checkbox, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../services/AuthContext';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
@@ -14,7 +14,7 @@ import type {
 import { ApiAutomationCaseModal } from './ApiAutomationCaseModal';
 import { UiAutomationCaseModal } from './UiAutomationCaseModal';
 import { testCaseStatusOptions } from '../testCaseOptions';
-import { moduleSelectOptions } from '../moduleOptions';
+import { moduleProjectOptions, moduleSelectOptions } from '../moduleOptions';
 
 const { TextArea } = Input;
 
@@ -31,6 +31,7 @@ interface CaseDrawerProps {
   initialCase?: TestCaseRecord;
   onClose: () => void;
   onSubmit: (input: CreateTestCaseInput) => Promise<TestCaseRecord>;
+  onModuleCreated?: (module: TestModule) => void;
 }
 
 interface CaseFormValues {
@@ -83,6 +84,7 @@ function FunctionalCaseDrawer({
   initialCase,
   onClose,
   onSubmit,
+  onModuleCreated,
 }: CaseDrawerProps) {
   const [form] = Form.useForm<CaseFormValues>();
   const { message } = App.useApp();
@@ -109,7 +111,7 @@ function FunctionalCaseDrawer({
       authorId: user?.id ?? 1,
       iteration: initialCase?.iteration ?? '',
       isSmoke: initialCase?.isSmoke ?? false,
-      projectName: initialCase?.projectName ?? '测试平台',
+      projectName: initialCase?.projectName ?? '',
     });
     let active = true;
     void Promise.all([service.listTestModules(1), service.listUsers()]).then(
@@ -117,6 +119,11 @@ function FunctionalCaseDrawer({
         if (!active) return;
         setModules(nextModules);
         setUsers(nextUsers);
+        const moduleId = initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule);
+        const moduleOption = moduleProjectOptions(nextModules).find(
+          (option) => option.moduleId === moduleId,
+        );
+        if (moduleOption) form.setFieldValue('projectName', moduleOption.value);
         if (initialCase) {
           const author = nextUsers.find((item) => item.name === initialCase.creator);
           if (author) form.setFieldValue('authorId', Number(author.id));
@@ -144,10 +151,26 @@ function FunctionalCaseDrawer({
   };
 
   const submit = async (values: CaseFormValues) => {
+    const projectName = values.projectName.trim();
+    const projectOptions = moduleProjectOptions(modules);
+    const selectedProject = projectOptions.find((option) => option.value === projectName);
+    const selectedModule = projectOptions.find((option) => option.moduleId === values.moduleId);
+    const matchingModule = selectedProject ?? (
+      selectedModule?.value === projectName ? selectedModule : undefined
+    );
+    let moduleId = matchingModule?.moduleId;
+    let persistedProjectName = matchingModule?.value ?? projectName;
+    if (!moduleId) {
+      const createdModule = await service.createTestModule({ name: projectName, projectId: 1 });
+      moduleId = createdModule.id;
+      persistedProjectName = createdModule.name;
+      setModules((current) => [...current, createdModule]);
+      onModuleCreated?.(createdModule);
+    }
     const created = await onSubmit({
       type: 'functional',
       authorId: values.authorId,
-      moduleId: values.moduleId,
+      moduleId,
       name: values.name,
       priority: values.priority,
       status: values.status,
@@ -157,7 +180,7 @@ function FunctionalCaseDrawer({
       expectedResult: values.expectedResult.trim(),
       iteration: values.iteration?.trim() ?? '',
       isSmoke: values.isSmoke,
-      projectName: values.projectName.trim(),
+      projectName: persistedProjectName,
     });
     form.resetFields();
     onClose();
@@ -196,7 +219,16 @@ function FunctionalCaseDrawer({
         >
           <div className="functional-case-form-grid">
             <Form.Item name="moduleId" label="用例目录" rules={[{ required: true, message: '请选择用例目录' }]}>
-              <Select aria-label="用例目录" options={moduleSelectOptions(modules)} />
+              <Select
+                aria-label="用例目录"
+                options={moduleSelectOptions(modules)}
+                onChange={(value) => {
+                  const selected = moduleProjectOptions(modules).find(
+                    (option) => option.moduleId === value,
+                  );
+                  if (selected) form.setFieldValue('projectName', selected.value);
+                }}
+              />
             </Form.Item>
             <Form.Item name="name" label="用例名称" rules={[{ required: true, whitespace: true, message: '请输入用例名称' }]}>
               <Input maxLength={255} placeholder="例如：用户登录成功" />
@@ -225,8 +257,22 @@ function FunctionalCaseDrawer({
             <Form.Item name="iteration" label="归属迭代">
               <Input maxLength={128} placeholder="例如：Sprint 12" />
             </Form.Item>
-            <Form.Item name="projectName" label="项目归属" rules={[{ required: true, whitespace: true, message: '请输入项目归属' }]}>
-              <Input maxLength={128} />
+            <Form.Item name="projectName" label="项目归属" rules={[{ required: true, whitespace: true, message: '请选择或输入项目目录' }]}>
+              <AutoComplete
+                aria-label="项目归属"
+                options={moduleProjectOptions(modules)}
+                filterOption={(inputValue, option) =>
+                  String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                }
+                placeholder="选择或输入模块目录"
+                onSelect={(value) => {
+                  const selected = moduleProjectOptions(modules).find(
+                    (option) => option.value === value,
+                  );
+                  if (selected) form.setFieldValue('moduleId', selected.moduleId);
+                }}
+                maxLength={128}
+              />
             </Form.Item>
             <Form.Item name="isSmoke" label="是否冒烟" valuePropName="checked">
               <Checkbox>设为冒烟用例</Checkbox>

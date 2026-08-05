@@ -14,6 +14,20 @@ it('返回项目测试用例目录树', async () => {
   ]);
 });
 
+it('创建新模块后返回可用于归类用例的模块 ID，并更新模块树', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  const created = await service.createTestModule({ name: '结算' });
+
+  expect(created).toMatchObject({ name: '结算', projectId: 1, children: [] });
+  await expect(service.listTestModules(1)).resolves.toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: created.id, name: '结算' })]),
+  );
+  await expect(service.createTestModule({ name: '结算' })).resolves.toMatchObject({
+    id: created.id,
+  });
+});
+
 it('创建接口用例后返回在列表首行', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const created = await service.createTestCase({

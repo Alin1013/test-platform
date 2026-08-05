@@ -89,6 +89,37 @@ test('maps the project module tree to the platform contract', async () => {
   );
 });
 
+test('creates a project module through the backend contract', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('/api/v1/modules');
+    expect(init).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ name: '结算', parent_id: 'auth', project_id: 1 }),
+    });
+    return jsonResponse(
+      {
+        id: 'module-settlement',
+        name: '结算',
+        parent_id: 'auth',
+        project_id: 1,
+        children: [],
+      },
+      201,
+    );
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(
+    service.createTestModule({ name: '结算', parentId: 'auth', projectId: 1 }),
+  ).resolves.toEqual({
+    id: 'module-settlement',
+    name: '结算',
+    parentId: 'auth',
+    projectId: 1,
+    children: [],
+  });
+});
+
 test('sends contract mutations in the backend request shape', async () => {
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);

@@ -18,6 +18,63 @@ def test_modules_returns_project_tree(client: TestClient) -> None:
     ]
 
 
+def test_can_create_module_and_reuse_same_name_in_parent(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/modules",
+        json={"name": "登录", "project_id": 1, "parent_id": "auth"},
+    )
+
+    assert created.status_code == 201
+    module = created.json()
+    assert module["name"] == "登录"
+    assert module["project_id"] == 1
+    assert module["parent_id"] == "auth"
+    assert module["children"] == []
+
+    repeated = client.post(
+        "/api/v1/modules",
+        json={"name": "登录", "project_id": 1, "parent_id": "auth"},
+    )
+
+    assert repeated.status_code == 200
+    assert repeated.json()["id"] == module["id"]
+
+    tree = client.get("/api/v1/modules", params={"project_id": 1}).json()
+    auth = next(item for item in tree if item["id"] == "auth")
+    assert {(item["id"], item["name"]) for item in auth["children"]} == {
+        ("profile", "用户资料"),
+        (module["id"], "登录"),
+    }
+
+
+def test_functional_case_can_be_assigned_to_new_module(client: TestClient) -> None:
+    module = client.post(
+        "/api/v1/modules",
+        json={"name": "结算", "project_id": 1},
+    ).json()
+
+    created = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "结算成功",
+            "type": "functional",
+            "module_id": module["id"],
+            "priority": "P1",
+            "status": "草稿",
+            "author_id": 1,
+            "project_name": "结算",
+            "test_steps": "提交结算申请",
+            "expected_result": "结算完成",
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["module_id"] == module["id"]
+    assert client.get(
+        "/api/v1/test-cases", params={"type": "functional", "module_id": module["id"]}
+    ).json()["items"][0]["title"] == "结算成功"
+
+
 def test_api_case_can_be_created_searched_updated_and_deleted(client: TestClient) -> None:
     created = client.post(
         "/api/v1/test-cases",

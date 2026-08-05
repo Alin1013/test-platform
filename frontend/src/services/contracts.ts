@@ -45,7 +45,14 @@ export interface TestModule {
   id: string;
   name: string;
   projectId: number;
+  parentId?: string;
   children: TestModule[];
+}
+
+export interface CreateTestModuleInput {
+  name: string;
+  parentId?: string;
+  projectId?: number;
 }
 
 export interface ApiKeyValueItem {
@@ -362,6 +369,7 @@ export interface UiDebugResult {
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestModules(projectId?: number): Promise<TestModule[]>;
+  createTestModule(input: CreateTestModuleInput): Promise<TestModule>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;

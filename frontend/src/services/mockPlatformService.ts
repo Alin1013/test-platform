@@ -10,12 +10,14 @@ import type {
   ApiExecutionReport,
   ApiDebugInput,
   CreateTestCaseInput,
+  CreateTestModuleInput,
   CreateUserInput,
   SystemSettings,
   PlatformService,
   TestCaseQuery,
   TestCaseImportResult,
   TestCaseRecord,
+  TestModule,
   UpdateTestCaseInput,
   UiExecutionInput,
   UiExecutionResult,
@@ -32,8 +34,35 @@ const copy = <T,>(value: T): T => {
   return JSON.parse(JSON.stringify(value)) as T;
 };
 
+function findModuleById(modules: TestModule[], moduleId: string): TestModule | undefined {
+  for (const module of modules) {
+    if (module.id === moduleId) return module;
+    const child = findModuleById(module.children, moduleId);
+    if (child) return child;
+  }
+  return undefined;
+}
+
+function updateModuleChildren(
+  modules: TestModule[],
+  moduleId: string,
+  update: (children: TestModule[]) => TestModule[],
+): TestModule[] {
+  return modules.map((module) => {
+    if (module.id === moduleId) {
+      return { ...module, children: update(module.children) };
+    }
+    if (!module.children.length) return module;
+    return {
+      ...module,
+      children: updateModuleChildren(module.children, moduleId, update),
+    };
+  });
+}
+
 export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
   let testCases = copy(initialTestCases);
+  let modules = copy(initialTestModules);
   let users = copy(initialUsers);
   let roles = copy(initialRoles);
   let caseSequence = 260000;
@@ -107,9 +136,51 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async listTestModules(projectId?: number) {
       return respond(
         projectId === undefined
-          ? initialTestModules
-          : initialTestModules.filter((module) => module.projectId === projectId),
+          ? modules
+          : modules.filter((module) => module.projectId === projectId),
       );
+    },
+
+    async createTestModule(input: CreateTestModuleInput) {
+      const projectId = input.projectId ?? 1;
+      const name = input.name.trim();
+      if (!name) throw new Error('模块名称不能为空');
+      const findModule = (nodes: typeof modules): TestModule | undefined => {
+        for (const module of nodes) {
+          if (
+            module.projectId === projectId &&
+            module.parentId === input.parentId &&
+            module.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+          ) {
+            return module;
+          }
+          const child = findModule(module.children);
+          if (child) return child;
+        }
+        return undefined;
+      };
+      const existing = findModule(modules);
+      if (existing) return respond(existing);
+
+      if (input.parentId && !findModuleById(modules, input.parentId)) {
+        throw new Error('父模块不存在');
+      }
+      const created: TestModule = {
+        id: `module-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        projectId,
+        ...(input.parentId ? { parentId: input.parentId } : {}),
+        children: [],
+      };
+      if (input.parentId) {
+        modules = updateModuleChildren(modules, input.parentId, (children) => [
+          ...children,
+          created,
+        ]);
+      } else {
+        modules = [...modules, created];
+      }
+      return respond(created);
     },
 
     async listTestCases(query: TestCaseQuery = {}) {

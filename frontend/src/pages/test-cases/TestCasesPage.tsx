@@ -40,6 +40,63 @@ function isTestCaseType(value: string | undefined): value is TestCaseType {
   return value === 'functional' || value === 'api' || value === 'ui';
 }
 
+const FUNCTIONAL_IMPORT_HEADERS = [
+  '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
+  '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+];
+const MODULE_IMPORT_HEADERS = new Set([
+  'module_id', '用例目录', '模块ID', '模块', '模块名称', '所属模块', '所属模块名称',
+]);
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('无法读取导入文件'));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new Error('无法读取导入文件'));
+    };
+    reader.onerror = () => reject(new Error('无法读取导入文件'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function hasMissingFunctionalModule(file: File): Promise<boolean> {
+  const extension = file.name.toLowerCase().split('.').pop();
+  if (extension !== 'csv' && extension !== 'xlsx' && extension !== 'xls') return false;
+
+  const { read, utils } = await import('xlsx');
+  const workbook = extension === 'csv'
+    ? read(await readFileAsText(file), { type: 'string' })
+    : read(await readFileAsArrayBuffer(file), { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    raw: false,
+    defval: '',
+  });
+  const headers = rows[0]?.map((value) => String(value).trim()) ?? [];
+  const dataRows = rows.slice(1).filter((row) => row.some((value) => String(value).trim()));
+  if (!dataRows.length) return false;
+  const moduleIndex = headers.findIndex((header) => MODULE_IMPORT_HEADERS.has(header));
+  if (moduleIndex < 0) return true;
+  if (
+    headers.length === FUNCTIONAL_IMPORT_HEADERS.length &&
+    headers.some((value, index) => value !== FUNCTIONAL_IMPORT_HEADERS[index])
+  ) {
+    return false;
+  }
+  return dataRows.some((row) => !String(row[moduleIndex] ?? '').trim());
+}
+
 export function TestCasesPage() {
   const params = useParams();
   const type = isTestCaseType(params.type) ? params.type : 'api';
@@ -58,6 +115,7 @@ export function TestCasesPage() {
   const [editingCase, setEditingCase] = useState<TestCaseRecord | null>(null);
   const [selectedStorageIds, setSelectedStorageIds] = useState<Key[]>([]);
   const [modulePanelWidth, setModulePanelWidth] = useState(248);
+  const [moduleRefreshToken, setModuleRefreshToken] = useState(0);
   const [isModulePanelCollapsed, setIsModulePanelCollapsed] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -280,6 +338,10 @@ export function TestCasesPage() {
   const importFunctionalCases = async (file: File) => {
     setIsImporting(true);
     try {
+      if (selectedModule === 'all' && await hasMissingFunctionalModule(file)) {
+        void message.warning('请先选择具体模块');
+        return;
+      }
       const result = await service.importTestCases(
         file,
         selectedModule === 'all' ? undefined : selectedModule,
@@ -354,7 +416,11 @@ export function TestCasesPage() {
           <div className="page-header-actions">
             {type === 'functional' ? (
               <>
-                <Button icon={<UploadOutlined />} loading={isImporting} onClick={() => functionalImportInputRef.current?.click()}>
+                <Button
+                  icon={<UploadOutlined />}
+                  loading={isImporting}
+                  onClick={() => functionalImportInputRef.current?.click()}
+                >
                   导入
                 </Button>
                 <input
@@ -425,6 +491,7 @@ export function TestCasesPage() {
           selectedModule={selectedModule}
           width={modulePanelWidth}
           hidden={isModulePanelCollapsed}
+          refreshToken={moduleRefreshToken}
           onSelect={setSelectedModule}
           onWidthChange={setModulePanelWidth}
           onCollapse={() => setIsModulePanelCollapsed(true)}
@@ -536,6 +603,7 @@ export function TestCasesPage() {
         defaultModule={selectedModule}
         onClose={closeDrawer}
         onSubmit={createCase}
+        onModuleCreated={() => setModuleRefreshToken((current) => current + 1)}
       />
       <CaseDrawer
         type={editingCase?.type ?? type}
@@ -544,6 +612,7 @@ export function TestCasesPage() {
         initialCase={editingCase ?? undefined}
         onClose={() => setEditingCase(null)}
         onSubmit={updateCase}
+        onModuleCreated={() => setModuleRefreshToken((current) => current + 1)}
       />
     </section>
   );

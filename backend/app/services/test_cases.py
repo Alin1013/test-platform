@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import ApiCaseDetails, Module, TestCase, UiCaseDetails, User
-from ..schemas import TestCaseCreate, TestCaseUpdate
+from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate
 
 
 def module_tree(session: Session, project_id: int) -> list[dict]:
@@ -30,6 +30,47 @@ def module_tree(session: Session, project_id: int) -> list[dict]:
         else:
             roots.append(node)
     return roots
+
+
+def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bool]:
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Module name is required")
+
+    if payload.parent_id:
+        parent = session.get(Module, payload.parent_id)
+        if parent is None or parent.project_id != payload.project_id:
+            raise HTTPException(status_code=404, detail="Parent module not found")
+
+    existing = session.scalar(
+        select(Module).where(
+            Module.project_id == payload.project_id,
+            Module.parent_id == payload.parent_id,
+            func.lower(Module.name) == name.lower(),
+        )
+    )
+    if existing is not None:
+        return _serialize_module(existing), False
+
+    module = Module(
+        id=f"module-{uuid4().hex[:12]}",
+        name=name,
+        parent_id=payload.parent_id,
+        project_id=payload.project_id,
+    )
+    session.add(module)
+    session.commit()
+    return _serialize_module(module), True
+
+
+def _serialize_module(module: Module) -> dict:
+    return {
+        "id": module.id,
+        "name": module.name,
+        "parent_id": module.parent_id,
+        "project_id": module.project_id,
+        "children": [],
+    }
 
 
 def serialize_case(test_case: TestCase) -> dict:

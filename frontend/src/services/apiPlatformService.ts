@@ -1,5 +1,6 @@
 import type {
   CreateTestCaseInput,
+  CreateTestModuleInput,
   CreateUserInput,
   ApiDebugInput,
   ApiDebugResult,
@@ -88,6 +89,7 @@ interface ApiTestCase {
 interface ApiTestModule {
   id: string;
   name: string;
+  parent_id?: string | null;
   project_id: number;
   children: ApiTestModule[];
 }
@@ -197,6 +199,7 @@ function mapModule(module: ApiTestModule): TestModule {
     id: module.id,
     name: module.name,
     projectId: module.project_id,
+    ...(module.parent_id ? { parentId: module.parent_id } : {}),
     children: module.children.map(mapModule),
   };
 }
@@ -318,6 +321,18 @@ export function createApiPlatformService({
         : `/modules?project_id=${encodeURIComponent(projectId)}`;
       const modules = await request<ApiTestModule[]>(path);
       return modules.map(mapModule);
+    },
+
+    async createTestModule(input: CreateTestModuleInput) {
+      const module = await request<ApiTestModule>('/modules', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          parent_id: input.parentId,
+          project_id: input.projectId ?? 1,
+        }),
+      });
+      return mapModule(module);
     },
 
     async listTestCases(query: TestCaseQuery = {}) {
