@@ -366,7 +366,7 @@ export interface PlatformService {
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;
   deleteTestCase(storageId: number): Promise<void>;
-  importTestCases(file: File): Promise<TestCaseImportResult>;
+  importTestCases(file: File, moduleId?: string): Promise<TestCaseImportResult>;
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;

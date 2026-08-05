@@ -51,6 +51,10 @@ HEADER_ALIASES = {
     "用例名称": "title",
     "类型": "type",
     "模块ID": "module_id",
+    "模块": "module_id",
+    "模块名称": "module_id",
+    "所属模块": "module_id",
+    "所属模块名称": "module_id",
     "优先级": "priority",
     "状态": "status",
     "创建人ID": "author_id",
@@ -74,7 +78,42 @@ HEADER_ALIASES = {
     "是否冒烟": "is_smoke",
     "项目归属": "project_name",
 }
-TYPE_ALIASES = {"功能用例": "functional", "接口用例": "api", "UI自动化": "ui"}
+TYPE_ALIASES = {
+    "功能用例": "functional",
+    "功能测试": "functional",
+    "功能测试用例": "functional",
+    "接口用例": "api",
+    "接口测试": "api",
+    "接口测试用例": "api",
+    "UI自动化": "ui",
+    "UI测试": "ui",
+    "UI测试用例": "ui",
+}
+PRIORITY_ALIASES = {
+    "高": "P0",
+    "最高": "P0",
+    "P0": "P0",
+    "中": "P1",
+    "P1": "P1",
+    "低": "P2",
+    "P2": "P2",
+    "很低": "P3",
+    "极低": "P3",
+    "最低": "P3",
+    "P3": "P3",
+}
+STATUS_ALIASES = {
+    "正常": "维护中",
+    "启用": "维护中",
+    "维护中": "维护中",
+    "已通过": "已通过",
+    "草稿": "草稿",
+    "失败": "已失败",
+    "已失败": "已失败",
+    "停用": "已停用",
+    "禁用": "已停用",
+    "已停用": "已停用",
+}
 
 
 @dataclass
@@ -201,16 +240,23 @@ def _parse_json(value: Any, field: str) -> Any:
         raise ValueError(f"{field} must contain valid JSON") from error
 
 
+def _normalize_alias(value: Any, aliases: dict[str, str], default: str | None = None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return default or ""
+    return aliases.get(text, text)
+
+
 def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
     row = {HEADER_ALIASES.get(str(key).strip(), str(key).strip()): value for key, value in raw_row.items()}
-    case_type = TYPE_ALIASES.get(str(row.get("type", "")).strip(), str(row.get("type", "")).strip())
+    case_type = _normalize_alias(row.get("type"), TYPE_ALIASES)
     common = {
         "code": row.get("code") or None,
         "title": str(row.get("title") or "").strip(),
         "type": case_type,
         "module_id": str(row.get("module_id") or "").strip(),
-        "priority": str(row.get("priority") or "P1").strip(),
-        "status": str(row.get("status") or "草稿").strip(),
+        "priority": _normalize_alias(row.get("priority"), PRIORITY_ALIASES, "P1"),
+        "status": _normalize_alias(row.get("status"), STATUS_ALIASES, "草稿"),
         "author_id": int(row.get("author_id") or 1),
         "requirement_id": str(row.get("requirement_id") or "").strip() or None,
         "precondition": str(row.get("precondition") or "").strip(),
@@ -236,7 +282,7 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
     return TestCaseCreate.model_validate(common)
 
 
-def import_cases(session: Session, filename: str, content: bytes) -> dict:
+def import_cases(session: Session, filename: str, content: bytes, module_id: str | None = None) -> dict:
     if len(content) > MAX_IMPORT_BYTES:
         raise HTTPException(status_code=413, detail="Import file exceeds the 10 MB limit")
     lower_name = filename.lower()
@@ -258,8 +304,11 @@ def import_cases(session: Session, filename: str, content: bytes) -> dict:
 
     # 所有行共用一个事务；任意一行失败时，前面已 flush 的记录也会回滚。
     created = []
+    selected_module_id = module_id.strip() if module_id and module_id.strip() else None
     for index, row in enumerate(rows, start=2):
         try:
+            if selected_module_id:
+                row = {**row, "module_id": selected_module_id}
             normalized_module = str(row.get("用例目录") or row.get("module_id") or "").strip()
             if normalized_module:
                 module = session.get(Module, normalized_module)

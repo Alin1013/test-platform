@@ -144,6 +144,26 @@ test('sends contract mutations in the backend request shape', async () => {
   );
 });
 
+test('imports test cases into the selected module', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    expect(String(input)).toBe('http://localhost:8000/api/v1/test-cases/import?module_id=auth');
+    return jsonResponse({ imported_count: 1, codes: ['FUN-90001'] }, 201);
+  });
+  const service = createApiPlatformService({
+    baseUrl: 'http://localhost:8000/api/v1/',
+    fetcher,
+  });
+
+  const result = await service.importTestCases(
+    new File(['用例目录,用例名称,用例类型\n鉴权,导入功能用例,功能测试'], 'apifox.csv', {
+      type: 'text/csv',
+    }),
+    'auth',
+  );
+
+  expect(result).toEqual({ importedCount: 1, codes: ['FUN-90001'] });
+});
+
 test('sends and maps the complete UI automation case details', async () => {
   const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));

@@ -131,9 +131,10 @@ def export_test_cases(
 async def import_test_cases(
     file: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
+    module_id: str | None = Query(default=None),
 ) -> dict:
     content = await file.read(case_files.MAX_IMPORT_BYTES + 1)
-    return case_files.import_cases(session, file.filename or "upload", content)
+    return case_files.import_cases(session, file.filename or "upload", content, module_id=module_id)
 
 
 @router.put("/test-cases/{case_id}")

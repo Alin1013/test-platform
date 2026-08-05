@@ -390,11 +390,12 @@ export function createApiPlatformService({
       await request(`/test-cases/${storageId}`, { method: 'DELETE' });
     },
 
-    async importTestCases(file: File): Promise<TestCaseImportResult> {
+    async importTestCases(file: File, moduleId?: string): Promise<TestCaseImportResult> {
       const body = new FormData();
       body.append('file', file);
+      const query = moduleId ? `?module_id=${encodeURIComponent(moduleId)}` : '';
       const result = await request<{ imported_count: number; codes: string[] }>(
-        '/test-cases/import',
+        `/test-cases/import${query}`,
         { method: 'POST', body },
       );
       return { importedCount: result.imported_count, codes: result.codes };

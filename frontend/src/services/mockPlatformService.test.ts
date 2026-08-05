@@ -120,6 +120,32 @@ it('按 storageId 删除功能用例后显示编号查询不到记录', async ()
   await expect(service.listTestCases({ keyword: 'FUN-12583' })).resolves.toEqual([]);
 });
 
+it('导入功能用例时归一化 Apifox 中文枚举并允许覆盖模块', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const csv = [
+    '用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属',
+    ',导入 Apifox 功能用例,REQ-APIFOX,账号已启用,打开登录页,进入首页,功能测试,正常,中,江珊,Sprint 13,否,测试平台',
+  ].join('\n');
+  const file = {
+    name: 'apifox-functional.csv',
+    text: async () => csv,
+    arrayBuffer: async () => new TextEncoder().encode(csv).buffer,
+  } as File;
+
+  const result = await service.importTestCases(file, 'auth');
+  const rows = await service.listTestCases({ keyword: '导入 Apifox 功能用例' });
+
+  expect(result).toEqual({ importedCount: 1, codes: [rows[0].id] });
+  expect(rows[0]).toMatchObject({
+    type: 'functional',
+    moduleId: 'auth',
+    priority: 'P1',
+    status: '维护中',
+    requirementId: 'REQ-APIFOX',
+    projectName: '测试平台',
+  });
+});
+
 it('更新或删除不存在的用例时抛出明确错误', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const input = {

@@ -280,7 +280,10 @@ export function TestCasesPage() {
   const importFunctionalCases = async (file: File) => {
     setIsImporting(true);
     try {
-      const result = await service.importTestCases(file);
+      const result = await service.importTestCases(
+        file,
+        selectedModule === 'all' ? undefined : selectedModule,
+      );
       await refreshRows();
       void message.success(`已导入 ${result.importedCount} 条功能用例`);
     } catch (error) {

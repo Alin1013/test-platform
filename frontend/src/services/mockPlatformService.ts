@@ -51,6 +51,45 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     return copy(value);
   };
 
+  const typeAliases: Record<string, TestCaseRecord['type']> = {
+    功能用例: 'functional',
+    功能测试: 'functional',
+    功能测试用例: 'functional',
+    接口用例: 'api',
+    接口测试: 'api',
+    接口测试用例: 'api',
+    UI自动化: 'ui',
+    UI测试: 'ui',
+    UI测试用例: 'ui',
+  };
+  const priorityAliases: Record<string, TestCaseRecord['priority']> = {
+    高: 'P0',
+    最高: 'P0',
+    P0: 'P0',
+    中: 'P1',
+    P1: 'P1',
+    低: 'P2',
+    P2: 'P2',
+    很低: 'P3',
+    极低: 'P3',
+    最低: 'P3',
+    P3: 'P3',
+  };
+  const statusAliases: Record<string, TestCaseRecord['status']> = {
+    正常: '维护中',
+    启用: '维护中',
+    维护中: '维护中',
+    已通过: '已通过',
+    草稿: '草稿',
+    失败: '已失败',
+    已失败: '已失败',
+    停用: '已停用',
+    禁用: '已停用',
+    已停用: '已停用',
+  };
+  const normalizeValue = <T extends string>(value: string, aliases: Record<string, T>) =>
+    (aliases[value] ?? value) as T;
+
   return {
     async getDashboard() {
       const counts = {
@@ -135,7 +174,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       await respond(undefined);
     },
 
-    async importTestCases(file: File) {
+    async importTestCases(file: File, moduleId?: string) {
       const { read, utils } = await import('xlsx');
       const extension = file.name.toLowerCase().split('.').pop();
       const workbook = extension === 'csv'
@@ -160,22 +199,22 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       if (!dataRows.length) throw new Error('导入文件没有数据行');
       const created = dataRows.map((row) => {
         const moduleValue = String(row[0] ?? '').trim();
-        const typeValue = String(row[6] ?? '').trim();
-        if (typeValue !== '功能用例' && typeValue !== 'functional') {
+        const typeValue = normalizeValue(String(row[6] ?? '').trim(), typeAliases);
+        if (typeValue !== 'functional') {
           throw new Error(`仅支持导入功能用例：${String(row[1] ?? '')}`);
         }
         const record: TestCaseRecord = {
           storageId: storageIdSequence++,
           id: `FUN-${caseSequence++}`,
           type: 'functional',
-          moduleId: moduleIds[moduleValue] ?? moduleValue,
+          moduleId: moduleId ?? moduleIds[moduleValue] ?? moduleValue,
           name: String(row[1] ?? '').trim(),
           requirementId: String(row[2] ?? '').trim() || undefined,
           precondition: String(row[3] ?? '').trim(),
           steps: String(row[4] ?? '').trim(),
           expectedResult: String(row[5] ?? '').trim(),
-          status: (String(row[7] ?? '').trim() || '草稿') as TestCaseRecord['status'],
-          priority: (String(row[8] ?? '').trim() || 'P1') as TestCaseRecord['priority'],
+          status: normalizeValue(String(row[7] ?? '').trim() || '草稿', statusAliases),
+          priority: normalizeValue(String(row[8] ?? '').trim() || 'P1', priorityAliases),
           creator: String(row[9] ?? '').trim() || '江珊',
           maintainer: String(row[9] ?? '').trim() || '江珊',
           iteration: String(row[10] ?? '').trim(),

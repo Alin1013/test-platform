@@ -242,6 +242,42 @@ it('可以将 Apifox OpenAPI JSON 导入当前模块', async () => {
   expect(await screen.findByText('已导入 1 条接口用例')).toBeInTheDocument();
 });
 
+it('导入功能用例时使用当前选中的模块', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  const importCalls: Array<{ fileName: string; moduleId?: string }> = [];
+  const originalImportTestCases = service.importTestCases.bind(service);
+  service.importTestCases = async (file, moduleId) => {
+    importCalls.push({ fileName: file.name, moduleId });
+    return originalImportTestCases(file, moduleId);
+  };
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+  await user.click(screen.getByRole('treeitem', { name: '鉴权' }));
+  await waitFor(() => {
+    expect(within(list).queryByText('创建支付订单')).not.toBeInTheDocument();
+  });
+
+  const upload = screen.getByLabelText('导入功能用例');
+  const file = new File(
+    [
+      [
+        '用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属',
+        ',导入 Apifox 功能用例,REQ-APIFOX,账号已启用,打开登录页,进入首页,功能测试,正常,中,江珊,Sprint 13,否,测试平台',
+      ].join('\n'),
+    ],
+    'apifox-functional.csv',
+    { type: 'text/csv' },
+  );
+
+  await user.upload(upload, file);
+
+  await waitFor(() => {
+    expect(importCalls).toEqual([{ fileName: 'apifox-functional.csv', moduleId: 'auth' }]);
+  });
+});
+
 it('可以添加和删除请求头', async () => {
   const user = userEvent.setup();
   renderApp('/test-cases/api?create=1');
