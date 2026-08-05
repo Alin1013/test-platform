@@ -163,6 +163,7 @@ export function TestCasesPage() {
   const columns: ColumnsType<TestCaseRecord> = (() => {
     if (type === 'functional') {
       return [
+        { title: '编号', dataIndex: 'id', width: 124 },
         { title: '用例目录', dataIndex: 'moduleId', width: 110 },
         { title: '用例名称', dataIndex: 'name', width: 180, ellipsis: true },
         { title: '需求ID', dataIndex: 'requirementId', width: 110, render: (value) => value || '-' },
