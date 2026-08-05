@@ -55,3 +55,29 @@ def test_invalid_import_rolls_back_every_row(client: TestClient) -> None:
     assert response.status_code == 422
     assert "row 3" in response.json()["detail"]
     assert client.get("/api/v1/test-cases", params={"keyword": "91001"}).json()["total"] == 0
+
+
+def test_functional_import_requires_standard_headers_and_persists_business_fields(
+    client: TestClient,
+) -> None:
+    headers = "用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属"
+    row = "鉴权,导入功能用例,REQ-IMPORT,账号已启用,\"打开登录页\n点击登录\",进入首页,功能用例,维护中,P1,江珊,Sprint 13,是,测试平台"
+    response = client.post(
+        "/api/v1/test-cases/import",
+        files={"file": ("functional.csv", f"{headers}\n{row}".encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 201
+    imported = client.get("/api/v1/test-cases", params={"type": "functional"}).json()["items"][0]
+    assert imported["module_id"] == "auth"
+    assert imported["requirement_id"] == "REQ-IMPORT"
+    assert imported["test_steps"] == "打开登录页\n点击登录"
+    assert imported["is_smoke"] is True
+
+    invalid_headers = headers.replace("项目归属", "项目")
+    invalid = client.post(
+        "/api/v1/test-cases/import",
+        files={"file": ("invalid.csv", f"{invalid_headers}\n{row}".encode("utf-8"), "text/csv")},
+    )
+    assert invalid.status_code == 422
+    assert "表头不一致" in invalid.json()["detail"]
