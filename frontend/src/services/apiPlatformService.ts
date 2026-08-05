@@ -11,6 +11,7 @@ import type {
   PlatformService,
   SystemSettings,
   TestCaseQuery,
+  TestCaseImportResult,
   TestCaseRecord,
   TestCaseStatus,
   TestCaseType,
@@ -73,6 +74,13 @@ interface ApiTestCase {
   status: TestCaseStatus;
   author_name: string;
   updated_at: string;
+  requirement_id?: string | null;
+  precondition?: string;
+  test_steps?: string;
+  expected_result?: string;
+  iteration?: string;
+  is_smoke?: boolean;
+  project_name?: string;
   api_details?: ApiCaseDetails | null;
   ui_details?: ApiUiCaseDetails | null;
 }
@@ -116,6 +124,13 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
     status: testCase.status,
     maintainer: testCase.author_name,
     creator: testCase.author_name,
+    requirementId: testCase.requirement_id ?? undefined,
+    precondition: testCase.precondition,
+    steps: testCase.test_steps,
+    expectedResult: testCase.expected_result,
+    iteration: testCase.iteration,
+    isSmoke: testCase.is_smoke,
+    projectName: testCase.project_name,
     updatedAt: Number.isNaN(updatedDate.valueOf())
       ? testCase.updated_at
       : updatedDate.toLocaleString('zh-CN'),
@@ -328,6 +343,13 @@ export function createApiPlatformService({
           priority: input.priority,
           status: input.status,
           author_id: input.authorId ?? 1,
+          requirement_id: input.requirementId,
+          precondition: input.precondition ?? '',
+          test_steps: input.steps ?? '',
+          expected_result: input.expectedResult ?? '',
+          iteration: input.iteration ?? '',
+          is_smoke: input.isSmoke ?? false,
+          project_name: input.projectName ?? '测试平台',
           api_details: apiDetails,
           ui_details:
             input.type === 'ui' && input.uiDetails
@@ -349,6 +371,14 @@ export function createApiPlatformService({
           module_id: input.moduleId,
           priority: input.priority,
           status: input.status,
+          author_id: input.authorId,
+          requirement_id: input.requirementId,
+          precondition: input.precondition,
+          test_steps: input.steps,
+          expected_result: input.expectedResult,
+          iteration: input.iteration,
+          is_smoke: input.isSmoke,
+          project_name: input.projectName,
           api_details: apiDetails,
           ui_details: input.uiDetails ? mapUiDetailsToApi(input.uiDetails) : undefined,
         }),
@@ -358,6 +388,16 @@ export function createApiPlatformService({
 
     async deleteTestCase(storageId: number) {
       await request(`/test-cases/${storageId}`, { method: 'DELETE' });
+    },
+
+    async importTestCases(file: File): Promise<TestCaseImportResult> {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await request<{ imported_count: number; codes: string[] }>(
+        '/test-cases/import',
+        { method: 'POST', body },
+      );
+      return { importedCount: result.imported_count, codes: result.codes };
     },
 
     async listUsers() {

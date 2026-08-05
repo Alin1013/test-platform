@@ -27,6 +27,13 @@ export interface TestCaseRecord {
   maintainer: string;
   creator: string;
   updatedAt: string;
+  requirementId?: string;
+  precondition?: string;
+  steps?: string;
+  expectedResult?: string;
+  iteration?: string;
+  isSmoke?: boolean;
+  projectName?: string;
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
@@ -103,6 +110,13 @@ export interface CreateTestCaseInput {
   name: string;
   priority: Priority;
   status: TestCaseStatus;
+  requirementId?: string;
+  precondition?: string;
+  steps?: string;
+  expectedResult?: string;
+  iteration?: string;
+  isSmoke?: boolean;
+  projectName?: string;
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
@@ -111,6 +125,11 @@ export interface CreateTestCaseInput {
 }
 
 export type UpdateTestCaseInput = Omit<CreateTestCaseInput, 'type'>;
+
+export interface TestCaseImportResult {
+  importedCount: number;
+  codes: string[];
+}
 
 export interface UserRecord {
   id: string;
@@ -347,6 +366,7 @@ export interface PlatformService {
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;
   deleteTestCase(storageId: number): Promise<void>;
+  importTestCases(file: File): Promise<TestCaseImportResult>;
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;

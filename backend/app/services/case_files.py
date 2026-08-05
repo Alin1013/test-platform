@@ -9,11 +9,12 @@ from typing import Any
 from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..case_file_schemas import TestCaseExportRequest
-from ..models import TestCase
+from ..models import Module, TestCase, User
 from ..schemas import ApiDetailsCreate, TestCaseCreate, UiDetailsCreate
 from . import test_cases
 
@@ -33,6 +34,17 @@ EXPORT_HEADERS = (
     "request_body",
     "expected_response",
     "steps",
+    "requirement_id",
+    "precondition",
+    "test_steps",
+    "expected_result",
+    "iteration",
+    "is_smoke",
+    "project_name",
+)
+FUNCTIONAL_HEADERS = (
+    "用例目录", "用例名称", "需求ID", "前置条件", "用例步骤", "预期结果",
+    "用例类型", "用例状态", "用例等级", "创建人", "归属迭代", "是否冒烟", "项目归属",
 )
 HEADER_ALIASES = {
     "编号": "code",
@@ -49,6 +61,18 @@ HEADER_ALIASES = {
     "请求体": "request_body",
     "预期响应": "expected_response",
     "测试步骤": "steps",
+    "用例目录": "module_id",
+    "需求ID": "requirement_id",
+    "前置条件": "precondition",
+    "用例步骤": "test_steps",
+    "预期结果": "expected_result",
+    "用例类型": "type",
+    "用例状态": "status",
+    "用例等级": "priority",
+    "创建人": "author_id",
+    "归属迭代": "iteration",
+    "是否冒烟": "is_smoke",
+    "项目归属": "project_name",
 }
 TYPE_ALIASES = {"功能用例": "functional", "接口用例": "api", "UI自动化": "ui"}
 
@@ -82,6 +106,13 @@ def _export_row(test_case: dict) -> list[Any]:
         _json_cell(api.get("request_body")),
         _json_cell(api.get("expected_response")),
         _json_cell(ui.get("steps")),
+        test_case.get("requirement_id", ""),
+        test_case.get("precondition", ""),
+        test_case.get("test_steps", ""),
+        test_case.get("expected_result", ""),
+        test_case.get("iteration", ""),
+        "是" if test_case.get("is_smoke") else "否",
+        test_case.get("project_name", "测试平台"),
     ]
 
 
@@ -146,6 +177,19 @@ def _xlsx_rows(content: bytes) -> list[dict[str, Any]]:
     return [dict(zip(headers, row, strict=False)) for row in values]
 
 
+def _xls_rows(content: bytes) -> list[dict[str, Any]]:
+    try:
+        import xlrd
+        workbook = xlrd.open_workbook(file_contents=content)
+        sheet = workbook.sheet_by_index(0)
+    except Exception as error:
+        raise HTTPException(status_code=422, detail="Invalid XLS workbook") from error
+    if sheet.nrows == 0:
+        return []
+    headers = [str(value or "").strip() for value in sheet.row_values(0)]
+    return [dict(zip(headers, sheet.row_values(index), strict=False)) for index in range(1, sheet.nrows)]
+
+
 def _parse_json(value: Any, field: str) -> Any:
     if value is None or value == "":
         return None
@@ -168,6 +212,13 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
         "priority": str(row.get("priority") or "P1").strip(),
         "status": str(row.get("status") or "草稿").strip(),
         "author_id": int(row.get("author_id") or 1),
+        "requirement_id": str(row.get("requirement_id") or "").strip() or None,
+        "precondition": str(row.get("precondition") or "").strip(),
+        "test_steps": str(row.get("test_steps") or row.get("steps") or "").strip(),
+        "expected_result": str(row.get("expected_result") or "").strip(),
+        "iteration": str(row.get("iteration") or "").strip(),
+        "is_smoke": str(row.get("is_smoke") or "").strip().lower() in {"是", "yes", "true", "1", "y"},
+        "project_name": str(row.get("project_name") or "测试平台").strip(),
     }
     if case_type == "api":
         common["api_details"] = ApiDetailsCreate(
@@ -193,15 +244,35 @@ def import_cases(session: Session, filename: str, content: bytes) -> dict:
         rows = _csv_rows(content)
     elif lower_name.endswith(".xlsx"):
         rows = _xlsx_rows(content)
+    elif lower_name.endswith(".xls"):
+        rows = _xls_rows(content)
     else:
-        raise HTTPException(status_code=415, detail="Only .csv and .xlsx files are supported")
+        raise HTTPException(status_code=415, detail="Only .csv, .xls and .xlsx files are supported")
     if not rows:
         raise HTTPException(status_code=422, detail="Import file has no data rows")
+
+    raw_headers = {str(key).strip() for key in rows[0]}
+    if any(header in raw_headers for header in FUNCTIONAL_HEADERS):
+        if tuple(str(key).strip() for key in rows[0]) != FUNCTIONAL_HEADERS:
+            raise HTTPException(status_code=422, detail="功能用例导入表头不一致，请使用标准模板")
 
     # 所有行共用一个事务；任意一行失败时，前面已 flush 的记录也会回滚。
     created = []
     for index, row in enumerate(rows, start=2):
         try:
+            normalized_module = str(row.get("用例目录") or row.get("module_id") or "").strip()
+            if normalized_module:
+                module = session.get(Module, normalized_module)
+                if module is None:
+                    module = session.scalar(select(Module).where(Module.name == normalized_module))
+                if module is not None:
+                    row = {**row, "module_id": module.id}
+            author_value = row.get("创建人") or row.get("author_id")
+            if author_value and not str(author_value).strip().isdigit():
+                author = session.scalar(select(User).where(User.name == str(author_value).strip()))
+                if author is None:
+                    raise ValueError(f"创建人不存在: {author_value}")
+                row = {**row, "author_id": author.id}
             payload = _case_payload(row)
             created.append(test_cases.add_case(session, payload))
         except (ValueError, ValidationError, HTTPException, IntegrityError) as error:

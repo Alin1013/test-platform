@@ -224,6 +224,13 @@ class TestCaseCreate(BaseModel):
     priority: Priority
     status: CaseStatus = "草稿"
     author_id: int = 1
+    requirement_id: str | None = Field(default=None, max_length=128)
+    precondition: str = Field(default="", max_length=10000)
+    test_steps: str = Field(default="", max_length=10000)
+    expected_result: str = Field(default="", max_length=10000)
+    iteration: str = Field(default="", max_length=128)
+    is_smoke: bool = False
+    project_name: str = Field(default="测试平台", min_length=1, max_length=128)
     api_details: ApiDetailsCreate | None = None
     ui_details: UiDetailsCreate | None = None
 
@@ -246,6 +253,13 @@ class TestCaseUpdate(BaseModel):
     priority: Priority | None = None
     status: CaseStatus | None = None
     author_id: int | None = None
+    requirement_id: str | None = Field(default=None, max_length=128)
+    precondition: str | None = Field(default=None, max_length=10000)
+    test_steps: str | None = Field(default=None, max_length=10000)
+    expected_result: str | None = Field(default=None, max_length=10000)
+    iteration: str | None = Field(default=None, max_length=128)
+    is_smoke: bool | None = None
+    project_name: str | None = Field(default=None, min_length=1, max_length=128)
     api_details: ApiDetailsUpdate | None = None
     ui_details: UiDetailsCreate | None = None
 

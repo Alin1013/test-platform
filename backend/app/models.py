@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -115,6 +115,13 @@ class TestCase(Base, TimestampMixin):
     priority: Mapped[str] = mapped_column(String(4), index=True)
     status: Mapped[str] = mapped_column(String(16), index=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    requirement_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    precondition: Mapped[str] = mapped_column(Text, default="")
+    test_steps: Mapped[str] = mapped_column(Text, default="")
+    expected_result: Mapped[str] = mapped_column(Text, default="")
+    iteration: Mapped[str] = mapped_column(String(128), default="")
+    is_smoke: Mapped[bool] = mapped_column(Boolean, default=False)
+    project_name: Mapped[str] = mapped_column(String(128), default="测试平台")
 
     module: Mapped[Module] = relationship(back_populates="test_cases")
     author: Mapped[User] = relationship(back_populates="test_cases")

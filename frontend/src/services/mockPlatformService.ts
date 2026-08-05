@@ -14,6 +14,7 @@ import type {
   SystemSettings,
   PlatformService,
   TestCaseQuery,
+  TestCaseImportResult,
   TestCaseRecord,
   UpdateTestCaseInput,
   UiExecutionInput,
@@ -93,12 +94,16 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     },
 
     async createTestCase(input: CreateTestCaseInput) {
+      const author = users.find((item, index) => {
+        const numericId = Number.isFinite(Number(item.id)) ? Number(item.id) : index + 1;
+        return numericId === (input.authorId ?? 1);
+      });
       const created: TestCaseRecord = {
         ...input,
         storageId: storageIdSequence++,
         id: `${input.type.toUpperCase()}-${caseSequence++}`,
-        creator: '江珊',
-        maintainer: '江珊',
+        creator: author?.name ?? '江珊',
+        maintainer: author?.name ?? '江珊',
         updatedAt: '刚刚',
       };
       testCases = [created, ...testCases];
@@ -128,6 +133,60 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       }
       testCases = testCases.filter((testCase) => testCase.storageId !== storageId);
       await respond(undefined);
+    },
+
+    async importTestCases(file: File) {
+      const { read, utils } = await import('xlsx');
+      const extension = file.name.toLowerCase().split('.').pop();
+      const workbook = extension === 'csv'
+        ? read(await file.text(), { type: 'string' })
+        : read(await file.arrayBuffer(), { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const values = utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
+      const expectedHeaders = [
+        '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
+        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+      ];
+      const headers = values[0]?.map((value) => String(value).trim()) ?? [];
+      if (headers.length !== expectedHeaders.length || headers.some((value, index) => value !== expectedHeaders[index])) {
+        throw new Error('功能用例导入表头不一致，请使用标准模板');
+      }
+      const moduleIds: Record<string, string> = {
+        鉴权: 'auth',
+        支付: 'payments',
+        用户资料: 'profile',
+      };
+      const dataRows = values.slice(1).filter((row) => row.some((value) => String(value).trim()));
+      if (!dataRows.length) throw new Error('导入文件没有数据行');
+      const created = dataRows.map((row) => {
+        const moduleValue = String(row[0] ?? '').trim();
+        const typeValue = String(row[6] ?? '').trim();
+        if (typeValue !== '功能用例' && typeValue !== 'functional') {
+          throw new Error(`仅支持导入功能用例：${String(row[1] ?? '')}`);
+        }
+        const record: TestCaseRecord = {
+          storageId: storageIdSequence++,
+          id: `FUN-${caseSequence++}`,
+          type: 'functional',
+          moduleId: moduleIds[moduleValue] ?? moduleValue,
+          name: String(row[1] ?? '').trim(),
+          requirementId: String(row[2] ?? '').trim() || undefined,
+          precondition: String(row[3] ?? '').trim(),
+          steps: String(row[4] ?? '').trim(),
+          expectedResult: String(row[5] ?? '').trim(),
+          status: (String(row[7] ?? '').trim() || '草稿') as TestCaseRecord['status'],
+          priority: (String(row[8] ?? '').trim() || 'P1') as TestCaseRecord['priority'],
+          creator: String(row[9] ?? '').trim() || '江珊',
+          maintainer: String(row[9] ?? '').trim() || '江珊',
+          iteration: String(row[10] ?? '').trim(),
+          isSmoke: ['是', 'true', '1', 'yes'].includes(String(row[11] ?? '').trim().toLowerCase()),
+          projectName: String(row[12] ?? '').trim() || '测试平台',
+          updatedAt: '刚刚',
+        };
+        return record;
+      });
+      testCases = [...created, ...testCases];
+      return respond({ importedCount: created.length, codes: created.map((item) => item.id) });
     },
 
     async listUsers() {

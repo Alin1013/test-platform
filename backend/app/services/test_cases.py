@@ -43,6 +43,13 @@ def serialize_case(test_case: TestCase) -> dict:
         "status": test_case.status,
         "author_id": test_case.author_id,
         "author_name": test_case.author.name,
+        "requirement_id": test_case.requirement_id,
+        "precondition": test_case.precondition,
+        "test_steps": test_case.test_steps,
+        "expected_result": test_case.expected_result,
+        "iteration": test_case.iteration,
+        "is_smoke": test_case.is_smoke,
+        "project_name": test_case.project_name,
         "created_at": test_case.created_at,
         "updated_at": test_case.updated_at,
         "api_details": None,
@@ -168,6 +175,13 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
         priority=payload.priority,
         status=payload.status,
         author_id=payload.author_id,
+        requirement_id=payload.requirement_id,
+        precondition=payload.precondition,
+        test_steps=payload.test_steps,
+        expected_result=payload.expected_result,
+        iteration=payload.iteration,
+        is_smoke=payload.is_smoke,
+        project_name=payload.project_name,
     )
     session.add(test_case)
     session.flush()

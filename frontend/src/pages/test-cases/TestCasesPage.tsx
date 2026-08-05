@@ -4,10 +4,11 @@ import {
   MenuUnfoldOutlined,
   PlusOutlined,
   SearchOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { App, Button, Empty, Input, Select, Skeleton, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Key } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
@@ -26,6 +27,7 @@ import type {
 import { CaseDrawer } from './components/CaseDrawer';
 import { ModuleTreePanel } from './components/ModuleTreePanel';
 import { testCaseStatusOptions } from './testCaseOptions';
+import { parseApifoxOpenApi } from './apifoxImport';
 import './test-cases.css';
 
 const typeLabels: Record<TestCaseType, string> = {
@@ -57,6 +59,9 @@ export function TestCasesPage() {
   const [selectedStorageIds, setSelectedStorageIds] = useState<Key[]>([]);
   const [modulePanelWidth, setModulePanelWidth] = useState(248);
   const [isModulePanelCollapsed, setIsModulePanelCollapsed] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
     () => ({
       type,
@@ -156,6 +161,35 @@ export function TestCasesPage() {
   };
 
   const columns: ColumnsType<TestCaseRecord> = (() => {
+    if (type === 'functional') {
+      return [
+        { title: '用例目录', dataIndex: 'moduleId', width: 110 },
+        { title: '用例名称', dataIndex: 'name', width: 180, ellipsis: true },
+        { title: '需求ID', dataIndex: 'requirementId', width: 110, render: (value) => value || '-' },
+        { title: '前置条件', dataIndex: 'precondition', width: 180, ellipsis: true, render: (value) => value || '-' },
+        { title: '用例步骤', dataIndex: 'steps', width: 220, ellipsis: true, render: (value) => value || '-' },
+        { title: '预期结果', dataIndex: 'expectedResult', width: 200, ellipsis: true, render: (value) => value || '-' },
+        { title: '用例类型', dataIndex: 'type', width: 100, render: () => '功能用例' },
+        { title: '用例状态', dataIndex: 'status', width: 100, render: (value: TestCaseStatus) => <StatusBadge status={value} /> },
+        { title: '用例等级', dataIndex: 'priority', width: 90, render: (value: Priority) => <Tag color={value === 'P0' ? 'error' : 'gold'}>{value}</Tag> },
+        {
+          title: '创建人', dataIndex: 'creator', width: 112,
+          render: (name: string) => <span className="case-person"><PersonAvatar name={name} size={22} />{name}</span>,
+        },
+        { title: '归属迭代', dataIndex: 'iteration', width: 120, render: (value) => value || '-' },
+        { title: '是否冒烟', dataIndex: 'isSmoke', width: 92, render: (value: boolean) => value ? <Tag color="success">是</Tag> : '否' },
+        { title: '项目归属', dataIndex: 'projectName', width: 120, render: (value) => value || '-' },
+        {
+          title: '操作', key: 'actions', width: 96, fixed: 'right',
+          render: (_, record) => (
+            <div className="case-row-actions">
+              <Tooltip title="编辑"><Button type="text" size="small" icon={<EditOutlined />} aria-label={`编辑 ${record.id}`} onClick={() => setEditingCase(record)} /></Tooltip>
+              <Tooltip title="删除"><Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`删除 ${record.id}`} onClick={() => deleteCases([record])} /></Tooltip>
+            </div>
+          ),
+        },
+      ];
+    }
     const base: ColumnsType<TestCaseRecord> = [
       { title: '编号', dataIndex: 'id', width: 124 },
       { title: '用例名称', dataIndex: 'name', ellipsis: true },
@@ -242,6 +276,55 @@ export function TestCasesPage() {
     return created;
   };
 
+  const importFunctionalCases = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const result = await service.importTestCases(file);
+      await refreshRows();
+      void message.success(`已导入 ${result.importedCount} 条功能用例`);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '导入失败，请检查文件格式');
+    } finally {
+      setIsImporting(false);
+      if (functionalImportInputRef.current) functionalImportInputRef.current.value = '';
+    }
+  };
+
+  const readImportFile = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(new Error('无法读取导入文件'));
+      reader.readAsText(file);
+    });
+
+  const importApifoxCases = async (file: File) => {
+    if (selectedModule === 'all') {
+      void message.warning('请先选择具体模块');
+      return;
+    }
+    setIsImporting(true);
+    const createdCases: TestCaseRecord[] = [];
+    try {
+      const source = JSON.parse(await readImportFile(file)) as unknown;
+      const inputs = parseApifoxOpenApi(source, selectedModule);
+      for (const input of inputs) createdCases.push(await service.createTestCase(input));
+      await refreshRows();
+      void message.success(`已导入 ${inputs.length} 条接口用例`);
+    } catch (error) {
+      if (createdCases.length) {
+        await Promise.allSettled(
+          createdCases.map((testCase) => service.deleteTestCase(testCase.storageId)),
+        );
+        await refreshRows();
+      }
+      void message.error(error instanceof Error ? error.message : '导入 Apifox 用例失败');
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
   const updateCase = async ({ type: _type, ...input }: CreateTestCaseInput) => {
     if (!editingCase) throw new Error('没有正在编辑的用例');
     const updated = await service.updateTestCase(editingCase.storageId, input);
@@ -264,14 +347,62 @@ export function TestCasesPage() {
         title="测试用例"
         description="按模块维护功能、接口和UI自动化资产"
         actions={
-          <Button
-            aria-label={`新建${typeLabels[type]}`}
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setDrawerOpen(true)}
-          >
-            新建{typeLabels[type]}
-          </Button>
+          <div className="page-header-actions">
+            {type === 'functional' ? (
+              <>
+                <Button icon={<UploadOutlined />} loading={isImporting} onClick={() => functionalImportInputRef.current?.click()}>
+                  导入
+                </Button>
+                <input
+                  ref={functionalImportInputRef}
+                  className="case-apifox-import-input"
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  aria-label="导入功能用例"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void importFunctionalCases(file);
+                  }}
+                />
+              </>
+            ) : null}
+            {type === 'api' ? (
+              <>
+                <Button
+                  icon={<UploadOutlined />}
+                  loading={isImporting}
+                  onClick={() => {
+                    if (selectedModule === 'all') {
+                      void message.warning('请先选择具体模块');
+                      return;
+                    }
+                    importInputRef.current?.click();
+                  }}
+                >
+                  导入 Apifox 用例
+                </Button>
+                <input
+                  ref={importInputRef}
+                  className="case-apifox-import-input"
+                  type="file"
+                  accept=".json,application/json"
+                  aria-label="导入 Apifox 用例"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void importApifoxCases(file);
+                  }}
+                />
+              </>
+            ) : null}
+            <Button
+              aria-label={`新建${typeLabels[type]}`}
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setDrawerOpen(true)}
+            >
+              新建{typeLabels[type]}
+            </Button>
+          </div>
         }
       />
 
@@ -372,7 +503,7 @@ export function TestCasesPage() {
                     onChange: setSelectedStorageIds,
                     getCheckboxProps: (record) => ({ 'aria-label': `选择 ${record.id}` }),
                   }}
-                  scroll={{ x: type === 'api' ? 1180 : 900 }}
+                  scroll={{ x: type === 'functional' ? 1900 : type === 'api' ? 1180 : 900 }}
                 />
               ) : (
                 <Empty description="没有符合条件的测试用例" />

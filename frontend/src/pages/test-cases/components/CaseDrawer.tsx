@@ -1,14 +1,20 @@
-import { App, Button, Drawer, Form, Input, Modal, Select } from 'antd';
+import { App, Button, Checkbox, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
+import { useAuth } from '../../../services/AuthContext';
+import { usePlatformService } from '../../../services/PlatformServiceContext';
 import type {
   CreateTestCaseInput,
+  Priority,
   TestCaseRecord,
   TestCaseStatus,
   TestCaseType,
+  TestModule,
+  UserRecord,
 } from '../../../services/contracts';
 import { ApiAutomationCaseModal } from './ApiAutomationCaseModal';
 import { UiAutomationCaseModal } from './UiAutomationCaseModal';
 import { testCaseStatusOptions } from '../testCaseOptions';
+import { moduleSelectOptions } from '../moduleOptions';
 
 const { TextArea } = Input;
 
@@ -30,11 +36,17 @@ interface CaseDrawerProps {
 interface CaseFormValues {
   name: string;
   moduleId: string;
-  priority: CreateTestCaseInput['priority'];
-  status: TestCaseStatus;
+  requirementId?: string;
   precondition?: string;
-  steps?: string;
-  expected?: string;
+  steps: string;
+  expectedResult: string;
+  caseType: 'functional';
+  status: TestCaseStatus;
+  priority: Priority;
+  authorId: number;
+  iteration?: string;
+  isSmoke: boolean;
+  projectName: string;
 }
 
 export function CaseDrawer(props: CaseDrawerProps) {
@@ -74,19 +86,47 @@ function FunctionalCaseDrawer({
 }: CaseDrawerProps) {
   const [form] = Form.useForm<CaseFormValues>();
   const { message } = App.useApp();
+  const { user } = useAuth();
+  const service = usePlatformService();
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
+  const [modules, setModules] = useState<TestModule[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const title = `${initialCase ? '编辑' : '新建'}${typeLabels.functional}`;
 
   useEffect(() => {
-    if (open) {
-      form.setFieldsValue({
-        name: initialCase?.name,
-        moduleId: initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule),
-        priority: initialCase?.priority ?? 'P1',
-        status: initialCase?.status ?? '维护中',
-      });
-    }
-  }, [defaultModule, form, initialCase, open]);
+    if (!open) return;
+    form.resetFields();
+    form.setFieldsValue({
+      name: initialCase?.name,
+      moduleId: initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule),
+      requirementId: initialCase?.requirementId,
+      precondition: initialCase?.precondition ?? '',
+      steps: initialCase?.steps ?? '',
+      expectedResult: initialCase?.expectedResult ?? '',
+      caseType: 'functional',
+      status: initialCase?.status ?? '维护中',
+      priority: initialCase?.priority ?? 'P1',
+      authorId: user?.id ?? 1,
+      iteration: initialCase?.iteration ?? '',
+      isSmoke: initialCase?.isSmoke ?? false,
+      projectName: initialCase?.projectName ?? '测试平台',
+    });
+    let active = true;
+    void Promise.all([service.listTestModules(1), service.listUsers()]).then(
+      ([nextModules, nextUsers]) => {
+        if (!active) return;
+        setModules(nextModules);
+        setUsers(nextUsers);
+        if (initialCase) {
+          const author = nextUsers.find((item) => item.name === initialCase.creator);
+          if (author) form.setFieldValue('authorId', Number(author.id));
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [defaultModule, form, initialCase, open, service, user?.id]);
 
   const closeDrawer = () => {
     if (!form.isFieldsTouched()) {
@@ -106,10 +146,18 @@ function FunctionalCaseDrawer({
   const submit = async (values: CaseFormValues) => {
     const created = await onSubmit({
       type: 'functional',
+      authorId: values.authorId,
       moduleId: values.moduleId,
       name: values.name,
       priority: values.priority,
       status: values.status,
+      requirementId: values.requirementId?.trim() || undefined,
+      precondition: values.precondition?.trim() ?? '',
+      steps: values.steps.trim(),
+      expectedResult: values.expectedResult.trim(),
+      iteration: values.iteration?.trim() ?? '',
+      isSmoke: values.isSmoke,
+      projectName: values.projectName.trim(),
     });
     form.resetFields();
     onClose();
@@ -118,94 +166,83 @@ function FunctionalCaseDrawer({
 
   return (
     <>
-      <Drawer
+      <Modal
         title={title}
         aria-label={title}
-        className="case-drawer"
-        placement="right"
-        size={520}
+        className="functional-case-modal"
+        width={900}
         open={open}
         destroyOnHidden
-        onClose={closeDrawer}
-        footer={
-          <div className="case-drawer__footer">
-            <Button aria-label="取消" onClick={closeDrawer}>
-              取消
-            </Button>
-            <Button
-              type="primary"
-              aria-label={initialCase ? '保存' : '创建用例'}
-              onClick={() => form.submit()}
-            >
-              {initialCase ? '保存' : '创建用例'}
-            </Button>
-          </div>
-        }
+        centered
+        mask={{ closable: false }}
+        onCancel={closeDrawer}
+        footer={[
+          <Button key="cancel" aria-label="取消" onClick={closeDrawer}>取消</Button>,
+          <Button
+            key="submit"
+            type="primary"
+            aria-label={initialCase ? '保存' : '创建用例'}
+            onClick={() => form.submit()}
+          >
+            {initialCase ? '保存' : '创建用例'}
+          </Button>,
+        ]}
       >
         <Form
           form={form}
           layout="vertical"
-          requiredMark={false}
+          requiredMark="optional"
           onFinish={(values) => void submit(values)}
         >
-          <Form.Item name="name" label="用例名称" rules={[{ required: true, message: '请输入用例名称' }]}>
-            <Input placeholder="例如：刷新访问令牌" />
-          </Form.Item>
-
-          <div className="case-drawer__grid">
-            <Form.Item name="moduleId" label="所属模块" rules={[{ required: true }]}>
+          <div className="functional-case-form-grid">
+            <Form.Item name="moduleId" label="用例目录" rules={[{ required: true, message: '请选择用例目录' }]}>
+              <Select aria-label="用例目录" options={moduleSelectOptions(modules)} />
+            </Form.Item>
+            <Form.Item name="name" label="用例名称" rules={[{ required: true, whitespace: true, message: '请输入用例名称' }]}>
+              <Input maxLength={255} placeholder="例如：用户登录成功" />
+            </Form.Item>
+            <Form.Item name="requirementId" label="需求ID">
+              <Input maxLength={128} placeholder="例如：REQ-1024" />
+            </Form.Item>
+            <Form.Item name="caseType" label="用例类型" rules={[{ required: true }]}>
+              <Select aria-label="用例类型" disabled options={[{ value: 'functional', label: '功能用例' }]} />
+            </Form.Item>
+            <Form.Item name="status" label="用例状态" rules={[{ required: true, message: '请选择用例状态' }]}>
+              <Select aria-label="用例状态" options={testCaseStatusOptions.map((value) => ({ value, label: value }))} />
+            </Form.Item>
+            <Form.Item name="priority" label="用例等级" rules={[{ required: true, message: '请选择用例等级' }]}>
+              <Select aria-label="用例等级" options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))} />
+            </Form.Item>
+            <Form.Item name="authorId" label="创建人" rules={[{ required: true, message: '请选择创建人' }]}>
               <Select
-                id="case-module-select"
-                options={[
-                  { value: 'auth', label: '鉴权' },
-                  { value: 'payments', label: '支付' },
-                  { value: 'profile', label: '用户资料' },
-                ]}
+                aria-label="创建人"
+                options={users.map((item, index) => ({
+                  value: Number.isFinite(Number(item.id)) ? Number(item.id) : index + 1,
+                  label: item.name,
+                }))}
               />
             </Form.Item>
-            <Form.Item name="priority" label="优先级" rules={[{ required: true }]}>
-              <Select
-                id="case-priority-select"
-                options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))}
-              />
+            <Form.Item name="iteration" label="归属迭代">
+              <Input maxLength={128} placeholder="例如：Sprint 12" />
             </Form.Item>
-            {initialCase ? (
-              <Form.Item name="status" label="状态" rules={[{ required: true }]}>
-                <Select
-                  aria-label="状态"
-                  options={testCaseStatusOptions.map((value) => ({
-                    value,
-                    label: value,
-                  }))}
-                />
-              </Form.Item>
-            ) : null}
+            <Form.Item name="projectName" label="项目归属" rules={[{ required: true, whitespace: true, message: '请输入项目归属' }]}>
+              <Input maxLength={128} />
+            </Form.Item>
+            <Form.Item name="isSmoke" label="是否冒烟" valuePropName="checked">
+              <Checkbox>设为冒烟用例</Checkbox>
+            </Form.Item>
+            <Form.Item className="functional-case-field--full" name="precondition" label="前置条件">
+              <TextArea rows={3} maxLength={10000} placeholder="描述执行用例前需要满足的条件" />
+            </Form.Item>
+            <Form.Item className="functional-case-field--full" name="steps" label="用例步骤" rules={[{ required: true, whitespace: true, message: '请输入用例步骤' }]}>
+              <TextArea rows={5} maxLength={10000} placeholder="每行输入一个操作步骤" />
+            </Form.Item>
+            <Form.Item className="functional-case-field--full" name="expectedResult" label="预期结果" rules={[{ required: true, whitespace: true, message: '请输入预期结果' }]}>
+              <TextArea rows={3} maxLength={10000} placeholder="描述预期的业务结果" />
+            </Form.Item>
           </div>
-
-          {!initialCase ? (
-            <>
-              <Form.Item name="precondition" label="前置条件">
-                <TextArea rows={3} placeholder="描述执行用例前需要满足的条件" />
-              </Form.Item>
-              <Form.Item
-                name="steps"
-                label="测试步骤"
-                rules={[{ required: true, message: '请输入测试步骤' }]}
-              >
-                <TextArea rows={6} placeholder="每行输入一个操作步骤" />
-              </Form.Item>
-              <Form.Item
-                name="expected"
-                label="预期结果"
-                rules={[{ required: true, message: '请输入预期结果' }]}
-              >
-                <TextArea rows={4} placeholder="描述预期的业务结果" />
-              </Form.Item>
-            </>
-          ) : null}
-
         </Form>
-      </Drawer>
+      </Modal>
       <Modal
         title="放弃未保存内容？"
         open={discardConfirmationOpen}

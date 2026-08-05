@@ -189,6 +189,22 @@ body.is-resizing-module-panel {
   padding: 16px;
 }
 
+.page-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-apifox-import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .case-list-toolbar {
   display: grid;
   grid-template-columns: minmax(200px, 1fr) 120px 120px;
@@ -265,6 +281,32 @@ body.is-resizing-module-panel {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.functional-case-modal {
+  width: min(900px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px);
+}
+
+.functional-case-modal .ant-modal-body {
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+  padding-top: 16px;
+}
+
+.functional-case-modal .ant-modal-footer {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.functional-case-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.functional-case-field--full {
+  grid-column: 1 / -1;
 }
 
 .api-case-modal {
@@ -994,6 +1036,25 @@ body.is-resizing-module-panel {
   .case-drawer__grid {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+
+  .functional-case-modal {
+    top: 8px;
+    width: min(480px, calc(100vw - 16px)) !important;
+    max-width: calc(100vw - 16px);
+    margin: 8px auto;
+  }
+
+  .functional-case-modal .ant-modal-body {
+    max-height: calc(100vh - 170px);
+  }
+
+  .functional-case-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .functional-case-field--full {
+    grid-column: auto;
   }
 
   .ui-case-modal {

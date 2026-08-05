@@ -202,6 +202,46 @@ it('切换模块后过滤用例', async () => {
   expect(within(list).queryByText('用户登录')).not.toBeInTheDocument();
 });
 
+it('可以将 Apifox OpenAPI JSON 导入当前模块', async () => {
+  const user = userEvent.setup();
+  renderApp('/test-cases/api');
+
+  const list = await screen.findByRole('region', { name: '接口用例列表' });
+  await user.click(screen.getByRole('treeitem', { name: '支付' }));
+
+  const upload = screen.getByLabelText('导入 Apifox 用例');
+  const file = new File([
+    JSON.stringify({
+      openapi: '3.0.0',
+      paths: {
+        '/api/orders': {
+          post: {
+            summary: '创建订单',
+            parameters: [
+              { name: 'X-Trace-Id', in: 'header', example: 'trace-demo' },
+              { name: 'source', in: 'query', example: 'apifox' },
+            ],
+            requestBody: {
+              content: {
+                'application/json': {
+                  example: { itemId: 10086 },
+                },
+              },
+            },
+            responses: { '201': { description: 'created' } },
+          },
+        },
+      },
+    }),
+  ], 'apifox.json', { type: 'application/json' });
+
+  await user.upload(upload, file);
+
+  expect(await within(list).findByText('创建订单')).toBeInTheDocument();
+  expect(within(list).getByText('/api/orders')).toBeInTheDocument();
+  expect(await screen.findByText('已导入 1 条接口用例')).toBeInTheDocument();
+});
+
 it('可以添加和删除请求头', async () => {
   const user = userEvent.setup();
   renderApp('/test-cases/api?create=1');
