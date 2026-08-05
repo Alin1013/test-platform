@@ -212,6 +212,16 @@ npm run build        # 生成生产构建
 npm run e2e          # 运行 Playwright 端到端测试
 ```
 
+服务启动命令：
+后端：
+./.venv/bin/alembic upgrade head
+./.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+
+前端：
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1
+
 当前技术栈为 React 18、TypeScript、Vite、Ant Design、React Router、Recharts、Vitest、Testing Library 和 Playwright。
 
 后端技术栈为 Python 3.12、FastAPI、SQLAlchemy 2、Alembic、SQLite、Pydantic、OpenPyXL 和 Pytest。后端验证命令为 `./.venv/bin/pytest`。

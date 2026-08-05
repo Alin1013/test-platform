@@ -81,3 +81,25 @@ def test_functional_import_requires_standard_headers_and_persists_business_field
     )
     assert invalid.status_code == 422
     assert "表头不一致" in invalid.json()["detail"]
+
+
+def test_functional_import_uses_selected_module_and_apifox_enums(
+    client: TestClient,
+) -> None:
+    headers = "用例目录,用例名称,需求ID,前置条件,用例步骤,预期结果,用例类型,用例状态,用例等级,创建人,归属迭代,是否冒烟,项目归属"
+    row = ",导入 Apifox 功能用例,REQ-APIFOX,账号已启用,打开登录页,进入首页,功能测试,正常,中,江珊,Sprint 13,否,测试平台"
+    response = client.post(
+        "/api/v1/test-cases/import?module_id=auth",
+        files={"file": ("apifox-functional.csv", f"{headers}\n{row}".encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 201
+    imported = client.get(
+        "/api/v1/test-cases",
+        params={"type": "functional", "keyword": "导入 Apifox 功能用例"},
+    ).json()["items"][0]
+    assert imported["module_id"] == "auth"
+    assert imported["type"] == "functional"
+    assert imported["priority"] == "P1"
+    assert imported["status"] == "维护中"
+    assert imported["is_smoke"] is False
