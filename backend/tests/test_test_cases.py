@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
+
+from backend.app.database import Base
+from backend.app.main import create_app
 
 
 def test_modules_returns_project_tree(client: TestClient) -> None:
@@ -45,6 +50,79 @@ def test_can_create_module_and_reuse_same_name_in_parent(client: TestClient) -> 
         ("profile", "用户资料"),
         (module["id"], "登录"),
     }
+
+
+def test_can_update_and_delete_empty_module(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/modules",
+        json={"name": "临时模块", "project_id": 1},
+    ).json()
+
+    updated = client.patch(
+        f"/api/v1/modules/{created['id']}",
+        json={"name": "结算模块"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "结算模块"
+
+    deleted = client.delete(f"/api/v1/modules/{created['id']}")
+    assert deleted.status_code == 204
+    tree = client.get("/api/v1/modules", params={"project_id": 1}).json()
+    assert all(item["id"] != created["id"] for item in tree)
+
+
+def test_cannot_delete_module_that_contains_test_cases(client: TestClient) -> None:
+    response = client.delete("/api/v1/modules/auth")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "包含测试用例的模块不能删除"
+    assert client.get(
+        "/api/v1/test-cases", params={"module_id": "auth"}
+    ).json()["total"] > 0
+
+
+def test_modules_and_test_cases_survive_application_restart(tmp_path: Path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'persistent.db'}"
+    first_app = create_app(
+        database_url,
+        upload_dir=tmp_path / "first-uploads",
+        log_dir=tmp_path / "first-logs",
+    )
+    Base.metadata.create_all(first_app.state.session_factory.kw["bind"])
+    with TestClient(first_app) as first_client:
+        module = first_client.post(
+            "/api/v1/modules",
+            json={"name": "持久化模块", "project_id": 1},
+        ).json()
+        created_case = first_client.post(
+            "/api/v1/test-cases",
+            json={
+                "title": "重启后仍存在的用例",
+                "type": "functional",
+                "module_id": module["id"],
+                "priority": "P1",
+                "status": "草稿",
+                "author_id": 1,
+            },
+        )
+        assert created_case.status_code == 201
+
+    second_app = create_app(
+        database_url,
+        upload_dir=tmp_path / "second-uploads",
+        log_dir=tmp_path / "second-logs",
+    )
+    with TestClient(second_app) as second_client:
+        modules = second_client.get(
+            "/api/v1/modules", params={"project_id": 1}
+        ).json()
+        cases = second_client.get(
+            "/api/v1/test-cases", params={"module_id": module["id"]}
+        ).json()
+
+    assert any(item["id"] == module["id"] for item in modules)
+    assert cases["total"] == 1
+    assert cases["items"][0]["title"] == "重启后仍存在的用例"
 
 
 def test_functional_case_can_be_assigned_to_new_module(client: TestClient) -> None:

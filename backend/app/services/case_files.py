@@ -17,6 +17,7 @@ from ..case_file_schemas import TestCaseExportRequest
 from ..models import Module, TestCase, User
 from ..schemas import ApiDetailsCreate, TestCaseCreate, UiDetailsCreate
 from . import test_cases
+from .xmind_skill import STANDARD_HEADERS
 
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
 EXPORT_HEADERS = (
@@ -192,6 +193,24 @@ def export_cases(
         content=output_bytes.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="test-cases.xlsx",
+    )
+
+
+def export_generated_cases(cases: list[dict[str, Any]]) -> ExportedFile:
+    """导出尚未入库的 XMind 生成预览，表头顺序与 Skill 契约一致。"""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "XMind Generated Cases"
+    sheet.append(STANDARD_HEADERS)
+    for case in cases:
+        sheet.append([case.get(header, "") for header in STANDARD_HEADERS])
+    output_bytes = io.BytesIO()
+    workbook.save(output_bytes)
+    return ExportedFile(
+        content=output_bytes.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="xmind-generated-cases.xlsx",
     )
 
 

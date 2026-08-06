@@ -89,6 +89,42 @@ test('maps the project module tree to the platform contract', async () => {
   );
 });
 
+test('调用 XMind 生成、确认和导出接口', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/xmind/generate')) {
+      expect(init?.method).toBe('POST');
+      expect(init?.body).toBeInstanceOf(FormData);
+      expect(init?.signal).toBe(generationController.signal);
+      return jsonResponse({ record: { id: 1 }, tree: [], cases: [] }, 201);
+    }
+    if (url.endsWith('/xmind/confirm')) {
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        uploader_id: 1,
+        module_mapping: { '用户中心/注册模块': 'auth' },
+      });
+      return jsonResponse({ saved_cases: [] }, 201);
+    }
+    return new Response(new Uint8Array([80, 75, 3, 4]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    });
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+  const file = new File(['xmind'], '用户中心.xmind');
+  const generationController = new AbortController();
+
+  await expect(
+    service.generateXMind(file, 1, generationController.signal),
+  ).resolves.toMatchObject({ cases: [] });
+  await expect(
+    service.confirmXMind({ uploaderId: 1, moduleMapping: { '用户中心/注册模块': 'auth' }, cases: [] }),
+  ).resolves.toEqual({ saved_cases: [] });
+  const downloaded = await service.exportXMind([]);
+  expect(downloaded.size).toBe(4);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
+
 test('sends functional project, iteration, and smoke filters in list queries', async () => {
   const fetcher = vi.fn(async () => jsonResponse({ items: [], total: 0 }));
   const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
@@ -152,6 +188,34 @@ test('creates a project module through the backend contract', async () => {
     projectId: 1,
     children: [],
   });
+});
+
+test('updates and deletes a project module through the backend contract', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/modules/module-settlement') && init?.method === 'PATCH') {
+      expect(JSON.parse(String(init.body))).toEqual({ name: '结算模块' });
+      return jsonResponse({
+        id: 'module-settlement',
+        name: '结算模块',
+        parent_id: null,
+        project_id: 1,
+        children: [],
+      });
+    }
+    if (url.endsWith('/modules/module-settlement') && init?.method === 'DELETE') {
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(service.updateTestModule('module-settlement', { name: '结算模块' })).resolves.toMatchObject({
+    id: 'module-settlement',
+    name: '结算模块',
+  });
+  await service.deleteTestModule('module-settlement');
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
 test('sends contract mutations in the backend request shape', async () => {

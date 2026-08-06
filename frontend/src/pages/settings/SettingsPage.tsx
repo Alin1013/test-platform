@@ -39,8 +39,9 @@ export function SettingsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [form] = Form.useForm<SystemSettings>();
+  const initialTab = new URLSearchParams(location.search).get('tab');
   const [activeTab, setActiveTab] = useState(
-    new URLSearchParams(location.search).get('tab') === 'profile' ? 'profile' : 'general',
+    initialTab === 'profile' || initialTab === 'ai' ? initialTab : 'general',
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,7 +54,8 @@ export function SettingsPage() {
   const environments = Form.useWatch(['execution', 'environments'], form) ?? [];
 
   useEffect(() => {
-    setActiveTab(new URLSearchParams(location.search).get('tab') === 'profile' ? 'profile' : 'general');
+    const tab = new URLSearchParams(location.search).get('tab');
+    setActiveTab(tab === 'profile' || tab === 'ai' ? tab : 'general');
   }, [location.search]);
 
   useEffect(() => {

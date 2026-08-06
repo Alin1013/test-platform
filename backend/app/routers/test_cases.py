@@ -23,6 +23,7 @@ from ..schemas import (
     TestCaseCreate,
     TestCaseUpdate,
     TestModuleCreate,
+    TestModuleUpdate,
 )
 from ..services import case_files, debug_runner, test_cases
 
@@ -42,6 +43,24 @@ def create_module(
 ) -> JSONResponse:
     module, created = test_cases.create_module(session, payload)
     return JSONResponse(status_code=201 if created else 200, content=module)
+
+
+@router.patch("/modules/{module_id}")
+def update_module(
+    module_id: str,
+    payload: TestModuleUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    return test_cases.update_module(session, module_id, payload)
+
+
+@router.delete("/modules/{module_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_module(
+    module_id: str,
+    session: Annotated[Session, Depends(get_session)],
+) -> Response:
+    test_cases.delete_module(session, module_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/test-cases/filter-options")

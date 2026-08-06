@@ -155,6 +155,17 @@
   border-bottom: 1px solid var(--border);
 }
 
+.xmind-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.xmind-preview > .ant-alert {
+  margin: 16px 22px 0;
+}
+
 .xmind-preview__header > div {
   min-width: 0;
 }
@@ -221,6 +232,13 @@
 
 .xmind-tree__root {
   font-weight: 650;
+}
+
+.xmind-tree__branch > [role='treeitem'] {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
 }
 
 .xmind-tree__children {
@@ -294,6 +312,79 @@
   line-height: 1.6;
 }
 
+.xmind-mapping-list {
+  display: grid;
+  gap: 12px;
+}
+
+.xmind-mapping-list .xmind-mapping {
+  margin-top: 0;
+}
+
+.xmind-mapping .ant-select {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.xmind-case-preview {
+  padding: 20px 22px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.xmind-case-preview > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e9eef4;
+}
+
+.xmind-case-preview h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.xmind-case-preview header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.xmind-case-preview__table-wrap {
+  overflow-x: auto;
+}
+
+.xmind-case-preview table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: #344a61;
+  font-size: 12px;
+}
+
+.xmind-case-preview th,
+.xmind-case-preview td {
+  max-width: 260px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #edf1f5;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.xmind-case-preview th {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.xmind-generating-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 .xmind-complete {
   display: flex;
   min-height: 430px;
@@ -356,6 +447,19 @@
   .xmind-uploading,
   .xmind-preview__header,
   .xmind-preview-panel {
+    padding: 18px;
+  }
+
+  .xmind-preview__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .xmind-preview__actions .ant-btn {
+    flex: 1 1 100%;
+  }
+
+  .xmind-case-preview {
     padding: 18px;
   }
 

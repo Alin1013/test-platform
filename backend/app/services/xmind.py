@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session
 
 from ..models import Module, User, XMindRecord
 from ..schemas import TestCaseCreate
-from . import test_cases
+from ..xmind_schemas import XMindConfirmRequest
+from . import settings, test_cases
+from .xmind_skill import (
+    LLMConfig,
+    OpenAICompatibleClient,
+    XMindToTestCaseSkill,
+    align_generated_cases,
+)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
@@ -211,4 +218,137 @@ def save_upload(
             }
             for test_case in saved_cases
         ],
+    }
+
+
+async def generate_upload(
+    session: Session,
+    *,
+    original_name: str,
+    content: bytes,
+    uploader_id: int,
+    upload_dir: Path,
+    llm_transport: Any = None,
+) -> dict:
+    """解析并生成完整预览；模型失败时不保存文件或生成记录。"""
+
+    uploader = session.get(User, uploader_id)
+    if uploader is None:
+        raise HTTPException(status_code=404, detail="Uploader not found")
+    tree = parse_xmind(content)
+    ai_settings = settings.get_settings(session)["ai"]
+    skill = XMindToTestCaseSkill(
+        OpenAICompatibleClient(transport=llm_transport),
+    )
+    cases = await skill.generate(
+        tree,
+        config=LLMConfig(
+            api_key=ai_settings["apiKey"],
+            base_url=ai_settings["baseUrl"],
+            model=ai_settings["defaultModel"],
+        ),
+        creator=uploader.name,
+    )
+
+    stored_name = f"{uuid4().hex}.xmind"
+    destination = upload_dir / stored_name
+    record = XMindRecord(
+        file_name=original_name,
+        file_url=f"/uploads/{stored_name}",
+        uploader_id=uploader_id,
+        parsed_cases_count=len(cases),
+    )
+    try:
+        destination.write_bytes(content)
+        session.add(record)
+        session.commit()
+    except Exception:
+        session.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    return {
+        "record": {
+            "id": record.id,
+            "file_name": record.file_name,
+            "file_url": record.file_url,
+            "uploader_id": record.uploader_id,
+            "parsed_cases_count": record.parsed_cases_count,
+            "created_at": record.created_at,
+        },
+        "tree": tree,
+        "cases": cases,
+    }
+
+
+def confirm_generated_cases(session: Session, payload: XMindConfirmRequest) -> dict:
+    """将用户确认的功能预览按目录映射一次性写入正式用例库。"""
+
+    uploader = session.get(User, payload.uploader_id)
+    if uploader is None:
+        raise HTTPException(status_code=404, detail="Uploader not found")
+    cases_with_directories = [
+        case.model_dump(by_alias=True) for case in payload.cases
+    ]
+    directories = {case["用例目录"].strip() for case in cases_with_directories}
+    if "" in directories:
+        raise HTTPException(status_code=422, detail="每条用例都必须包含用例目录")
+    missing_names = sorted(directories - payload.module_mapping.keys())
+    if missing_names:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing module mappings: {', '.join(missing_names)}",
+        )
+    missing_modules = sorted(
+        {
+            module_id
+            for module_id in payload.module_mapping.values()
+            if session.get(Module, module_id) is None
+        }
+    )
+    if missing_modules:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Mapped modules not found: {', '.join(missing_modules)}",
+        )
+
+    saved_cases = []
+    try:
+        for raw_case in cases_with_directories:
+            normalized = align_generated_cases(
+                [raw_case],
+                directory=raw_case["用例目录"],
+                creator=uploader.name,
+            )[0]
+            saved_cases.append(
+                test_cases.add_case(
+                    session,
+                    TestCaseCreate(
+                        title=normalized["用例名称"],
+                        type="functional",
+                        module_id=payload.module_mapping[normalized["用例目录"]],
+                        priority=normalized["用例等级"],
+                        status="草稿",
+                        author_id=payload.uploader_id,
+                        requirement_id=normalized["需求ID"] or None,
+                        precondition=normalized["前置条件"],
+                        test_steps=normalized["用例步骤"],
+                        expected_result=normalized["预期结果"],
+                        iteration=normalized["归属迭代"],
+                    ),
+                )
+            )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return {
+        "saved_cases": [
+            {
+                "id": test_case.id,
+                "code": test_case.code,
+                "title": test_case.title,
+                "module_id": test_case.module_id,
+            }
+            for test_case in saved_cases
+        ]
     }

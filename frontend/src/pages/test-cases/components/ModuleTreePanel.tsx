@@ -5,7 +5,7 @@ import {
   MenuFoldOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { Button, Dropdown, Input, Modal, Tooltip } from 'antd';
+import { App, Button, Dropdown, Input, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
@@ -55,7 +55,11 @@ type DialogState =
   | { type: 'delete'; node: ModuleNode }
   | null;
 
-function updateNode(nodes: ModuleNode[], nodeId: string, update: (node: ModuleNode) => ModuleNode): ModuleNode[] {
+function updateNode(
+  nodes: ModuleNode[],
+  nodeId: string,
+  update: (node: ModuleNode) => ModuleNode,
+): ModuleNode[] {
   return nodes.map((node) => {
     if (node.id === nodeId) return update(node);
     if (!node.children?.length) return node;
@@ -66,7 +70,10 @@ function updateNode(nodes: ModuleNode[], nodeId: string, update: (node: ModuleNo
 function removeNode(nodes: ModuleNode[], nodeId: string): ModuleNode[] {
   return nodes
     .filter((node) => node.id !== nodeId)
-    .map((node) => (node.children?.length ? { ...node, children: removeNode(node.children, nodeId) } : node));
+    .map((node) => ({
+      ...node,
+      children: node.children?.length ? removeNode(node.children, nodeId) : node.children,
+    }));
 }
 
 function findNode(nodes: ModuleNode[], nodeId: string): ModuleNode | undefined {
@@ -88,11 +95,18 @@ export function ModuleTreePanel({
   onCollapse,
 }: ModuleTreePanelProps) {
   const service = usePlatformService();
+  const { message } = App.useApp();
   const [moduleTree, setModuleTree] = useState<ModuleNode[]>([]);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<DialogState>(null);
   const [draftName, setDraftName] = useState('');
+  const [isMutating, setIsMutating] = useState(false);
   const resizeOrigin = useRef<{ pointerX: number; width: number } | null>(null);
+
+  const reloadModules = async () => {
+    const modules = await service.listTestModules(1);
+    setModuleTree(toModuleNodes(modules));
+  };
 
   useEffect(() => {
     let active = true;
@@ -150,44 +164,71 @@ export function ModuleTreePanel({
     onClick: ({ key }) => handleMenuClick(node, key),
   });
 
-  const submitName = () => {
+  const submitName = async () => {
     const label = draftName.trim();
     if (!label || !dialog || dialog.type === 'delete') return;
 
-    if (dialog.type === 'addRoot') {
-      const rootNode: ModuleNode = {
-        id: `root-${Date.now()}`,
-        label,
-      };
-      setModuleTree((nodes) => [...nodes, rootNode]);
-    } else if (dialog.type === 'rename') {
-      setModuleTree((nodes) => updateNode(nodes, dialog.node.id, (node) => ({ ...node, label })));
+    const currentDialog = dialog;
+    setIsMutating(true);
+    if (currentDialog.type === 'addRoot') {
+      setModuleTree((nodes) => [...nodes, { id: `pending-${Date.now()}`, label, children: [] }]);
+    } else if (currentDialog.type === 'rename') {
+      setModuleTree((nodes) => updateNode(nodes, currentDialog.node.id, (node) => ({ ...node, label })));
     } else {
-      const child: ModuleNode = {
-        id: `${dialog.node.id}-${Date.now()}`,
-        label,
-      };
       setModuleTree((nodes) =>
-        updateNode(nodes, dialog.node.id, (node) => ({
+        updateNode(nodes, currentDialog.node.id, (node) => ({
           ...node,
-          children: [...(node.children ?? []), child],
+          children: [...(node.children ?? []), { id: `pending-${Date.now()}`, label, children: [] }],
         })),
       );
-      setExpandedNodeIds((currentIds) => new Set(currentIds).add(dialog.node.id));
+      setExpandedNodeIds((currentIds) => new Set(currentIds).add(currentDialog.node.id));
     }
-    setDialog(null);
+    try {
+      if (currentDialog.type === 'addRoot') {
+        await service.createTestModule({ name: label, projectId: 1 });
+      } else if (currentDialog.type === 'rename') {
+        await service.updateTestModule(currentDialog.node.id, { name: label });
+      } else {
+        await service.createTestModule({
+          name: label,
+          parentId: currentDialog.node.id,
+          projectId: 1,
+        });
+      }
+      await reloadModules();
+      setDialog(null);
+    } catch (error) {
+      await reloadModules().catch(() => undefined);
+      void message.error(error instanceof Error ? error.message : '保存模块失败');
+    } finally {
+      setIsMutating(false);
+    }
   };
 
-  const deleteNode = () => {
+  const deleteNode = async () => {
     if (!dialog || dialog.type !== 'delete') return;
-    setModuleTree((nodes) => removeNode(nodes, dialog.node.id));
+
+    const currentDialog = dialog;
+    setIsMutating(true);
+    setModuleTree((nodes) => removeNode(nodes, currentDialog.node.id));
     setExpandedNodeIds((currentIds) => {
       const nextIds = new Set(currentIds);
-      nextIds.delete(dialog.node.id);
+      nextIds.delete(currentDialog.node.id);
       return nextIds;
     });
-    if (selectedModule === dialog.node.id || findNode([dialog.node], selectedModule)) onSelect('all');
-    setDialog(null);
+    if (selectedModule === currentDialog.node.id || findNode([currentDialog.node], selectedModule)) {
+      onSelect('all');
+    }
+    try {
+      await service.deleteTestModule(currentDialog.node.id);
+      await reloadModules();
+      setDialog(null);
+    } catch (error) {
+      await reloadModules().catch(() => undefined);
+      void message.error(error instanceof Error ? error.message : '删除模块失败');
+    } finally {
+      setIsMutating(false);
+    }
   };
 
   const renderActions = (node: ModuleNode) => (
@@ -336,7 +377,7 @@ export function ModuleTreePanel({
         cancelText="取消"
         onOk={submitName}
         onCancel={() => setDialog(null)}
-        okButtonProps={{ 'aria-label': '确定', disabled: !draftName.trim() }}
+        okButtonProps={{ 'aria-label': '确定', disabled: !draftName.trim(), loading: isMutating }}
         cancelButtonProps={{ 'aria-label': '取消' }}
       >
         <Input
@@ -354,7 +395,7 @@ export function ModuleTreePanel({
         destroyOnHidden
         okText="删除"
         cancelText="取消"
-        okButtonProps={{ 'aria-label': '删除', danger: true }}
+        okButtonProps={{ 'aria-label': '删除', danger: true, loading: isMutating }}
         cancelButtonProps={{ 'aria-label': '取消' }}
         onOk={deleteNode}
         onCancel={() => setDialog(null)}

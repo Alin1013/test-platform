@@ -55,6 +55,10 @@ export interface CreateTestModuleInput {
   projectId?: number;
 }
 
+export interface UpdateTestModuleInput {
+  name: string;
+}
+
 export interface ApiKeyValueItem {
   enabled: boolean;
   key: string;
@@ -144,6 +148,53 @@ export type UpdateTestCaseInput = Omit<CreateTestCaseInput, 'type'>;
 export interface TestCaseImportResult {
   importedCount: number;
   codes: string[];
+}
+
+export interface XMindTreeNode {
+  title: string;
+  children: XMindTreeNode[];
+}
+
+export interface XMindGeneratedCase {
+  用例目录: string;
+  用例名称: string;
+  需求ID: string;
+  前置条件: string;
+  用例类型: '功能测试';
+  用例状态: TestCaseStatus;
+  用例等级: Priority;
+  创建人: string;
+  归属迭代: string;
+  用例步骤: string;
+  预期结果: string;
+}
+
+export interface XMindGenerationResult {
+  record: {
+    id: number;
+    file_name: string;
+    file_url: string;
+    uploader_id: number;
+    parsed_cases_count: number;
+    created_at: string;
+  };
+  tree: XMindTreeNode[];
+  cases: XMindGeneratedCase[];
+}
+
+export interface XMindConfirmInput {
+  uploaderId: number;
+  moduleMapping: Record<string, string>;
+  cases: XMindGeneratedCase[];
+}
+
+export interface XMindConfirmResult {
+  saved_cases: Array<{
+    id: number;
+    code: string;
+    title: string;
+    module_id: string;
+  }>;
 }
 
 export interface UserRecord {
@@ -378,6 +429,8 @@ export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestModules(projectId?: number): Promise<TestModule[]>;
   createTestModule(input: CreateTestModuleInput): Promise<TestModule>;
+  updateTestModule(moduleId: string, input: UpdateTestModuleInput): Promise<TestModule>;
+  deleteTestModule(moduleId: string): Promise<void>;
   getTestCaseFilterOptions(type?: TestCaseType): Promise<TestCaseFilterOptions>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
@@ -403,4 +456,11 @@ export interface PlatformService {
   stopApiExecution(executionId: string): Promise<void>;
   debugApiCase(input: ApiDebugInput): Promise<ApiDebugResult>;
   debugUiCase(input: UiDebugInput): Promise<UiDebugResult>;
+  generateXMind(
+    file: File,
+    uploaderId?: number,
+    signal?: AbortSignal,
+  ): Promise<XMindGenerationResult>;
+  confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult>;
+  exportXMind(cases: XMindGeneratedCase[]): Promise<Blob>;
 }

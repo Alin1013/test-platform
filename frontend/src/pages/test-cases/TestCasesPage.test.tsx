@@ -637,28 +637,39 @@ it('新增子目录后可以删除该目录', async () => {
   await user.type(within(addDialog).getByRole('textbox', { name: '目录名称' }), '审计');
   await user.click(within(addDialog).getByRole('button', { name: '确定' }));
 
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: '新增子目录' })).not.toBeInTheDocument();
+  });
+
   expect(await screen.findByRole('treeitem', { name: '审计' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: '审计 操作' }));
   await user.click(screen.getByRole('menuitem', { name: '删除' }));
 
   const deleteDialog = await screen.findByRole('dialog', { name: '删除模块' });
   await user.click(within(deleteDialog).getByRole('button', { name: '删除' }));
-  expect(screen.queryByRole('treeitem', { name: '审计' })).not.toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.queryByRole('treeitem', { name: '审计' })).not.toBeInTheDocument();
+  });
 });
 
 it('新增子目录嵌套在父目录内并支持展开折叠', async () => {
   const user = userEvent.setup();
   renderApp('/test-cases/functional');
 
-  const parent = await screen.findByRole('treeitem', { name: '鉴权' });
+  await screen.findByRole('treeitem', { name: '鉴权' });
   await user.click(screen.getByRole('button', { name: '鉴权 操作' }));
   await user.click(screen.getByRole('menuitem', { name: '新增子目录' }));
   const addDialog = await screen.findByRole('dialog', { name: '新增子目录' });
   await user.type(within(addDialog).getByRole('textbox', { name: '目录名称' }), '审计');
   await user.click(within(addDialog).getByRole('button', { name: '确定' }));
 
-  expect(parent).toHaveAttribute('aria-level', '1');
-  expect(parent).toHaveAttribute('aria-expanded', 'true');
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: '新增子目录' })).not.toBeInTheDocument();
+  });
+
+  const persistedParent = screen.getByRole('treeitem', { name: '鉴权' });
+  expect(persistedParent).toHaveAttribute('aria-level', '1');
+  expect(persistedParent).toHaveAttribute('aria-expanded', 'true');
   expect(await screen.findByRole('treeitem', { name: '审计' })).toHaveAttribute('aria-level', '2');
 
   await user.click(screen.getByRole('button', { name: '折叠 鉴权' }));

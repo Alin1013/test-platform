@@ -28,6 +28,40 @@ it('创建新模块后返回可用于归类用例的模块 ID，并更新模块�
   });
 });
 
+it('重命名和删除模块后列表仍反映持久化结果', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const created = await service.createTestModule({ name: '临时模块' });
+
+  await expect(service.updateTestModule(created.id, { name: '结算模块' })).resolves.toMatchObject({
+    id: created.id,
+    name: '结算模块',
+  });
+  expect((await service.listTestModules(1)).some((module) => module.name === '结算模块')).toBe(true);
+
+  await service.deleteTestModule(created.id);
+  expect((await service.listTestModules(1)).some((module) => module.id === created.id)).toBe(false);
+});
+
+it('XMind 确认存在无效目录映射时不会保存部分用例', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const before = await service.listTestCases({ type: 'functional' });
+  const generated = await service.generateXMind(new File(['xmind'], '登录.xmind'));
+  const cases = [
+    generated.cases[0],
+    { ...generated.cases[1], 用例目录: '不存在/目录' },
+  ];
+
+  await expect(
+    service.confirmXMind({
+      uploaderId: 1,
+      moduleMapping: { '核心模块/鉴权': 'auth' },
+      cases,
+    }),
+  ).rejects.toThrow('模块映射不存在：不存在/目录');
+
+  await expect(service.listTestCases({ type: 'functional' })).resolves.toEqual(before);
+});
+
 it('创建接口用例后返回在列表首行', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const created = await service.createTestCase({

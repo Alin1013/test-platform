@@ -124,6 +124,12 @@ class TestModuleCreate(BaseModel):
     project_id: int = Field(default=1, gt=0)
 
 
+class TestModuleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+
+
 class UiStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

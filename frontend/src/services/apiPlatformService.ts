@@ -17,12 +17,17 @@ import type {
   TestCaseStatus,
   TestCaseType,
   TestModule,
+  UpdateTestModuleInput,
   UiExecutionInput,
   UiExecutionResult,
   UiDebugInput,
   UiDebugResult,
   UpdateTestCaseInput,
   UserRecord,
+  XMindConfirmInput,
+  XMindConfirmResult,
+  XMindGeneratedCase,
+  XMindGenerationResult,
 } from './contracts';
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -31,6 +36,8 @@ interface ApiPlatformServiceOptions {
   baseUrl: string;
   fetcher?: Fetcher;
 }
+
+export const DEFAULT_PLATFORM_API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 interface Page<T> {
   items: T[];
@@ -303,6 +310,25 @@ export function createApiPlatformService({
     return (await response.json()) as T;
   };
 
+  const download = async (path: string, init: RequestInit): Promise<Blob> => {
+    const headers = new Headers(init.headers);
+    if (init.body && !(init.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
+    const response = await fetcher(`${normalizedBaseUrl}${path}`, { ...init, headers });
+    if (!response.ok) {
+      const errorBody = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+      const detail =
+        typeof errorBody?.detail === 'string'
+          ? errorBody.detail
+          : errorBody?.detail
+            ? JSON.stringify(errorBody.detail)
+            : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+    return response.blob();
+  };
+
   return {
     async getDashboard(): Promise<DashboardData> {
       const [stats, recent] = await Promise.all([
@@ -338,6 +364,18 @@ export function createApiPlatformService({
         }),
       });
       return mapModule(module);
+    },
+
+    async updateTestModule(moduleId: string, input: UpdateTestModuleInput) {
+      const module = await request<ApiTestModule>(`/modules/${encodeURIComponent(moduleId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: input.name }),
+      });
+      return mapModule(module);
+    },
+
+    async deleteTestModule(moduleId: string) {
+      await request(`/modules/${encodeURIComponent(moduleId)}`, { method: 'DELETE' });
     },
 
     async getTestCaseFilterOptions(type?: TestCaseType) {
@@ -568,6 +606,39 @@ export function createApiPlatformService({
         screenshotUrl: resolveArtifactUrl(response.data.screenshotUrl),
         videoUrl: resolveArtifactUrl(response.data.videoUrl),
       };
+    },
+
+    async generateXMind(
+      file: File,
+      uploaderId = 1,
+      signal?: AbortSignal,
+    ): Promise<XMindGenerationResult> {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('uploader_id', String(uploaderId));
+      return request<XMindGenerationResult>('/xmind/generate', {
+        method: 'POST',
+        body,
+        signal,
+      });
+    },
+
+    async confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult> {
+      return request<XMindConfirmResult>('/xmind/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          uploader_id: input.uploaderId,
+          module_mapping: input.moduleMapping,
+          cases: input.cases,
+        }),
+      });
+    },
+
+    async exportXMind(cases: XMindGeneratedCase[]): Promise<Blob> {
+      return download('/xmind/export', {
+        method: 'POST',
+        body: JSON.stringify({ cases }),
+      });
     },
   };
 }

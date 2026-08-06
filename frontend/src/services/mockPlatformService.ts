@@ -19,11 +19,16 @@ import type {
   TestCaseRecord,
   TestCaseType,
   TestModule,
+  UpdateTestModuleInput,
   UpdateTestCaseInput,
   UiExecutionInput,
   UiExecutionResult,
   UiDebugInput,
   UserRecord,
+  XMindConfirmInput,
+  XMindConfirmResult,
+  XMindGeneratedCase,
+  XMindGenerationResult,
 } from './contracts';
 
 interface MockServiceOptions {
@@ -59,6 +64,35 @@ function updateModuleChildren(
       children: updateModuleChildren(module.children, moduleId, update),
     };
   });
+}
+
+function updateModule(
+  modules: TestModule[],
+  moduleId: string,
+  update: (module: TestModule) => TestModule,
+): TestModule[] {
+  return modules.map((module) => {
+    if (module.id === moduleId) return update(module);
+    if (!module.children.length) return module;
+    return { ...module, children: updateModule(module.children, moduleId, update) };
+  });
+}
+
+function removeModule(modules: TestModule[], moduleId: string): TestModule[] {
+  return modules
+    .filter((module) => module.id !== moduleId)
+    .map((module) => ({
+      ...module,
+      children: removeModule(module.children, moduleId),
+    }));
+}
+
+function flattenModuleIds(module: TestModule): string[] {
+  return [module.id, ...module.children.flatMap(flattenModuleIds)];
+}
+
+function flattenModules(modules: TestModule[]): TestModule[] {
+  return modules.flatMap((module) => [module, ...flattenModules(module.children)]);
 }
 
 export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
@@ -182,6 +216,32 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         modules = [...modules, created];
       }
       return respond(created);
+    },
+
+    async updateTestModule(moduleId: string, input: UpdateTestModuleInput) {
+      const existing = findModuleById(modules, moduleId);
+      if (!existing) throw new Error('模块不存在');
+      const name = input.name.trim();
+      if (!name) throw new Error('模块名称不能为空');
+      const siblings = flattenModules(modules)
+        .filter((module) => module.parentId === existing.parentId && module.id !== moduleId);
+      if (siblings.some((module) => module.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        throw new Error('同级模块名称已存在');
+      }
+      const updated = { ...existing, name };
+      modules = updateModule(modules, moduleId, () => updated);
+      return respond(updated);
+    },
+
+    async deleteTestModule(moduleId: string) {
+      const existing = findModuleById(modules, moduleId);
+      if (!existing) throw new Error('模块不存在');
+      const moduleIds = new Set(flattenModuleIds(existing));
+      if (testCases.some((testCase) => moduleIds.has(testCase.moduleId))) {
+        throw new Error('包含测试用例的模块不能删除');
+      }
+      modules = removeModule(modules, moduleId);
+      await respond(undefined);
     },
 
     async getTestCaseFilterOptions(type?: TestCaseType) {
@@ -467,6 +527,101 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       );
       execution.summary.pendingApi = 0;
       await respond(undefined);
+    },
+
+    async generateXMind(file: File, uploaderId = 1): Promise<XMindGenerationResult> {
+      const cases: XMindGeneratedCase[] = Array.from({ length: 6 }, (_, index) => ({
+        用例目录: '核心模块/鉴权',
+        用例名称: index % 2 === 0 ? `登录正向场景 ${index + 1}` : `登录异常场景 ${index + 1}`,
+        需求ID: '',
+        前置条件: '测试账号已准备',
+        用例类型: '功能测试',
+        用例状态: '草稿',
+        用例等级: index === 0 ? 'P1' : 'P2',
+        创建人: users.find((user) => Number(user.id) === uploaderId)?.name ?? '江珊',
+        归属迭代: '',
+        用例步骤: `1. 执行登录场景 ${index + 1}`,
+        预期结果: `1. 系统正确处理登录场景 ${index + 1}`,
+      }));
+      return respond({
+        record: {
+          id: 1,
+          file_name: file.name,
+          file_url: '/uploads/mock.xmind',
+          uploader_id: uploaderId,
+          parsed_cases_count: cases.length,
+          created_at: new Date().toISOString(),
+        },
+        tree: [
+          {
+            title: '登录',
+            children: [
+              { title: '成功登录', children: [] },
+              { title: '登录失败', children: [] },
+            ],
+          },
+        ],
+        cases,
+      });
+    },
+
+    async confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult> {
+      const resolvedCases = input.cases.map((item) => {
+        const moduleId = input.moduleMapping[item.用例目录];
+        if (!moduleId || !findModuleById(modules, moduleId)) {
+          throw new Error(`模块映射不存在：${item.用例目录}`);
+        }
+        return { item, moduleId };
+      });
+      const author = users.find((user) => Number(user.id) === input.uploaderId);
+      const createdCases = resolvedCases.map(({ item, moduleId }, index) => {
+        const created: TestCaseRecord = {
+          storageId: storageIdSequence + index,
+          id: `FUN-${caseSequence + index}`,
+          type: 'functional',
+          moduleId,
+          name: item.用例名称,
+          priority: item.用例等级,
+          status: '草稿',
+          maintainer: author?.name ?? '江珊',
+          creator: author?.name ?? '江珊',
+          updatedAt: '刚刚',
+          requirementId: item.需求ID || undefined,
+          precondition: item.前置条件,
+          steps: item.用例步骤,
+          expectedResult: item.预期结果,
+          iteration: item.归属迭代,
+          projectName: '测试平台',
+          isSmoke: false,
+        };
+        return created;
+      });
+      storageIdSequence += createdCases.length;
+      caseSequence += createdCases.length;
+      testCases = [...createdCases, ...testCases];
+      return respond({
+        saved_cases: createdCases.map((created) => ({
+          id: created.storageId,
+          code: created.id,
+          title: created.name,
+          module_id: created.moduleId,
+        })),
+      });
+    },
+
+    async exportXMind(cases: XMindGeneratedCase[]): Promise<Blob> {
+      const { utils, write } = await import('xlsx');
+      const headers = [
+        '用例目录', '用例名称', '需求ID', '前置条件', '用例类型', '用例状态',
+        '用例等级', '创建人', '归属迭代', '用例步骤', '预期结果',
+      ];
+      const workbook = utils.book_new();
+      const sheet = utils.json_to_sheet(cases, { header: headers });
+      utils.book_append_sheet(workbook, sheet, 'XMind Generated Cases');
+      const output = write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+      return new Blob([output], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
     },
 
     async debugApiCase(input: ApiDebugInput) {

@@ -48,6 +48,7 @@ def create_app(
     app.state.upload_dir = resolved_upload_dir
     app.state.request_log_path = resolved_log_dir / LOG_FILE_NAME
     app.state.api_debug_transport = None
+    app.state.xmind_llm_transport = None
     app.state.ui_runner = PlaywrightUiRunner(resolved_upload_dir)
     app.add_middleware(
         CORSMiddleware,

@@ -134,7 +134,7 @@ frontend/
 | `debugApiCase(input)` | 同步调试当前 API 表单配置并返回请求、响应、断言和提取结果 |
 | `debugUiCase(input)` | 同步调试当前 UI 步骤并返回逐步结果、日志和媒体地址 |
 
-`PlatformServiceContext` 负责向页面注入具体服务。未配置环境变量时使用内存 Mock；设置 `VITE_API_BASE_URL` 后使用 `apiPlatformService` 调用真实后端，页面层不依赖具体传输协议。
+`PlatformServiceContext` 负责向页面注入具体服务。开发和生产运行默认连接 `http://127.0.0.1:8000/api/v1`，模块目录和三类测试用例均通过 `apiPlatformService` 写入后端数据库；`VITE_API_BASE_URL` 可覆盖该地址。只有自动化测试环境使用隔离的内存 Mock，页面层不依赖具体传输协议。
 
 自动化执行后端提供以下公共接口：
 

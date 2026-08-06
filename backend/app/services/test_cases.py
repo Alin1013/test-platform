@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from ..models import ApiCaseDetails, Module, TestCase, UiCaseDetails, User
-from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate
+from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate, TestModuleUpdate
 
 
 def module_tree(session: Session, project_id: int) -> list[dict]:
@@ -61,6 +61,63 @@ def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bo
     session.add(module)
     session.commit()
     return _serialize_module(module), True
+
+
+def update_module(session: Session, module_id: str, payload: TestModuleUpdate) -> dict:
+    module = session.get(Module, module_id)
+    if module is None:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Module name is required")
+    duplicate = session.scalar(
+        select(Module).where(
+            Module.id != module_id,
+            Module.project_id == module.project_id,
+            Module.parent_id == module.parent_id,
+            func.lower(Module.name) == name.lower(),
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="同级模块名称已存在",
+        )
+
+    module.name = name
+    session.commit()
+    return _serialize_module(module)
+
+
+def delete_module(session: Session, module_id: str) -> None:
+    module = session.get(Module, module_id)
+    if module is None:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    module_ids = [module_id]
+    index = 0
+    while index < len(module_ids):
+        children = session.scalars(
+            select(Module.id).where(Module.parent_id == module_ids[index])
+        ).all()
+        module_ids.extend(children)
+        index += 1
+
+    existing_case = session.scalar(
+        select(TestCase.id)
+        .where(TestCase.module_id.in_(module_ids))
+        .limit(1)
+    )
+    if existing_case is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="包含测试用例的模块不能删除",
+        )
+
+    for descendant_id in reversed(module_ids):
+        session.delete(session.get(Module, descendant_id))
+    session.commit()
 
 
 def _serialize_module(module: Module) -> dict:

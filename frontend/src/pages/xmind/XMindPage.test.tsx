@@ -24,7 +24,7 @@ it('校验 XMind 文件并生成测试用例', async () => {
   await user.click(screen.getByRole('button', { name: '开始完整解析' }));
   expect(await screen.findByText('已生成 6 条测试用例')).toBeInTheDocument();
 
-  await user.click(screen.getByRole('button', { name: '查看接口用例' }));
+  await user.click(screen.getByRole('button', { name: '查看功能用例' }));
   expect(await screen.findByRole('heading', { name: '测试用例' })).toBeInTheDocument();
 });
 
