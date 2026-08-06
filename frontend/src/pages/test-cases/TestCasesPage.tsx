@@ -268,10 +268,8 @@ export function TestCasesPage() {
   const columns: ColumnsType<TestCaseRecord> = (() => {
     if (type === 'functional') {
       return [
-        { title: '编号', dataIndex: 'id', width: 124 },
         { title: '用例目录', dataIndex: 'moduleId', width: 110 },
         { title: '用例名称', dataIndex: 'name', width: 180, ellipsis: true },
-        { title: '需求ID', dataIndex: 'requirementId', width: 110, render: (value) => value || '-' },
         { title: '前置条件', dataIndex: 'precondition', width: 180, ellipsis: true, render: (value) => value || '-' },
         { title: '用例步骤', dataIndex: 'steps', width: 220, ellipsis: true, render: (value) => value || '-' },
         { title: '预期结果', dataIndex: 'expectedResult', width: 200, ellipsis: true, render: (value) => value || '-' },
@@ -297,7 +295,6 @@ export function TestCasesPage() {
       ];
     }
     const base: ColumnsType<TestCaseRecord> = [
-      { title: '编号', dataIndex: 'id', width: 124 },
       { title: '用例名称', dataIndex: 'name', ellipsis: true },
     ];
     if (type === 'api') {
@@ -562,7 +559,7 @@ export function TestCasesPage() {
             <Input
               className="case-list-toolbar__search"
               prefix={<SearchOutlined />}
-              placeholder="搜索编号、名称或接口地址"
+              placeholder="搜索用例名称或接口地址"
               allowClear
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -655,7 +652,7 @@ export function TestCasesPage() {
                     onChange: setSelectedStorageIds,
                     getCheckboxProps: (record) => ({ 'aria-label': `选择 ${record.id}` }),
                   }}
-                  scroll={{ x: type === 'functional' ? 1900 : type === 'api' ? 1180 : 900 }}
+                  scroll={{ x: type === 'functional' ? 1660 : type === 'api' ? 1060 : 780 }}
                 />
               ) : (
                 <Empty description="没有符合条件的测试用例" />

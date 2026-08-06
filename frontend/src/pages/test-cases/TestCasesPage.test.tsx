@@ -38,6 +38,20 @@ it('UI自动化页使用统一名称', async () => {
   expect(screen.getByText('按模块维护功能、接口和UI自动化资产')).toBeInTheDocument();
 });
 
+it.each([
+  { route: '/test-cases/functional', listName: '功能用例列表', hiddenHeaders: ['编号', '需求ID'] },
+  { route: '/test-cases/api', listName: '接口用例列表', hiddenHeaders: ['编号'] },
+  { route: '/test-cases/ui', listName: 'UI自动化列表', hiddenHeaders: ['编号'] },
+])('$listName不展示已移除的用例标识列', async ({ route, listName, hiddenHeaders }) => {
+  renderApp(route);
+
+  const list = await screen.findByRole('region', { name: listName });
+  hiddenHeaders.forEach((header) => {
+    expect(within(list).queryByRole('columnheader', { name: header })).not.toBeInTheDocument();
+  });
+  expect(screen.getByPlaceholderText('搜索用例名称或接口地址')).toBeInTheDocument();
+});
+
 it('新建 UI 自动化用例时提供完整配置和可维护的步骤列表', async () => {
   const user = userEvent.setup();
   renderTestCasesPageWithService(
@@ -368,7 +382,7 @@ it('创建用例后继续遵守当前筛选', async () => {
   renderApp('/test-cases/api');
   const list = await screen.findByRole('region', { name: '接口用例列表' });
 
-  await user.type(screen.getByPlaceholderText('搜索编号、名称或接口地址'), '不存在的筛选词');
+  await user.type(screen.getByPlaceholderText('搜索用例名称或接口地址'), '不存在的筛选词');
   expect(await within(list).findByText('没有符合条件的测试用例')).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: '新建接口用例' }));
@@ -738,8 +752,9 @@ it('批量删除部分失败时保留失败项供重试', async () => {
   await user.click(within(deleteDialog!).getByRole('button', { name: '删除' }));
 
   expect(await screen.findByText('已删除 1 条，1 条删除失败')).toBeInTheDocument();
-  expect(within(list).queryByText('FUN-12583')).not.toBeInTheDocument();
-  expect(within(list).getByText('FUN-12584')).toBeInTheDocument();
+  expect(
+    within(list).queryByRole('checkbox', { name: '选择 FUN-12583' }),
+  ).not.toBeInTheDocument();
   expect(within(list).getByRole('checkbox', { name: '选择 FUN-12584' })).toBeChecked();
   expect(screen.getByRole('toolbar', { name: '批量操作' })).toHaveTextContent('已选择 1 项');
 });
