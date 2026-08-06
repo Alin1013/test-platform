@@ -30,7 +30,7 @@ it('向页面组件提供平台服务', async () => {
 
 it('开发环境未配置 API 地址时默认使用数据库后端，测试环境保留 mock', () => {
   expect(resolvePlatformApiBaseUrl(undefined, 'development')).toBe(
-    'http://127.0.0.1:8000/api/v1',
+    '/api/v1',
   );
   expect(resolvePlatformApiBaseUrl(undefined, 'test')).toBeUndefined();
   expect(resolvePlatformApiBaseUrl(' https://example.test/api/v1 ', 'development')).toBe(

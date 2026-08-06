@@ -37,7 +37,9 @@ interface ApiPlatformServiceOptions {
   fetcher?: Fetcher;
 }
 
-export const DEFAULT_PLATFORM_API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+// Same-origin is safe for production deployments; Vite proxies this path locally.
+// Split deployments can override it with VITE_API_BASE_URL.
+export const DEFAULT_PLATFORM_API_BASE_URL = '/api/v1';
 
 interface Page<T> {
   items: T[];

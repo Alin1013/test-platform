@@ -100,7 +100,7 @@ test('development uses the persistent API when no base URL is configured', async
   });
 
   expect(fetcher).toHaveBeenCalledWith(
-    'http://127.0.0.1:8000/api/v1/auth/register',
+    '/api/v1/auth/register',
     expect.any(Object),
   );
 });

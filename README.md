@@ -134,7 +134,7 @@ frontend/
 | `debugApiCase(input)` | 同步调试当前 API 表单配置并返回请求、响应、断言和提取结果 |
 | `debugUiCase(input)` | 同步调试当前 UI 步骤并返回逐步结果、日志和媒体地址 |
 
-`PlatformServiceContext` 负责向页面注入具体服务。开发和生产运行默认连接 `http://127.0.0.1:8000/api/v1`，模块目录和三类测试用例均通过 `apiPlatformService` 写入后端数据库；`VITE_API_BASE_URL` 可覆盖该地址。只有自动化测试环境使用隔离的内存 Mock，页面层不依赖具体传输协议。
+`PlatformServiceContext` 负责向页面注入具体服务。开发和生产运行默认使用同源 `/api/v1`，模块目录和三类测试用例均通过 `apiPlatformService` 写入后端数据库；Vite 开发服务器会把 `/api` 代理到本地后端，生产环境可用 `VITE_API_BASE_URL` 覆盖为统一后端地址。只有自动化测试环境使用隔离的内存 Mock，页面层不依赖具体传输协议。
 
 自动化执行后端提供以下公共接口：
 
@@ -202,7 +202,7 @@ python3 -m venv .venv
 后端 API 文档位于 `http://localhost:8000/docs`。
 本地演示平台账号为 `jiangshan`，密码为 `Test1234`。该账号仅限本地演示，部署前必须修改或禁用；它用于应用登录，不是数据库账号。SQLite 数据库不使用用户名或密码，完整的表结构、连接方式和维护命令见 [`DATABASE.md`](DATABASE.md)。
 
-前端复制 `frontend/.env.example` 中的变量到本地 `.env` 后，在 `frontend/` 目录执行：
+前端复制 `frontend/.env.example` 中的变量到本地 `.env` 后（默认同源 `/api/v1`，跨域部署时改成统一后端地址），在 `frontend/` 目录执行：
 
 ```bash
 npm install          # 安装依赖
