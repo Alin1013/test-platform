@@ -89,6 +89,40 @@ test('maps the project module tree to the platform contract', async () => {
   );
 });
 
+test('sends functional project, iteration, and smoke filters in list queries', async () => {
+  const fetcher = vi.fn(async () => jsonResponse({ items: [], total: 0 }));
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await service.listTestCases({
+    type: 'functional',
+    projectName: '移动端',
+    iteration: 'V2.1.0',
+    isSmoke: false,
+  });
+
+  expect(fetcher).toHaveBeenCalledWith(
+    '/api/v1/test-cases?page_size=100&type=functional&project_name=%E7%A7%BB%E5%8A%A8%E7%AB%AF&iteration=V2.1.0&is_smoke=false',
+    expect.any(Object),
+  );
+});
+
+test('loads authoritative test case filter options', async () => {
+  const fetcher = vi.fn(async () => jsonResponse({
+    project_names: ['测试平台', '移动端'],
+    iterations: ['V2.0.0', 'V2.1.0'],
+  }));
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(service.getTestCaseFilterOptions('functional')).resolves.toEqual({
+    projectNames: ['测试平台', '移动端'],
+    iterations: ['V2.0.0', 'V2.1.0'],
+  });
+  expect(fetcher).toHaveBeenCalledWith(
+    '/api/v1/test-cases/filter-options?type=functional',
+    expect.any(Object),
+  );
+});
+
 test('creates a project module through the backend contract', async () => {
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     expect(String(input)).toBe('/api/v1/modules');

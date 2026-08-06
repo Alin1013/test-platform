@@ -108,6 +108,14 @@ export interface TestCaseQuery {
   keyword?: string;
   priority?: Priority;
   status?: TestCaseStatus;
+  projectName?: string;
+  iteration?: string;
+  isSmoke?: boolean;
+}
+
+export interface TestCaseFilterOptions {
+  projectNames: string[];
+  iterations: string[];
 }
 
 export interface CreateTestCaseInput {
@@ -370,6 +378,7 @@ export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestModules(projectId?: number): Promise<TestModule[]>;
   createTestModule(input: CreateTestModuleInput): Promise<TestModule>;
+  getTestCaseFilterOptions(type?: TestCaseType): Promise<TestCaseFilterOptions>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;

@@ -17,6 +17,7 @@ import type {
   TestCaseQuery,
   TestCaseImportResult,
   TestCaseRecord,
+  TestCaseType,
   TestModule,
   UpdateTestCaseInput,
   UiExecutionInput,
@@ -183,6 +184,17 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       return respond(created);
     },
 
+    async getTestCaseFilterOptions(type?: TestCaseType) {
+      const matchingCases = testCases.filter((testCase) => !type || testCase.type === type);
+      const uniqueValues = (values: Array<string | undefined>) =>
+        Array.from(new Set(values.filter((value): value is string => Boolean(value))))
+          .sort((left, right) => left.localeCompare(right, 'zh-CN'));
+      return respond({
+        projectNames: uniqueValues(matchingCases.map((testCase) => testCase.projectName)),
+        iterations: uniqueValues(matchingCases.map((testCase) => testCase.iteration)),
+      });
+    },
+
     async listTestCases(query: TestCaseQuery = {}) {
       const keyword = query.keyword?.trim().toLowerCase();
       const rows = testCases.filter((testCase) => {
@@ -197,7 +209,10 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           (!query.type || testCase.type === query.type) &&
           (!query.moduleId || testCase.moduleId === query.moduleId) &&
           (!query.priority || testCase.priority === query.priority) &&
-          (!query.status || testCase.status === query.status)
+          (!query.status || testCase.status === query.status) &&
+          (!query.projectName || testCase.projectName === query.projectName) &&
+          (!query.iteration || testCase.iteration === query.iteration) &&
+          (query.isSmoke === undefined || testCase.isSmoke === query.isSmoke)
         );
       });
       return respond(rows);

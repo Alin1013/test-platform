@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from ..models import ApiCaseDetails, Module, TestCase, UiCaseDetails, User
 from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate
@@ -133,6 +133,26 @@ def _case_query():
     )
 
 
+def _distinct_case_values(
+    session: Session,
+    column: InstrumentedAttribute[str],
+    case_type: str | None,
+) -> list[str]:
+    query = select(column).where(column != "")
+    if case_type:
+        query = query.where(TestCase.type == case_type)
+    return list(session.scalars(query.distinct().order_by(column)))
+
+
+def get_filter_options(session: Session, *, case_type: str | None) -> dict:
+    return {
+        "project_names": _distinct_case_values(
+            session, TestCase.project_name, case_type
+        ),
+        "iterations": _distinct_case_values(session, TestCase.iteration, case_type),
+    }
+
+
 def filtered_case_query(
     *,
     case_type: str | None,
@@ -140,6 +160,9 @@ def filtered_case_query(
     priority: str | None,
     status: str | None,
     keyword: str | None,
+    project_name: str | None = None,
+    iteration: str | None = None,
+    is_smoke: bool | None = None,
 ):
     query = _case_query().outerjoin(ApiCaseDetails)
     if case_type:
@@ -150,6 +173,12 @@ def filtered_case_query(
         query = query.where(TestCase.priority == priority)
     if status:
         query = query.where(TestCase.status == status)
+    if project_name:
+        query = query.where(TestCase.project_name == project_name)
+    if iteration:
+        query = query.where(TestCase.iteration == iteration)
+    if is_smoke is not None:
+        query = query.where(TestCase.is_smoke == is_smoke)
     if keyword and keyword.strip():
         pattern = f"%{keyword.strip()}%"
         query = query.where(
@@ -170,6 +199,9 @@ def list_cases(
     module_id: str | None,
     priority: str | None,
     status: str | None,
+    project_name: str | None,
+    iteration: str | None,
+    is_smoke: bool | None,
     keyword: str | None,
     page: int,
     page_size: int,
@@ -179,6 +211,9 @@ def list_cases(
         module_id=module_id,
         priority=priority,
         status=status,
+        project_name=project_name,
+        iteration=iteration,
+        is_smoke=is_smoke,
         keyword=keyword,
     )
     count_query = select(func.count()).select_from(query.order_by(None).subquery())

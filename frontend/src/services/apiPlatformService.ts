@@ -94,6 +94,11 @@ interface ApiTestModule {
   children: ApiTestModule[];
 }
 
+interface ApiTestCaseFilterOptions {
+  project_names: string[];
+  iterations: string[];
+}
+
 interface ApiUser {
   id: number;
   name: string;
@@ -335,6 +340,19 @@ export function createApiPlatformService({
       return mapModule(module);
     },
 
+    async getTestCaseFilterOptions(type?: TestCaseType) {
+      const params = new URLSearchParams();
+      if (type) params.set('type', type);
+      const suffix = params.size ? `?${params}` : '';
+      const options = await request<ApiTestCaseFilterOptions>(
+        `/test-cases/filter-options${suffix}`,
+      );
+      return {
+        projectNames: options.project_names,
+        iterations: options.iterations,
+      };
+    },
+
     async listTestCases(query: TestCaseQuery = {}) {
       const params = new URLSearchParams({ page_size: '100' });
       if (query.type) params.set('type', query.type);
@@ -342,6 +360,9 @@ export function createApiPlatformService({
       if (query.keyword) params.set('keyword', query.keyword);
       if (query.priority) params.set('priority', query.priority);
       if (query.status) params.set('status', query.status);
+      if (query.projectName) params.set('project_name', query.projectName);
+      if (query.iteration) params.set('iteration', query.iteration);
+      if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
       const page = await request<Page<ApiTestCase>>(`/test-cases?${params}`);
       return page.items.map(mapCase);
     },

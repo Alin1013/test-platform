@@ -383,6 +383,56 @@ it('创建用例后继续遵守当前筛选', async () => {
   expect(within(list).queryByText('P1 筛选外用例')).not.toBeInTheDocument();
 });
 
+it('功能用例支持按项目归属、是否冒烟和归属迭代组合筛选', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  await service.createTestCase({
+    type: 'functional',
+    moduleId: 'auth',
+    name: '移动端结算回归',
+    priority: 'P1',
+    status: '维护中',
+    projectName: '移动端',
+    iteration: 'Sprint 13',
+    isSmoke: false,
+  });
+  const listTestCases = vi.spyOn(service, 'listTestCases');
+  renderTestCasesPageWithService(service, '/test-cases/functional');
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+
+  await user.click(screen.getByRole('combobox', { name: '筛选项目归属' }));
+  await screen.findByRole('option', { name: '移动端' });
+  await user.click(screen.getByTitle('移动端'));
+  await waitFor(() => {
+    expect(listTestCases).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectName: '移动端' }),
+    );
+  });
+  await waitFor(() => expect(within(list).queryByText('FUN-12583')).not.toBeInTheDocument());
+  await user.click(screen.getByRole('combobox', { name: '筛选项目归属' }));
+  expect(await screen.findByRole('option', { name: '测试平台' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+
+  await user.click(screen.getByRole('combobox', { name: '筛选是否冒烟' }));
+  await screen.findByRole('option', { name: '否' });
+  await user.click(screen.getByTitle('否'));
+  await user.click(screen.getByRole('combobox', { name: '筛选归属迭代' }));
+  await screen.findByRole('option', { name: 'Sprint 13' });
+  await user.click(screen.getByTitle('Sprint 13'));
+
+  expect(await within(list).findByText('移动端结算回归')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(listTestCases).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'functional',
+        projectName: '移动端',
+        isSmoke: false,
+        iteration: 'Sprint 13',
+      }),
+    );
+  });
+});
+
 it('测试用例分页提供统一的每页条数和页码跳转控件', async () => {
   renderApp('/test-cases/functional');
 

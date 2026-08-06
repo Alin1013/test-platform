@@ -44,6 +44,14 @@ def create_module(
     return JSONResponse(status_code=201 if created else 200, content=module)
 
 
+@router.get("/test-cases/filter-options")
+def get_test_case_filter_options(
+    session: Annotated[Session, Depends(get_session)],
+    type: CaseType | None = None,
+) -> dict:
+    return test_cases.get_filter_options(session, case_type=type)
+
+
 @router.get("/test-cases")
 def list_test_cases(
     session: Annotated[Session, Depends(get_session)],
@@ -51,6 +59,9 @@ def list_test_cases(
     module_id: str | None = None,
     priority: Priority | None = None,
     status: CaseStatus | None = None,
+    project_name: str | None = None,
+    iteration: str | None = None,
+    is_smoke: bool | None = None,
     keyword: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -61,6 +72,9 @@ def list_test_cases(
         module_id=module_id,
         priority=priority,
         status=status,
+        project_name=project_name,
+        iteration=iteration,
+        is_smoke=is_smoke,
         keyword=keyword,
         page=page,
         page_size=page_size,

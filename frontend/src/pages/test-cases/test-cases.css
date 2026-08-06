@@ -222,6 +222,13 @@ body.is-resizing-module-panel {
   color: #52677e;
 }
 
+.case-list-toolbar__functional-filters {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .case-list-table {
   min-width: 0;
   overflow-x: auto;

@@ -19,6 +19,7 @@ import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
   CreateTestCaseInput,
   Priority,
+  TestCaseFilterOptions,
   TestCaseQuery,
   TestCaseRecord,
   TestCaseStatus,
@@ -108,6 +109,13 @@ export function TestCasesPage() {
   const [keyword, setKeyword] = useState('');
   const [priority, setPriority] = useState<Priority | undefined>();
   const [status, setStatus] = useState<TestCaseStatus | undefined>();
+  const [projectName, setProjectName] = useState<string | undefined>();
+  const [iteration, setIteration] = useState<string | undefined>();
+  const [smokeFilter, setSmokeFilter] = useState<'smoke' | 'non-smoke' | undefined>();
+  const [filterOptions, setFilterOptions] = useState<TestCaseFilterOptions>({
+    projectNames: [],
+    iterations: [],
+  });
   const [rows, setRows] = useState<TestCaseRecord[] | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -127,8 +135,15 @@ export function TestCasesPage() {
       keyword,
       priority,
       status,
+      ...(type === 'functional'
+        ? {
+            projectName,
+            iteration,
+            isSmoke: smokeFilter === undefined ? undefined : smokeFilter === 'smoke',
+          }
+        : {}),
     }),
-    [keyword, priority, selectedModule, status, type],
+    [iteration, keyword, priority, projectName, selectedModule, smokeFilter, status, type],
   );
 
   useEffect(() => {
@@ -148,6 +163,18 @@ export function TestCasesPage() {
   }, [query, service]);
 
   useEffect(() => {
+    if (type !== 'functional') return;
+    let active = true;
+    void service.getTestCaseFilterOptions(type).then((nextOptions) => {
+      if (active) setFilterOptions(nextOptions);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [service, type]);
+
+  useEffect(() => {
     setPage(1);
     setSelectedStorageIds([]);
   }, [query]);
@@ -164,9 +191,29 @@ export function TestCasesPage() {
     return rows.slice(start, start + pageSize);
   }, [page, pageSize, rows]);
 
+  const projectOptions = useMemo(
+    () => filterOptions.projectNames.map((value) => ({ value, label: value })),
+    [filterOptions.projectNames],
+  );
+  const iterationOptions = useMemo(
+    () => filterOptions.iterations.map((value) => ({ value, label: value })),
+    [filterOptions.iterations],
+  );
+
+  const refreshFilterOptions = async () => {
+    if (type !== 'functional') return;
+    setFilterOptions(await service.getTestCaseFilterOptions(type));
+  };
+
   const refreshRows = async () => {
     const nextRows = await service.listTestCases(query);
     setRows(nextRows);
+    return nextRows;
+  };
+
+  const refreshRowsAndFilterOptions = async () => {
+    const nextRows = await refreshRows();
+    await refreshFilterOptions();
     return nextRows;
   };
 
@@ -185,7 +232,7 @@ export function TestCasesPage() {
           const results = await Promise.allSettled(
             cases.map((testCase) => service.deleteTestCase(testCase.storageId)),
           );
-          const nextRows = await refreshRows();
+          const nextRows = await refreshRowsAndFilterOptions();
           const failedStorageIds = cases
             .filter((_, index) => results[index].status === 'rejected')
             .map((testCase) => testCase.storageId)
@@ -331,7 +378,7 @@ export function TestCasesPage() {
 
   const createCase = async (input: CreateTestCaseInput) => {
     const created = await service.createTestCase(input);
-    await refreshRows();
+    await refreshRowsAndFilterOptions();
     return created;
   };
 
@@ -346,7 +393,7 @@ export function TestCasesPage() {
         file,
         selectedModule === 'all' ? undefined : selectedModule,
       );
-      await refreshRows();
+      await refreshRowsAndFilterOptions();
       void message.success(`已导入 ${result.importedCount} 条功能用例`);
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '导入失败，请检查文件格式');
@@ -394,7 +441,7 @@ export function TestCasesPage() {
   const updateCase = async ({ type: _type, ...input }: CreateTestCaseInput) => {
     if (!editingCase) throw new Error('没有正在编辑的用例');
     const updated = await service.updateTestCase(editingCase.storageId, input);
-    const nextRows = await refreshRows();
+    const nextRows = await refreshRowsAndFilterOptions();
     setSelectedStorageIds((currentIds) =>
       currentIds.filter((storageId) =>
         nextRows.some((testCase) => testCase.storageId === storageId),
@@ -538,6 +585,40 @@ export function TestCasesPage() {
               options={testCaseStatusOptions.map((value) => ({ value, label: value }))}
               onChange={setStatus}
             />
+            {type === 'functional' ? (
+              <div className="case-list-toolbar__functional-filters">
+                <Select
+                  id="project-filter"
+                  aria-label="筛选项目归属"
+                  placeholder="项目归属"
+                  allowClear
+                  value={projectName}
+                  options={projectOptions}
+                  onChange={setProjectName}
+                />
+                <Select
+                  id="smoke-filter"
+                  aria-label="筛选是否冒烟"
+                  placeholder="是否冒烟"
+                  allowClear
+                  value={smokeFilter}
+                  options={[
+                    { value: 'smoke', label: '是' },
+                    { value: 'non-smoke', label: '否' },
+                  ]}
+                  onChange={setSmokeFilter}
+                />
+                <Select
+                  id="iteration-filter"
+                  aria-label="筛选归属迭代"
+                  placeholder="归属迭代"
+                  allowClear
+                  value={iteration}
+                  options={iterationOptions}
+                  onChange={setIteration}
+                />
+              </div>
+            ) : null}
           </div>
 
           {selectedStorageIds.length ? (

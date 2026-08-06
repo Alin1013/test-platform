@@ -45,6 +45,37 @@ it('创建接口用例后返回在列表首行', async () => {
   expect(rows[0]).toMatchObject({ id: created.id, name: '刷新访问令牌' });
 });
 
+it('按项目归属、归属迭代和非冒烟标记组合筛选功能用例', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  const rows = await service.listTestCases({
+    type: 'functional',
+    projectName: '测试平台',
+    iteration: 'Sprint 12',
+    isSmoke: false,
+  });
+
+  expect(rows.map((testCase) => testCase.id)).toEqual(['FUN-12584']);
+});
+
+it('从完整功能用例数据生成筛选选项', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  await service.createTestCase({
+    type: 'functional',
+    moduleId: 'auth',
+    name: '移动端结算回归',
+    priority: 'P1',
+    status: '维护中',
+    projectName: '移动端',
+    iteration: 'Sprint 13',
+  });
+
+  await expect(service.getTestCaseFilterOptions('functional')).resolves.toEqual({
+    projectNames: ['测试平台', '移动端'],
+    iterations: ['Sprint 12', 'Sprint 13'],
+  });
+});
+
 it('创建 UI 自动化用例后保留执行配置和步骤', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const uiDetails = {

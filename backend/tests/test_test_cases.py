@@ -75,6 +75,82 @@ def test_functional_case_can_be_assigned_to_new_module(client: TestClient) -> No
     ).json()["items"][0]["title"] == "结算成功"
 
 
+def test_functional_cases_can_be_filtered_by_project_iteration_and_smoke(
+    client: TestClient,
+) -> None:
+    cases = [
+        ("目标非冒烟用例", "移动端", "V2.1.0", False),
+        ("其他项目用例", "测试平台", "V2.1.0", False),
+        ("其他迭代用例", "移动端", "V2.0.0", False),
+        ("冒烟标记不同用例", "移动端", "V2.1.0", True),
+    ]
+    for title, project_name, iteration, is_smoke in cases:
+        response = client.post(
+            "/api/v1/test-cases",
+            json={
+                "title": title,
+                "type": "functional",
+                "module_id": "auth",
+                "priority": "P1",
+                "status": "维护中",
+                "author_id": 1,
+                "project_name": project_name,
+                "iteration": iteration,
+                "is_smoke": is_smoke,
+                "test_steps": "执行测试步骤",
+                "expected_result": "得到预期结果",
+            },
+        )
+        assert response.status_code == 201
+
+    listed = client.get(
+        "/api/v1/test-cases",
+        params={
+            "type": "functional",
+            "project_name": "移动端",
+            "iteration": "V2.1.0",
+            "is_smoke": "false",
+        },
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+    assert listed.json()["items"][0]["title"] == "目标非冒烟用例"
+
+
+def test_functional_filter_options_are_distinct_and_not_page_limited(
+    client: TestClient,
+) -> None:
+    for index in range(101):
+        response = client.post(
+            "/api/v1/test-cases",
+            json={
+                "title": f"筛选选项用例 {index}",
+                "type": "functional",
+                "module_id": "auth",
+                "priority": "P1",
+                "status": "维护中",
+                "author_id": 1,
+                "project_name": "移动端" if index == 100 else "测试平台",
+                "iteration": "V2.1.0" if index == 100 else "V2.0.0",
+                "test_steps": "执行测试步骤",
+                "expected_result": "得到预期结果",
+            },
+        )
+        assert response.status_code == 201
+
+    options = client.get(
+        "/api/v1/test-cases/filter-options",
+        params={"type": "functional"},
+    )
+
+    assert options.status_code == 200
+    assert options.json() == {
+        "project_names": ["测试平台", "移动端"],
+        "iterations": ["V2.0.0", "V2.1.0"],
+    }
+
+
 def test_api_case_can_be_created_searched_updated_and_deleted(client: TestClient) -> None:
     created = client.post(
         "/api/v1/test-cases",
