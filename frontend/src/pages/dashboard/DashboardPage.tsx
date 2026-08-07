@@ -240,7 +240,12 @@ export function DashboardPage() {
         className="dashboard-card dashboard-recent"
         title="最近用例"
         extra={
-          <Button type="link" icon={<ArrowRightOutlined />} iconPlacement="end" onClick={() => navigate('/test-cases/api')}>
+          <Button
+            type="link"
+            icon={<ArrowRightOutlined />}
+            iconPlacement="end"
+            onClick={() => navigate('/test-cases/functional')}
+          >
             查看全部
           </Button>
         }

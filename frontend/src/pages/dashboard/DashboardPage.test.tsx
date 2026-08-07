@@ -21,6 +21,20 @@ it('展示用例总数与最近用例', async () => {
   expect(screen.getAllByText('UI自动化')).not.toHaveLength(0);
 });
 
+it('查看全部默认进入功能用例列表', async () => {
+  const user = userEvent.setup();
+  renderApp('/dashboard');
+
+  await screen.findByText('用例总数');
+  await user.click(await screen.findByText('查看全部'));
+
+  expect(await screen.findByRole('tab', { name: '功能用例' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByRole('tab', { name: '接口用例' })).toHaveAttribute('aria-selected', 'false');
+});
+
 it('仪表盘请求失败时显示错误态并允许重试', async () => {
   const service = createMockPlatformService({ delay: 0 });
   const getDashboard = vi.spyOn(service, 'getDashboard');
