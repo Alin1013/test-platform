@@ -628,7 +628,7 @@ export function TestCasesPage() {
                 aria-label={`删除已选 ${selectedStorageIds.length} 项`}
                 onClick={() => deleteCases(selectedCases)}
               >
-                删除
+                批量删除
               </Button>
             </div>
           ) : null}
