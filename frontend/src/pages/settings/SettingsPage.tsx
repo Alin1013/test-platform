@@ -36,6 +36,20 @@ const modelOptions = [
   { value: 'qwen-plus', label: 'Qwen Plus' },
 ];
 
+function validateUniqueName(
+  names: Array<string | undefined>,
+  currentIndex: number,
+  value: string,
+  message: string,
+) {
+  const normalizedName = value?.trim().toLowerCase();
+  const duplicate = names.some(
+    (name, index) =>
+      index !== currentIndex && name?.trim().toLowerCase() === normalizedName,
+  );
+  return duplicate ? Promise.reject(new Error(message)) : Promise.resolve();
+}
+
 export function SettingsPage() {
   const service = usePlatformService();
   const { message } = App.useApp();
@@ -325,15 +339,13 @@ export function SettingsPage() {
                         rules={[
                           { required: true, message: '请输入环境名称' },
                           {
-                            validator: async (_rule, value: string) => {
-                              const normalizedName = value?.trim().toLowerCase();
-                              const duplicate = environments.some(
-                                (environment, environmentIndex) =>
-                                  environmentIndex !== index &&
-                                  environment.name?.trim().toLowerCase() === normalizedName,
-                              );
-                              if (duplicate) throw new Error('环境名称不能重复');
-                            },
+                            validator: (_rule, value: string) =>
+                              validateUniqueName(
+                                environments.map((environment) => environment.name),
+                                index,
+                                value,
+                                '环境名称不能重复',
+                              ),
                           },
                         ]}
                       >
@@ -443,15 +455,13 @@ export function SettingsPage() {
                         rules={[
                           { required: true, whitespace: true, message: '请输入项目名称' },
                           {
-                            validator: async (_rule, value: string) => {
-                              const normalizedName = value?.trim().toLowerCase();
-                              const duplicate = projectNames.some(
-                                (projectName, projectIndex) =>
-                                  projectIndex !== index &&
-                                  projectName?.trim().toLowerCase() === normalizedName,
-                              );
-                              if (duplicate) throw new Error('项目名称不能重复');
-                            },
+                            validator: (_rule, value: string) =>
+                              validateUniqueName(
+                                projectNames,
+                                index,
+                                value,
+                                '项目名称不能重复',
+                              ),
                           },
                         ]}
                       >
