@@ -59,6 +59,16 @@ it('运行环境与系统设置中的环境列表保持一致', async () => {
   expect(screen.queryByRole('option', { name: 'Staging' })).not.toBeInTheDocument();
 });
 
+it('执行列表展示模块名称且不展示用例编号', async () => {
+  renderApp('/execution/ui-test');
+
+  expect(await screen.findByRole('heading', { name: 'UI 自动化' })).toBeInTheDocument();
+  expect(await screen.findByText('登录表单校验')).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: '模块' })).toBeInTheDocument();
+  expect(screen.getAllByText('鉴权').length).toBeGreaterThan(0);
+  expect(screen.queryByText('UI-13533')).not.toBeInTheDocument();
+});
+
 it('可以选择测试用例目录并过滤执行列表', async () => {
   const user = userEvent.setup();
   renderApp('/execution/ui-test');

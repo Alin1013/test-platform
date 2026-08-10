@@ -26,6 +26,16 @@ it('配置并启动接口自动化后展示 KPI 与请求分析', async () => {
   expect(analysis).toHaveTextContent('/api/users/profile');
 });
 
+it('执行列表展示模块名称且不展示接口编号', async () => {
+  renderApp('/execution/api-test');
+
+  expect(await screen.findByRole('heading', { name: '接口自动化' })).toBeInTheDocument();
+  expect(await screen.findByText('用户资料查询')).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: '模块' })).toBeInTheDocument();
+  expect(screen.getAllByText('鉴权').length).toBeGreaterThan(0);
+  expect(screen.queryByText('API-253301')).not.toBeInTheDocument();
+});
+
 it('接口自动化配置提供迭代、并发间隔和请求头覆盖', async () => {
   renderApp('/execution/api-test');
 

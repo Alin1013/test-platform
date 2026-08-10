@@ -144,9 +144,15 @@ export function ApiTestExecutionPage() {
       title: '接口名称',
       dataIndex: 'name',
       ellipsis: true,
-      render: (name: string, record) => (
-        <div className="execution-name-cell"><strong>{name}</strong><span>{record.id}</span></div>
+      render: (name: string) => (
+        <div className="execution-name-cell"><strong>{name}</strong></div>
       ),
+    },
+    {
+      title: '模块',
+      dataIndex: 'moduleName',
+      width: 130,
+      render: (value: string | undefined) => value || '-',
     },
     {
       title: '方法',

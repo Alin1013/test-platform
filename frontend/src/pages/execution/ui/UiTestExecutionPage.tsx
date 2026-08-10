@@ -259,12 +259,11 @@ export function UiTestExecutionPage() {
       render: (name: string, record) => (
         <div className="execution-name-cell">
           <strong>{name}</strong>
-          <span>{record.code}</span>
         </div>
       ),
     },
     {
-      title: '关联模块',
+      title: '模块',
       dataIndex: 'moduleId',
       width: 110,
       render: (value: string) => modulesById.get(value)?.name ?? value,
