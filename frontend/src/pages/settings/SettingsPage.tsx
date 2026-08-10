@@ -52,6 +52,7 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState('');
   const [testingChannel, setTestingChannel] = useState<NotificationChannel | null>(null);
   const environments = Form.useWatch(['execution', 'environments'], form) ?? [];
+  const projectNames = Form.useWatch(['caseManagement', 'projectNames'], form) ?? [];
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab');
@@ -193,6 +194,17 @@ export function SettingsPage() {
     if (defaultEnvironmentId === removingId) {
       const nextEnvironment = environments.find((environment, environmentIndex) => environmentIndex !== index);
       form.setFieldValue(['execution', 'defaultEnvironmentId'], nextEnvironment?.id ?? '');
+    }
+  };
+
+  const removeProjectName = (index: number, remove: (index: number | number[]) => void) => {
+    const removingName = projectNames[index];
+    const defaultProjectName = form.getFieldValue(['caseManagement', 'defaultProjectName']);
+    remove(index);
+
+    if (defaultProjectName === removingName) {
+      const nextProjectName = projectNames.find((_, projectIndex) => projectIndex !== index);
+      form.setFieldValue(['caseManagement', 'defaultProjectName'], nextProjectName ?? '');
     }
   };
 
@@ -408,6 +420,79 @@ export function SettingsPage() {
               <InputNumber min={1000} max={300000} step={1000} precision={0} suffix="ms" />
             </Form.Item>
           </div>
+        </div>
+      ),
+    },
+    {
+      key: 'cases',
+      label: '用例配置',
+      children: (
+        <div className="settings-case-content">
+          <Form.List name={['caseManagement', 'projectNames']}>
+            {(fields, { add, remove }) => (
+              <>
+                <div className="settings-section-heading">
+                  <h2>项目归属</h2>
+                  <Button
+                    type="default"
+                    icon={<PlusOutlined aria-hidden="true" />}
+                    onClick={() => add('')}
+                  >
+                    添加项目归属
+                  </Button>
+                </div>
+                <div className="settings-project-list">
+                  {fields.map((field, index) => (
+                    <div className="settings-project-row" key={field.key}>
+                      <Form.Item
+                        name={field.name}
+                        label="项目名称"
+                        rules={[
+                          { required: true, whitespace: true, message: '请输入项目名称' },
+                          {
+                            validator: async (_rule, value: string) => {
+                              const normalizedName = value?.trim().toLowerCase();
+                              const duplicate = projectNames.some(
+                                (projectName, projectIndex) =>
+                                  projectIndex !== index &&
+                                  projectName?.trim().toLowerCase() === normalizedName,
+                              );
+                              if (duplicate) throw new Error('项目名称不能重复');
+                            },
+                          },
+                        ]}
+                      >
+                        <Input maxLength={128} placeholder="例如：官网环境" />
+                      </Form.Item>
+                      <Button
+                        danger
+                        type="text"
+                        icon={<DeleteOutlined aria-hidden="true" />}
+                        aria-label={`删除${projectNames[index] || `第${index + 1}个项目归属`}`}
+                        disabled={fields.length <= 1}
+                        onClick={() => removeProjectName(index, remove)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Form.List>
+
+          <Form.Item
+            className="settings-default-project"
+            name={['caseManagement', 'defaultProjectName']}
+            label="默认项目归属"
+            rules={[{ required: true, message: '请选择默认项目归属' }]}
+          >
+            <Select
+              aria-label="默认项目归属"
+              options={projectNames
+                .filter((projectName) => projectName?.trim())
+                .map((projectName) => ({ value: projectName, label: projectName }))}
+              placeholder="选择默认项目归属"
+            />
+          </Form.Item>
         </div>
       ),
     },

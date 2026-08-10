@@ -36,6 +36,10 @@ DEFAULT_SETTINGS = {
         "announcement": "",
         "caseNumberPrefix": "TC-",
     },
+    "caseManagement": {
+        "projectNames": ["官网环境"],
+        "defaultProjectName": "官网环境",
+    },
     "execution": {
         "environments": [
             {"id": "dev", "name": "DEV", "baseUrl": "https://dev-api.example.com"},

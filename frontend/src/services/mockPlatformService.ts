@@ -263,7 +263,10 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         Array.from(new Set(values.filter((value): value is string => Boolean(value))))
           .sort((left, right) => left.localeCompare(right, 'zh-CN'));
       return respond({
-        projectNames: uniqueValues(matchingCases.map((testCase) => testCase.projectName)),
+        projectNames: uniqueValues([
+          ...systemSettings.caseManagement.projectNames,
+          ...matchingCases.map((testCase) => testCase.projectName),
+        ]),
         iterations: uniqueValues(matchingCases.map((testCase) => testCase.iteration)),
       });
     },
@@ -309,6 +312,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
       const created: TestCaseRecord = {
         ...input,
+        projectName: input.projectName ?? systemSettings.caseManagement.defaultProjectName,
         storageId: storageIdSequence++,
         id: `${input.type.toUpperCase()}-${caseSequence++}`,
         creator: author?.name ?? '江珊',
@@ -389,7 +393,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           maintainer: String(row[9] ?? '').trim() || '江珊',
           iteration: String(row[10] ?? '').trim(),
           isSmoke: ['是', 'true', '1', 'yes'].includes(String(row[11] ?? '').trim().toLowerCase()),
-          projectName: String(row[12] ?? '').trim() || '测试平台',
+          projectName:
+            String(row[12] ?? '').trim() || systemSettings.caseManagement.defaultProjectName,
           updatedAt: '刚刚',
         };
         return record;
@@ -655,7 +660,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           steps: item.用例步骤,
           expectedResult: item.预期结果,
           iteration: item.归属迭代,
-          projectName: '测试平台',
+          projectName: systemSettings.caseManagement.defaultProjectName,
           isSmoke: false,
         };
         return created;

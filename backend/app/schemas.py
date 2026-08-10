@@ -244,7 +244,7 @@ class TestCaseCreate(BaseModel):
     expected_result: str = Field(default="", max_length=10000)
     iteration: str = Field(default="", max_length=128)
     is_smoke: bool = False
-    project_name: str = Field(default="测试平台", min_length=1, max_length=128)
+    project_name: str = Field(default="官网环境", min_length=1, max_length=128)
     api_details: ApiDetailsCreate | None = None
     ui_details: UiDetailsCreate | None = None
 
@@ -377,6 +377,26 @@ class GeneralSettings(SettingsModel):
     caseNumberPrefix: str = Field(pattern=r"^[A-Za-z0-9_-]+$", max_length=16)
 
 
+class CaseManagementSettings(SettingsModel):
+    projectNames: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
+        default_factory=lambda: ["官网环境"], min_length=1, max_length=32
+    )
+    defaultProjectName: str = Field(default="官网环境", min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def default_project_exists(self) -> "CaseManagementSettings":
+        normalized_names = [name.strip().casefold() for name in self.projectNames]
+        if any(not name for name in normalized_names):
+            raise ValueError("project names cannot be blank")
+        if len(normalized_names) != len(set(normalized_names)):
+            raise ValueError("project names must be unique")
+        if self.defaultProjectName.strip().casefold() not in normalized_names:
+            raise ValueError("defaultProjectName must reference a project name")
+        self.projectNames = [name.strip() for name in self.projectNames]
+        self.defaultProjectName = self.defaultProjectName.strip()
+        return self
+
+
 class TestEnvironment(SettingsModel):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=32)
@@ -416,6 +436,7 @@ class AiSettings(SettingsModel):
 
 class SystemSettings(SettingsModel):
     general: GeneralSettings
+    caseManagement: CaseManagementSettings = Field(default_factory=CaseManagementSettings)
     execution: ExecutionSettings
     notifications: NotificationSettings
     ai: AiSettings

@@ -6,6 +6,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from ..models import ApiCaseDetails, Module, TestCase, UiCaseDetails, User
 from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate, TestModuleUpdate
+from .settings import get_settings
 
 
 def module_tree(session: Session, project_id: int) -> list[dict]:
@@ -204,10 +205,14 @@ def _distinct_case_values(
 
 
 def get_filter_options(session: Session, *, case_type: str | None) -> dict:
+    configured_names = (
+        get_settings(session)
+        .get("caseManagement", {})
+        .get("projectNames", ["官网环境"])
+    )
+    stored_names = _distinct_case_values(session, TestCase.project_name, case_type)
     return {
-        "project_names": _distinct_case_values(
-            session, TestCase.project_name, case_type
-        ),
+        "project_names": list(dict.fromkeys([*configured_names, *stored_names])),
         "iterations": _distinct_case_values(session, TestCase.iteration, case_type),
     }
 

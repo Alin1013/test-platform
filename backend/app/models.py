@@ -121,7 +121,7 @@ class TestCase(Base, TimestampMixin):
     expected_result: Mapped[str] = mapped_column(Text, default="")
     iteration: Mapped[str] = mapped_column(String(128), default="")
     is_smoke: Mapped[bool] = mapped_column(Boolean, default=False)
-    project_name: Mapped[str] = mapped_column(String(128), default="测试平台")
+    project_name: Mapped[str] = mapped_column(String(128), default="官网环境")
 
     module: Mapped[Module] = relationship(back_populates="test_cases")
     author: Mapped[User] = relationship(back_populates="test_cases")

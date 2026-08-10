@@ -266,6 +266,10 @@ export interface SystemSettings {
     announcement: string;
     caseNumberPrefix: string;
   };
+  caseManagement: {
+    projectNames: string[];
+    defaultProjectName: string;
+  };
   execution: {
     environments: TestEnvironment[];
     defaultEnvironmentId: string;

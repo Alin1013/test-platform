@@ -25,6 +25,10 @@ export const initialSystemSettings: SystemSettings = {
     announcement: '',
     caseNumberPrefix: 'TC-',
   },
+  caseManagement: {
+    projectNames: ['官网环境'],
+    defaultProjectName: '官网环境',
+  },
   execution: {
     environments: [
       { id: 'dev', name: 'DEV', baseUrl: 'https://dev-api.example.com' },
@@ -61,7 +65,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '登录成功并进入首页',
     iteration: 'Sprint 12',
     isSmoke: true,
-    projectName: '测试平台',
+    projectName: '官网环境',
     maintainer: '江珊',
     creator: '江珊',
     updatedAt: '8 分钟前',
@@ -137,7 +141,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '退款成功，订单状态更新为已退款',
     iteration: 'Sprint 12',
     isSmoke: false,
-    projectName: '测试平台',
+    projectName: '官网环境',
     maintainer: '林然',
     creator: '林然',
     updatedAt: '昨天 18:10',

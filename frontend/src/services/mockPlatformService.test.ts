@@ -85,7 +85,7 @@ it('按项目归属、归属迭代和非冒烟标记组合筛选功能用例', a
 
   const rows = await service.listTestCases({
     type: 'functional',
-    projectName: '测试平台',
+    projectName: '官网环境',
     iteration: 'Sprint 12',
     isSmoke: false,
   });
@@ -106,7 +106,7 @@ it('从完整功能用例数据生成筛选选项', async () => {
   });
 
   await expect(service.getTestCaseFilterOptions('functional')).resolves.toEqual({
-    projectNames: ['测试平台', '移动端'],
+    projectNames: ['官网环境', '移动端'],
     iterations: ['Sprint 12', 'Sprint 13'],
   });
 });

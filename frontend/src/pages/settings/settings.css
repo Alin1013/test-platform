@@ -33,7 +33,8 @@
   width: 100%;
 }
 
-.settings-execution-content {
+.settings-execution-content,
+.settings-case-content {
   max-width: 1000px;
 }
 
@@ -75,6 +76,34 @@
 }
 
 .settings-default-environment {
+  max-width: 360px;
+  margin-top: 20px;
+}
+
+.settings-project-list {
+  max-width: 680px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-project-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 40px;
+  align-items: end;
+  gap: 16px;
+  padding: 18px 0 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-project-row .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.settings-project-row > .ant-btn {
+  width: 32px;
+  margin-bottom: 16px;
+}
+
+.settings-default-project {
   max-width: 360px;
   margin-top: 20px;
 }
@@ -167,6 +196,10 @@
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: 0;
+  }
+
+  .settings-project-row {
+    grid-template-columns: minmax(0, 1fr) 40px;
   }
 
   .settings-environment-row > .ant-btn {

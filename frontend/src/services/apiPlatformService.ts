@@ -507,7 +507,7 @@ export function createApiPlatformService({
           expected_result: input.expectedResult ?? '',
           iteration: input.iteration ?? '',
           is_smoke: input.isSmoke ?? false,
-          project_name: input.projectName ?? '测试平台',
+          project_name: input.projectName ?? '官网环境',
           api_details: apiDetails,
           ui_details:
             input.type === 'ui' && input.uiDetails

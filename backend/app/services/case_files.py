@@ -152,7 +152,7 @@ def _export_row(test_case: dict) -> list[Any]:
         test_case.get("expected_result", ""),
         test_case.get("iteration", ""),
         "是" if test_case.get("is_smoke") else "否",
-        test_case.get("project_name", "测试平台"),
+        test_case.get("project_name", "官网环境"),
     ]
 
 
@@ -290,7 +290,7 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
         "expected_result": str(row.get("expected_result") or "").strip(),
         "iteration": str(row.get("iteration") or "").strip(),
         "is_smoke": str(row.get("is_smoke") or "").strip().lower() in {"是", "yes", "true", "1", "y"},
-        "project_name": str(row.get("project_name") or "测试平台").strip(),
+        "project_name": str(row.get("project_name") or "官网环境").strip(),
     }
     if case_type == "api":
         common["api_details"] = ApiDetailsCreate(

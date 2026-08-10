@@ -679,7 +679,6 @@ export function TestCasesPage() {
         defaultModule={selectedModule}
         onClose={closeDrawer}
         onSubmit={createCase}
-        onModuleCreated={() => setModuleRefreshToken((current) => current + 1)}
       />
       <CaseDrawer
         type={editingCase?.type ?? type}
@@ -688,7 +687,6 @@ export function TestCasesPage() {
         initialCase={editingCase ?? undefined}
         onClose={() => setEditingCase(null)}
         onSubmit={updateCase}
-        onModuleCreated={() => setModuleRefreshToken((current) => current + 1)}
       />
     </section>
   );

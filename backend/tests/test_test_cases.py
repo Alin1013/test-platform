@@ -106,6 +106,7 @@ def test_modules_and_test_cases_survive_application_restart(tmp_path: Path) -> N
             },
         )
         assert created_case.status_code == 201
+        assert created_case.json()["project_name"] == "官网环境"
 
     second_app = create_app(
         database_url,
@@ -224,7 +225,7 @@ def test_functional_filter_options_are_distinct_and_not_page_limited(
 
     assert options.status_code == 200
     assert options.json() == {
-        "project_names": ["测试平台", "移动端"],
+        "project_names": ["官网环境", "测试平台", "移动端"],
         "iterations": ["V2.0.0", "V2.1.0"],
     }
 
