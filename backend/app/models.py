@@ -312,13 +312,31 @@ class ExecutionTask(Base, TimestampMixin):
 
 class XMindRecord(Base):
     __tablename__ = "xmind_records"
-    __table_args__ = {"comment": "XMind 文件上传与解析记录"}
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'RUNNING', 'WAITING_REVIEW', 'FAILED', 'COMPLETED')",
+            name="ck_xmind_records_status",
+        ),
+        {"comment": "XMind 文件生成任务"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     file_name: Mapped[str] = mapped_column(String(255))
     file_url: Mapped[str] = mapped_column(String(2048))
     uploader_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
     parsed_cases_count: Mapped[int] = mapped_column(Integer, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tree_json: Mapped[list[dict[str, Any]]] = mapped_column(MutableList.as_mutable(JSON), default=list)
+    preview_cases_json: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        MutableList.as_mutable(JSON), nullable=True
+    )
+    module_mapping_json: Mapped[dict[str, str] | None] = mapped_column(
+        MutableDict.as_mutable(JSON), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     uploader: Mapped[User] = relationship(back_populates="xmind_records")

@@ -2,12 +2,16 @@ import json
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
-from ..xmind_schemas import XMindConfirmRequest, XMindExportRequest
+from ..xmind_schemas import (
+    XMindConfirmRequest,
+    XMindExportRequest,
+    XMindTaskConfirmRequest,
+)
 from ..services import xmind
 from ..services import case_files
 from ..services.xmind_skill import XMindGenerationError, XMindLLMUnavailable
@@ -57,7 +61,7 @@ async def upload_and_parse_xmind(
 
 
 @router.post("/generate", status_code=status.HTTP_201_CREATED)
-async def generate_xmind_cases(
+async def create_xmind_generation_task(
     request: Request,
     file: Annotated[UploadFile, File()],
     uploader_id: Annotated[int, Form()] = 1,
@@ -68,20 +72,49 @@ async def generate_xmind_cases(
         raise HTTPException(status_code=415, detail="Only .xmind files are supported")
     content = await file.read(xmind.MAX_UPLOAD_BYTES + 1)
     try:
-        return await xmind.generate_upload(
+        return xmind.create_generation_task(
             session,
             original_name=original_name,
             content=content,
             uploader_id=uploader_id,
             upload_dir=Path(request.app.state.upload_dir),
-            llm_transport=getattr(request.app.state, "xmind_llm_transport", None),
         )
     except xmind.XMindParseError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    except XMindLLMUnavailable as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    except XMindGenerationError as error:
-        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.get("/tasks")
+def list_xmind_tasks(
+    session: Session = Depends(get_session),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status: str | None = None,
+) -> dict:
+    return xmind.list_generation_tasks(
+        session,
+        page=page,
+        page_size=page_size,
+        status=status,
+    )
+
+
+@router.get("/tasks/{task_id}")
+def get_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+    return xmind.get_generation_task(session, task_id)
+
+
+@router.post("/tasks/{task_id}/retry")
+def retry_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+    return xmind.retry_generation_task(session, task_id)
+
+
+@router.post("/tasks/{task_id}/confirm", status_code=status.HTTP_201_CREATED)
+def confirm_xmind_task(
+    task_id: int,
+    payload: XMindTaskConfirmRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    return xmind.confirm_generated_task(session, task_id, payload)
 
 
 @router.post("/confirm", status_code=status.HTTP_201_CREATED)

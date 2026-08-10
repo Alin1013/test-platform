@@ -19,7 +19,7 @@ EXPECTED_TABLE_COMMENTS = {
     "test_cases": "测试用例公共信息",
     "api_case_details": "接口测试用例扩展信息",
     "ui_case_details": "UI 自动化用例扩展信息",
-    "xmind_records": "XMind 文件上传与解析记录",
+    "xmind_records": "XMind 文件生成任务",
     "system_configs": "系统全局配置",
     "test_execution": "自动化测试执行主记录",
     "test_execution_detail": "自动化测试执行明细",

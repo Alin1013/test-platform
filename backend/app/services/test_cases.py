@@ -137,6 +137,7 @@ def serialize_case(test_case: TestCase) -> dict:
         "title": test_case.title,
         "type": test_case.type,
         "module_id": test_case.module_id,
+        "module_name": test_case.module.name,
         "priority": test_case.priority,
         "status": test_case.status,
         "author_id": test_case.author_id,
@@ -185,6 +186,7 @@ def _case_query():
     # 列表序列化会访问作者和两类扩展详情，预加载可避免逐行查询。
     return select(TestCase).options(
         selectinload(TestCase.author),
+        selectinload(TestCase.module),
         selectinload(TestCase.api_details),
         selectinload(TestCase.ui_details),
     )

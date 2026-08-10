@@ -14,6 +14,12 @@ class XMindConfirmRequest(BaseModel):
     )
 
 
+class XMindTaskConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    module_mapping: dict[str, str] = Field(min_length=1, max_length=200)
+
+
 class XMindExportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

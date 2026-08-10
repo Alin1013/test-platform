@@ -4,16 +4,18 @@ import io
 import json
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from ..models import Module, User, XMindRecord
 from ..schemas import TestCaseCreate
-from ..xmind_schemas import XMindConfirmRequest
+from ..xmind_schemas import XMindConfirmRequest, XMindTaskConfirmRequest
 from . import settings, test_cases
 from .xmind_skill import (
     LLMConfig,
@@ -352,3 +354,282 @@ def confirm_generated_cases(session: Session, payload: XMindConfirmRequest) -> d
             for test_case in saved_cases
         ]
     }
+
+
+def _task_upload_path(upload_dir: Path, record: XMindRecord) -> Path:
+    return upload_dir / Path(record.file_url).name
+
+
+def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
+    return {
+        "id": record.id,
+        "file_name": record.file_name,
+        "file_url": record.file_url,
+        "uploader_id": record.uploader_id,
+        "uploader_name": record.uploader.name if record.uploader else "",
+        "status": record.status,
+        "parsed_cases_count": record.parsed_cases_count,
+        "attempts": record.attempts,
+        "available_at": record.available_at,
+        "locked_at": record.locked_at,
+        "last_error": record.last_error,
+        "created_at": record.created_at,
+    }
+
+
+def _serialize_task_detail(record: XMindRecord) -> dict[str, Any]:
+    return {
+        **_serialize_task_record(record),
+        "tree": record.tree_json or [],
+        "cases": record.preview_cases_json or [],
+        "module_mapping": record.module_mapping_json or {},
+    }
+
+
+def create_generation_task(
+    session: Session,
+    *,
+    original_name: str,
+    content: bytes,
+    uploader_id: int,
+    upload_dir: Path,
+) -> dict:
+    uploader = session.get(User, uploader_id)
+    if uploader is None:
+        raise HTTPException(status_code=404, detail="Uploader not found")
+    tree = parse_xmind(content)
+    stored_name = f"{uuid4().hex}.xmind"
+    destination = upload_dir / stored_name
+    record = XMindRecord(
+        file_name=original_name,
+        file_url=f"/uploads/{stored_name}",
+        uploader_id=uploader_id,
+        status="PENDING",
+        parsed_cases_count=0,
+        attempts=0,
+        available_at=datetime.now(timezone.utc),
+        locked_at=None,
+        last_error=None,
+        tree_json=tree,
+        preview_cases_json=None,
+        module_mapping_json=None,
+    )
+    session.add(record)
+    try:
+        destination.write_bytes(content)
+        session.commit()
+    except Exception:
+        session.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    return _serialize_task_detail(record)
+
+
+def list_generation_tasks(
+    session: Session,
+    *,
+    page: int,
+    page_size: int,
+    status: str | None = None,
+) -> dict:
+    query = select(XMindRecord).options(selectinload(XMindRecord.uploader))
+    if status:
+        query = query.where(XMindRecord.status == status)
+    count_query = select(func.count()).select_from(query.order_by(None).subquery())
+    total = session.scalar(count_query) or 0
+    rows = session.scalars(
+        query.order_by(XMindRecord.created_at.desc(), XMindRecord.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [_serialize_task_record(record) for record in rows],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+    }
+
+
+def get_generation_task(session: Session, task_id: int) -> dict:
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    return _serialize_task_detail(record)
+
+
+def retry_generation_task(session: Session, task_id: int) -> dict:
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    if record.status != "FAILED":
+        raise HTTPException(status_code=409, detail="Only failed XMind tasks can be retried")
+
+    record.status = "PENDING"
+    record.available_at = datetime.now(timezone.utc)
+    record.locked_at = None
+    record.last_error = None
+    record.preview_cases_json = None
+    record.module_mapping_json = None
+    record.parsed_cases_count = 0
+    session.commit()
+    return _serialize_task_detail(record)
+
+
+def confirm_generated_task(
+    session: Session,
+    task_id: int,
+    payload: XMindTaskConfirmRequest,
+) -> dict:
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    if record.status != "WAITING_REVIEW":
+        raise HTTPException(status_code=409, detail="XMind task is not ready for confirmation")
+
+    cases = record.preview_cases_json or []
+    if not cases:
+        raise HTTPException(status_code=422, detail="XMind task has no preview cases")
+
+    directories = {str(case.get("用例目录") or "").strip() for case in cases}
+    if "" in directories:
+        raise HTTPException(status_code=422, detail="每条用例都必须包含用例目录")
+    missing_names = sorted(directories - payload.module_mapping.keys())
+    if missing_names:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing module mappings: {', '.join(missing_names)}",
+        )
+    missing_modules = sorted(
+        {
+            module_id
+            for module_id in payload.module_mapping.values()
+            if session.get(Module, module_id) is None
+        }
+    )
+    if missing_modules:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Mapped modules not found: {', '.join(missing_modules)}",
+        )
+
+    uploader = record.uploader or session.get(User, record.uploader_id)
+    if uploader is None:
+        raise HTTPException(status_code=404, detail="Uploader not found")
+
+    saved_cases = []
+    try:
+        for raw_case in cases:
+            normalized = align_generated_cases(
+                [raw_case],
+                directory=str(raw_case["用例目录"]),
+                creator=uploader.name,
+            )[0]
+            saved_cases.append(
+                test_cases.add_case(
+                    session,
+                    TestCaseCreate(
+                        title=normalized["用例名称"],
+                        type="functional",
+                        module_id=payload.module_mapping[normalized["用例目录"]],
+                        priority=normalized["用例等级"],
+                        status="草稿",
+                        author_id=record.uploader_id,
+                        requirement_id=normalized["需求ID"] or None,
+                        precondition=normalized["前置条件"],
+                        test_steps=normalized["用例步骤"],
+                        expected_result=normalized["预期结果"],
+                        iteration=normalized["归属迭代"],
+                    ),
+                )
+            )
+        record.module_mapping_json = dict(payload.module_mapping)
+        record.status = "COMPLETED"
+        record.locked_at = None
+        record.last_error = None
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return {
+        "saved_cases": [
+            {
+                "id": test_case.id,
+                "code": test_case.code,
+                "title": test_case.title,
+                "module_id": test_case.module_id,
+            }
+            for test_case in saved_cases
+        ]
+    }
+
+
+async def generate_task_preview(
+    session_factory: Any,
+    task_id: int,
+    *,
+    upload_dir: Path,
+    llm_transport: Any = None,
+) -> dict:
+    try:
+        with session_factory() as session:
+            record = session.scalar(
+                select(XMindRecord)
+                .options(selectinload(XMindRecord.uploader))
+                .where(XMindRecord.id == task_id)
+            )
+            if record is None:
+                raise HTTPException(status_code=404, detail="XMind task not found")
+            if record.status != "RUNNING":
+                raise HTTPException(status_code=409, detail="XMind task is not running")
+
+            tree = list(record.tree_json or [])
+            if not tree:
+                tree = parse_xmind(_task_upload_path(upload_dir, record).read_bytes())
+                record.tree_json = tree
+
+            uploader = record.uploader or session.get(User, record.uploader_id)
+            if uploader is None:
+                raise HTTPException(status_code=404, detail="Uploader not found")
+
+            ai_settings = settings.get_settings(session)["ai"]
+            skill = XMindToTestCaseSkill(
+                OpenAICompatibleClient(transport=llm_transport),
+            )
+            cases = await skill.generate(
+                tree,
+                config=LLMConfig(
+                    api_key=ai_settings["apiKey"],
+                    base_url=ai_settings["baseUrl"],
+                    model=ai_settings["defaultModel"],
+                ),
+                creator=uploader.name,
+            )
+
+            record.preview_cases_json = cases
+            record.parsed_cases_count = len(cases)
+            record.status = "WAITING_REVIEW"
+            record.locked_at = None
+            record.last_error = None
+            session.commit()
+            return _serialize_task_detail(record)
+    except Exception as error:
+        with session_factory() as session:
+            record = session.get(XMindRecord, task_id)
+            if record is not None and record.status == "RUNNING":
+                record.status = "FAILED"
+                record.locked_at = None
+                record.last_error = str(error)
+                session.commit()
+        raise

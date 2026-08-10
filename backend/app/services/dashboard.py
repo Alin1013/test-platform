@@ -20,6 +20,7 @@ def get_recent_cases(session: Session, page: int, page_size: int) -> dict:
         select(TestCase)
         .options(
             selectinload(TestCase.author),
+            selectinload(TestCase.module),
             selectinload(TestCase.api_details),
             selectinload(TestCase.ui_details),
         )

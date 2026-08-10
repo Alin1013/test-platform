@@ -7,9 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
-from sqlalchemy import func, select
 
-from backend.app.models import XMindRecord
 from backend.app.services.xmind_skill import STANDARD_HEADERS, align_generated_cases
 from backend.app.services.xmind_skill import (
     LLMConfig,
@@ -86,74 +84,6 @@ def test_generated_case_directory_is_fixed_to_the_xmind_group() -> None:
     )
 
     assert cases[0]["用例目录"] == "用户中心/注册模块"
-
-
-def test_xmind_generate_waits_for_every_group_before_returning_preview(
-    client: TestClient,
-) -> None:
-    calls: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        calls.append(payload["messages"][-1]["content"])
-        if "注册模块" in calls[-1]:
-            return llm_response([{"用例名称": "注册成功", "用例步骤": "1. 提交有效注册信息", "预期结果": "1. 创建账号"}])
-        return llm_response([{"用例名称": "密码错误", "用例步骤": "1. 输入错误密码", "预期结果": "1. 提示密码错误"}])
-
-    client.app.state.xmind_llm_transport = httpx.MockTransport(handler)
-    settings = client.get("/api/v1/settings").json()
-    settings["ai"]["apiKey"] = "test-key"
-    client.post("/api/v1/settings", json=settings)
-
-    response = client.post(
-        "/api/v1/xmind/generate",
-        files={"file": ("用户中心.xmind", make_grouped_xmind_file(), "application/octet-stream")},
-        data={"uploader_id": "1"},
-    )
-
-    assert response.status_code == 201
-    assert len(calls) == 2
-    assert response.json()["record"]["parsed_cases_count"] == 2
-    assert [case["用例名称"] for case in response.json()["cases"]] == ["注册成功", "密码错误"]
-    assert all(list(case) == list(STANDARD_HEADERS) for case in response.json()["cases"])
-
-
-def test_xmind_generate_is_all_or_nothing_after_retries(client: TestClient) -> None:
-    attempts = 0
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal attempts
-        attempts += 1
-        return httpx.Response(500, json={"error": {"message": "temporary failure"}})
-
-    client.app.state.xmind_llm_transport = httpx.MockTransport(handler)
-    settings = client.get("/api/v1/settings").json()
-    settings["ai"]["apiKey"] = "test-key"
-    client.post("/api/v1/settings", json=settings)
-
-    response = client.post(
-        "/api/v1/xmind/generate",
-        files={"file": ("用户中心.xmind", make_grouped_xmind_file(), "application/octet-stream")},
-        data={"uploader_id": "1"},
-    )
-
-    assert response.status_code == 502
-    assert attempts == 6
-    assert response.json()["detail"] == "XMind 用例生成失败，请稍后重试"
-    with client.app.state.session_factory() as session:
-        assert session.scalar(select(func.count()).select_from(XMindRecord)) == 0
-    assert list(client.app.state.upload_dir.glob("*.xmind")) == []
-
-
-def test_xmind_generate_requires_llm_configuration(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/xmind/generate",
-        files={"file": ("用户中心.xmind", make_grouped_xmind_file(), "application/octet-stream")},
-        data={"uploader_id": "1"},
-    )
-
-    assert response.status_code == 503
-    assert response.json()["detail"] == "请先在系统设置中配置 LLM API Key"
 
 
 def test_generated_preview_can_be_confirmed_and_exported(client: TestClient) -> None:
