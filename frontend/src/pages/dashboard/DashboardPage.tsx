@@ -42,7 +42,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 const columns: ColumnsType<TestCaseRecord> = [
-  { title: '编号', dataIndex: 'id', width: 120 },
+  { title: '模块', dataIndex: 'moduleName', width: 130, render: (moduleName: string | undefined) => moduleName || '-' },
   { title: '用例名称', dataIndex: 'name', ellipsis: true },
   {
     title: '类型',
@@ -111,9 +111,9 @@ export function DashboardPage() {
   const exportCases = async () => {
     if (!data) return;
     const rows = [
-      ['编号', '用例名称', '类型', '优先级', '状态'],
+      ['模块', '用例名称', '类型', '优先级', '状态'],
       ...data.recentCases.map((item) => [
-        item.id,
+        item.moduleName ?? '-',
         item.name,
         typeLabels[item.type],
         item.priority,

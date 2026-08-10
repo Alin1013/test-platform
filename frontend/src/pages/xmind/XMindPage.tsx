@@ -1,15 +1,14 @@
 import {
   ApartmentOutlined,
-  ArrowRightOutlined,
   CheckCircleFilled,
-  CloseOutlined,
   CloudUploadOutlined,
   DownloadOutlined,
   FileOutlined,
   ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
-import { Alert, App, Button, Progress, Select, Spin } from 'antd';
+import { Alert, App, Button, Empty, Progress, Select, Skeleton, Table, Tag } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
@@ -18,26 +17,32 @@ import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
   TestModule,
   XMindGeneratedCase,
-  XMindGenerationResult,
+  XMindTaskDetail,
+  XMindTaskRecord,
+  XMindTaskStatus,
   XMindTreeNode,
 } from '../../services/contracts';
 import './xmind.css';
 
-type WorkflowState =
+type UploadState =
   | { status: 'idle'; error?: string }
-  | { status: 'uploading'; fileName: string; progress: number }
-  | { status: 'generating'; fileName: string }
-  | {
-      status: 'preview';
-      fileName: string;
-      result: XMindGenerationResult;
-      modules: TestModule[];
-      moduleMapping: Record<string, string>;
-      error?: string;
-    }
-  | { status: 'complete'; fileName: string; generatedCount: number };
+  | { status: 'uploading'; fileName: string; progress: number };
 
-const initialState: WorkflowState = { status: 'idle' };
+const statusLabels: Record<XMindTaskStatus, string> = {
+  PENDING: '排队中',
+  RUNNING: '生成中',
+  WAITING_REVIEW: '待审核',
+  FAILED: '失败',
+  COMPLETED: '已完成',
+};
+
+const statusColors: Record<XMindTaskStatus, string> = {
+  PENDING: 'default',
+  RUNNING: 'processing',
+  WAITING_REVIEW: 'warning',
+  FAILED: 'error',
+  COMPLETED: 'success',
+};
 
 interface FlatModule {
   id: string;
@@ -90,15 +95,16 @@ function normalizeModulePath(path: string): string {
 
 function findMappedModule(directory: string, modules: FlatModule[]): FlatModule | undefined {
   const normalizedDirectory = normalizeModulePath(directory);
-  const exactMatch = modules.find(
-    (module) => normalizeModulePath(module.label) === normalizedDirectory,
-  );
+  const exactMatch = modules.find((module) => normalizeModulePath(module.label) === normalizedDirectory);
   if (exactMatch) return exactMatch;
-
   const leafName = normalizedDirectory.split('/').at(-1);
   if (!leafName) return undefined;
   const leafMatches = modules.filter((module) => module.name.trim() === leafName);
   return leafMatches.length === 1 ? leafMatches[0] : undefined;
+}
+
+function taskStatus(status: XMindTaskStatus) {
+  return <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>;
 }
 
 export function XMindPage() {
@@ -106,11 +112,17 @@ export function XMindPage() {
   const service = usePlatformService();
   const { message } = App.useApp();
   const { user } = useAuth();
-  const [workflow, setWorkflow] = useState<WorkflowState>(initialState);
+  const [upload, setUpload] = useState<UploadState>({ status: 'idle' });
+  const [tasks, setTasks] = useState<XMindTaskRecord[] | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<XMindTaskDetail | null>(null);
+  const [modules, setModules] = useState<TestModule[]>([]);
+  const [moduleMapping, setModuleMapping] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string>();
   const [confirming, setConfirming] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
   const uploadTimer = useRef<number | null>(null);
-  const generationController = useRef<AbortController | null>(null);
-  const requestSequence = useRef(0);
+  const flatModules = useMemo(() => flattenModules(modules), [modules]);
 
   const clearUploadTimer = useCallback(() => {
     if (uploadTimer.current !== null) {
@@ -119,151 +131,157 @@ export function XMindPage() {
     }
   }, []);
 
-  useEffect(
-    () => () => {
-      clearUploadTimer();
-      generationController.current?.abort();
-    },
-    [clearUploadTimer],
-  );
+  useEffect(() => () => clearUploadTimer(), [clearUploadTimer]);
+
+  const loadTasks = useCallback(async () => {
+    const result = await service.listXMindTasks(1, 20);
+    setTasks(result.items);
+    if (selectedTaskId === null && result.items[0]) setSelectedTaskId(result.items[0].id);
+  }, [selectedTaskId, service]);
+
+  useEffect(() => {
+    let active = true;
+    setTasks(null);
+    void Promise.all([service.listXMindTasks(1, 20), service.listTestModules()])
+      .then(([taskPage, nextModules]) => {
+        if (!active) return;
+        setTasks(taskPage.items);
+        setModules(nextModules);
+        if (selectedTaskId === null && taskPage.items[0]) setSelectedTaskId(taskPage.items[0].id);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : '生成任务加载失败');
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadToken, service]);
+
+  useEffect(() => {
+    if (selectedTaskId === null) {
+      setDetail(null);
+      return;
+    }
+    let active = true;
+    const loadDetail = async () => {
+      try {
+        const nextDetail = await service.getXMindTask(selectedTaskId);
+        if (!active) return;
+        setDetail(nextDetail);
+        const defaults = Object.fromEntries(
+          previewDirectories(nextDetail.cases).map((directory) => [
+            directory,
+            nextDetail.moduleMapping[directory] ?? findMappedModule(directory, flatModules)?.id ?? '',
+          ]),
+        );
+        setModuleMapping(defaults);
+        await loadTasks();
+      } catch (reason: unknown) {
+        if (active) setError(reason instanceof Error ? reason.message : '生成任务详情加载失败');
+      }
+    };
+    void loadDetail();
+    const shouldPoll = detail?.id !== selectedTaskId || detail.status === 'PENDING' || detail.status === 'RUNNING';
+    if (!shouldPoll) return () => { active = false; };
+    const timer = window.setInterval(() => void loadDetail(), 1200);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [detail?.id, detail?.status, flatModules, loadTasks, selectedTaskId, service]);
+
+  const directories = useMemo(() => previewDirectories(detail?.cases ?? []), [detail?.cases]);
 
   const startUpload = (file: File) => {
     clearUploadTimer();
-    generationController.current?.abort();
-    generationController.current = null;
-    const requestId = ++requestSequence.current;
-
+    setError(undefined);
     if (!file.name.toLowerCase().endsWith('.xmind')) {
-      setWorkflow({ status: 'idle', error: '仅支持 .xmind 文件' });
+      setUpload({ status: 'idle', error: '仅支持 .xmind 文件' });
       return;
     }
-
-    setWorkflow({ status: 'uploading', fileName: file.name, progress: 8 });
-    let progress = 8;
-    const tickDelay = window.navigator.userAgent.includes('jsdom') ? 1 : 140;
+    setUpload({ status: 'uploading', fileName: file.name, progress: 12 });
+    let progress = 12;
     uploadTimer.current = window.setInterval(() => {
-      progress = Math.min(progress + 16, 100);
-      if (progress !== 100) {
-        setWorkflow({ status: 'uploading', fileName: file.name, progress });
-        return;
-      }
-      clearUploadTimer();
-      setWorkflow({ status: 'generating', fileName: file.name });
-      const controller = new AbortController();
-      generationController.current = controller;
-      void service
-        .generateXMind(file, Number(user?.id ?? 1), controller.signal)
-        .then(async (result) => {
-          if (requestId !== requestSequence.current) return;
-          let modules: TestModule[] = [];
-          try {
-            modules = await service.listTestModules();
-          } catch {
-            // 生成结果仍然可预览，用户可以稍后重试目录加载。
-          }
-          const flatModules = flattenModules(modules);
-          const moduleMapping = Object.fromEntries(
-            previewDirectories(result.cases).map((directory) => {
-              const match = findMappedModule(directory, flatModules);
-              return [directory, match?.id ?? ''];
-            }),
-          );
-          setWorkflow({
-            status: 'preview',
-            fileName: file.name,
-            result,
-            modules,
-            moduleMapping,
-          });
-        })
-        .catch((error: unknown) => {
-          if (requestId !== requestSequence.current) return;
-          setWorkflow({
-            status: 'idle',
-            error: error instanceof Error ? error.message : 'XMind 用例生成失败，请稍后重试',
-          });
-        })
-        .finally(() => {
-          if (generationController.current === controller) {
-            generationController.current = null;
-          }
-        });
-    }, tickDelay);
+      progress = Math.min(progress + 22, 88);
+      setUpload({ status: 'uploading', fileName: file.name, progress });
+    }, 160);
+    void service
+      .generateXMind(file, Number(user?.id ?? 1))
+      .then((created) => {
+        clearUploadTimer();
+        setUpload({ status: 'idle' });
+        setSelectedTaskId(created.id);
+        setDetail(created);
+        setModuleMapping(created.moduleMapping);
+        setReloadToken((token) => token + 1);
+        void message.success('已创建生成任务，可离开页面后在任务列表查看进度');
+      })
+      .catch((reason: unknown) => {
+        clearUploadTimer();
+        setUpload({ status: 'idle' });
+        setError(reason instanceof Error ? reason.message : 'XMind 用例生成失败，请稍后重试');
+      });
   };
 
-  const resetWorkflow = () => {
-    requestSequence.current += 1;
-    clearUploadTimer();
-    generationController.current?.abort();
-    generationController.current = null;
-    setConfirming(false);
-    setWorkflow(initialState);
-  };
-
-  const flatModules = useMemo(
-    () => (workflow.status === 'preview' ? flattenModules(workflow.modules) : []),
-    [workflow],
-  );
-
-  const updateMapping = (directory: string, moduleId: string) => {
-    if (workflow.status !== 'preview') return;
-    setWorkflow({
-      ...workflow,
-      moduleMapping: { ...workflow.moduleMapping, [directory]: moduleId },
-      error: undefined,
-    });
-  };
-
-  const confirmPreview = async () => {
-    if (workflow.status !== 'preview') return;
-    const directories = previewDirectories(workflow.result.cases);
-    if (directories.some((directory) => !workflow.moduleMapping[directory])) {
-      setWorkflow({ ...workflow, error: '请为每个用例目录选择目标模块' });
+  const confirmTask = async () => {
+    if (!detail || detail.status !== 'WAITING_REVIEW') return;
+    if (directories.some((directory) => !moduleMapping[directory])) {
+      setError('请为每个用例目录选择目标模块');
       return;
     }
     setConfirming(true);
     try {
-      const saved = await service.confirmXMind({
-        uploaderId: Number(user?.id ?? 1),
-        moduleMapping: workflow.moduleMapping,
-        cases: workflow.result.cases,
-      });
-      setWorkflow({
-        status: 'complete',
-        fileName: workflow.fileName,
-        generatedCount: saved.saved_cases.length,
-      });
-    } catch (error: unknown) {
-      setWorkflow({
-        ...workflow,
-        error: error instanceof Error ? error.message : '保存用例失败，请重试',
-      });
+      const result = await service.confirmXMindTask(detail.id, { moduleMapping });
+      setDetail({ ...detail, status: 'COMPLETED', moduleMapping });
+      setTasks((current) => current?.map((task) => task.id === detail.id ? { ...task, status: 'COMPLETED' } : task) ?? current);
+      void message.success(`已合并 ${result.saved_cases.length} 条功能用例`);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : '保存用例失败，请重试');
     } finally {
       setConfirming(false);
     }
   };
 
-  const exportPreview = async () => {
-    if (workflow.status !== 'preview') return;
+  const retryTask = async () => {
+    if (!detail) return;
     try {
-      const blob = await service.exportXMind(workflow.result.cases);
+      const nextDetail = await service.retryXMindTask(detail.id);
+      setDetail(nextDetail);
+      setError(undefined);
+      setReloadToken((token) => token + 1);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : '重试生成任务失败');
+    }
+  };
+
+  const exportPreview = async () => {
+    if (!detail?.cases.length) return;
+    try {
+      const blob = await service.exportXMind(detail.cases);
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `${workflow.fileName.replace(/\.xmind$/i, '')}-功能用例.xlsx`;
+      anchor.download = `${detail.fileName.replace(/\.xmind$/i, '')}-功能用例.xlsx`;
       anchor.click();
       window.URL.revokeObjectURL(url);
-      void message.success('已导出生成预览');
-    } catch (error: unknown) {
-      void message.error(error instanceof Error ? error.message : '导出失败，请重试');
+    } catch (reason: unknown) {
+      void message.error(reason instanceof Error ? reason.message : '导出失败，请重试');
     }
   };
+
+  const taskColumns: ColumnsType<XMindTaskRecord> = [
+    { title: '文件', dataIndex: 'fileName', ellipsis: true },
+    { title: '状态', dataIndex: 'status', width: 100, render: taskStatus },
+    { title: '用例数', dataIndex: 'parsedCasesCount', width: 82 },
+    { title: '提交人', dataIndex: 'uploaderName', width: 100 },
+    { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+  ];
 
   return (
     <section className="page-section xmind-page">
       <PageHeader title="用例生成器" description="将思维导图节点解析为结构化功能测试用例" />
 
-      {workflow.status === 'idle' ? (
+      {upload.status === 'idle' ? (
         <div
           className="xmind-dropzone"
           aria-label="XMind 文件上传区"
@@ -276,7 +294,7 @@ export function XMindPage() {
         >
           <div className="xmind-dropzone__icon" aria-hidden="true"><CloudUploadOutlined /></div>
           <h2>拖拽 XMind 文件到此处</h2>
-          <p>支持文件扩展名 .xmind，上传后生成完整功能用例预览</p>
+          <p>支持文件扩展名 .xmind，上传后进入生成任务列表</p>
           <input
             id="xmind-file-input"
             className="xmind-file-input"
@@ -292,109 +310,96 @@ export function XMindPage() {
             <FileOutlined aria-hidden="true" />
             选择 XMind 文件
           </label>
-          {workflow.error ? (
-            <div className="xmind-dropzone__error" role="alert">
-              <span>{workflow.error}</span>
-              {workflow.error.includes('LLM API Key') ? (
-                <Button type="link" onClick={() => navigate('/settings?tab=ai')}>前往 AI 设置</Button>
-              ) : null}
-            </div>
-          ) : null}
+          {upload.error ? <div className="xmind-dropzone__error" role="alert">{upload.error}</div> : null}
         </div>
-      ) : null}
-
-      {workflow.status === 'uploading' ? (
+      ) : (
         <div className="xmind-uploading" aria-live="polite">
           <div className="xmind-stage-heading">
             <div className="xmind-stage-heading__icon" aria-hidden="true"><FileOutlined /></div>
-            <div><span>正在上传文件</span><h2>{workflow.fileName}</h2></div>
+            <div><span>正在创建生成任务</span><h2>{upload.fileName}</h2></div>
           </div>
-          <Progress percent={workflow.progress} status="active" strokeColor="#1677ff" />
-          <Button aria-label="取消上传" icon={<CloseOutlined />} onClick={resetWorkflow}>取消上传</Button>
+          <Progress percent={upload.progress} status="active" strokeColor="#1677ff" />
         </div>
-      ) : null}
+      )}
 
-      {workflow.status === 'generating' ? (
-        <div className="xmind-uploading" aria-live="polite">
-          <div className="xmind-stage-heading">
-            <div className="xmind-stage-heading__icon" aria-hidden="true"><ApartmentOutlined /></div>
-            <div><span>正在生成完整功能用例</span><h2>{workflow.fileName}</h2></div>
-          </div>
-          <Spin size="large" aria-label="正在生成" />
-          <p className="xmind-generating-note">所有节点分组成功后才会展示预览。</p>
-          <Button aria-label="取消生成" icon={<CloseOutlined />} onClick={resetWorkflow}>取消生成</Button>
+      {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError(undefined)} /> : null}
+
+      <div className="xmind-task-list" aria-label="XMind 生成任务列表">
+        <div className="xmind-preview__header">
+          <div><span className="xmind-eyebrow">后台生成</span><h2>生成任务</h2><p>任务独立于当前页面，生成完成后状态变为待审核。</p></div>
+          <Button aria-label="刷新生成任务" icon={<ReloadOutlined />} onClick={() => setReloadToken((token) => token + 1)} />
         </div>
-      ) : null}
+        {tasks ? (
+          tasks.length ? (
+            <Table<XMindTaskRecord>
+              rowKey="id"
+              columns={taskColumns}
+              dataSource={tasks}
+              pagination={false}
+              size="small"
+              rowClassName={(record) => record.id === selectedTaskId ? 'xmind-task-row--selected' : ''}
+              onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
+            />
+          ) : <Empty description="暂无生成任务" />
+        ) : <Skeleton active paragraph={{ rows: 3 }} />}
+      </div>
 
-      {workflow.status === 'preview' ? (
+      {detail ? (
         <div className="xmind-preview">
           <div className="xmind-preview__header">
-            <div>
-              <span className="xmind-eyebrow">文件：{workflow.fileName}</span>
-              <h2>解析预览</h2>
-              <p>已完成全部节点分组生成，请确认目录映射后保存正式功能用例。</p>
-            </div>
+            <div><span className="xmind-eyebrow">文件：{detail.fileName}</span><h2>任务详情 {taskStatus(detail.status)}</h2><p>{detail.status === 'WAITING_REVIEW' ? '请审核生成预览并确认模块映射。' : '生成任务状态会自动刷新。'}</p></div>
             <div className="xmind-preview__actions">
-              <Button icon={<DownloadOutlined />} onClick={() => void exportPreview()}>导出 XLSX</Button>
-              <Button
-                aria-label="开始完整解析"
-                type="primary"
-                icon={<SaveOutlined />}
-                loading={confirming}
-                onClick={() => void confirmPreview()}
-              >
-                确认并生成用例
-              </Button>
+              {detail.cases.length ? <Button icon={<DownloadOutlined />} onClick={() => void exportPreview()}>导出 XLSX</Button> : null}
+              {detail.status === 'FAILED' ? <Button type="primary" icon={<ReloadOutlined />} onClick={() => void retryTask()}>重新执行</Button> : null}
+              {detail.status === 'WAITING_REVIEW' ? <Button type="primary" icon={<SaveOutlined />} loading={confirming} onClick={() => void confirmTask()}>审核并合并</Button> : null}
+              {detail.status === 'COMPLETED' ? <Button type="primary" onClick={() => navigate('/test-cases/functional')}>查看功能用例</Button> : null}
             </div>
           </div>
-          {workflow.error ? <Alert type="error" showIcon message={workflow.error} /> : null}
-          <div className="xmind-preview__grid">
-            <section className="xmind-preview-panel" aria-labelledby="xmind-tree-title">
-              <header><h3 id="xmind-tree-title">XMind 树</h3><span>{countNodes(workflow.result.tree)} 个节点</span></header>
-              <div className="xmind-tree" role="tree" aria-label="XMind 树">
-                {workflow.result.tree.map((node, index) => renderTreeNode(node, 1, String(index)))}
-              </div>
-            </section>
-            <section className="xmind-preview-panel" aria-labelledby="xmind-mapping-title">
-              <header><h3 id="xmind-mapping-title">模块映射</h3><span>{workflow.result.cases.length} 条用例</span></header>
-              <div className="xmind-mapping-list">
-                {previewDirectories(workflow.result.cases).map((directory) => (
-                  <div className="xmind-mapping" key={directory}>
-                    <span className="xmind-mapping__label">用例目录</span>
-                    <strong>目录路径：{directory.replaceAll('/', ' / ')}</strong>
-                    <Select
-                      aria-label={`选择 ${directory} 目标模块`}
-                      value={workflow.moduleMapping[directory] || undefined}
-                      placeholder="选择目标模块"
-                      options={flatModules.map((module) => ({ value: module.id, label: module.label }))}
-                      onChange={(value) => updateMapping(directory, value)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-          <section className="xmind-case-preview" aria-labelledby="xmind-case-title">
-            <header><h3 id="xmind-case-title">功能用例预览</h3><span>{workflow.result.cases.length} 条</span></header>
-            <div className="xmind-case-preview__table-wrap">
-              <table><thead><tr><th>用例目录</th><th>用例名称</th><th>用例等级</th><th>用例步骤</th><th>预期结果</th></tr></thead>
-                <tbody>{workflow.result.cases.map((item, index) => <tr key={`${item.用例名称}-${index}`}><td>{item.用例目录}</td><td>{item.用例名称}</td><td>{item.用例等级}</td><td>{item.用例步骤}</td><td>{item.预期结果}</td></tr>)}</tbody>
-              </table>
+          {detail.status === 'FAILED' && detail.lastError ? <Alert type="error" showIcon message={detail.lastError} /> : null}
+          {detail.cases.length ? (
+            <div className="xmind-preview__grid">
+              <section className="xmind-preview-panel" aria-labelledby="xmind-tree-title">
+                <header><h3 id="xmind-tree-title">XMind 树</h3><span>{countNodes(detail.tree)} 个节点</span></header>
+                <div className="xmind-tree" role="tree" aria-label="XMind 树">
+                  {detail.tree.map((node, index) => renderTreeNode(node, 1, String(index)))}
+                </div>
+              </section>
+              <section className="xmind-preview-panel" aria-labelledby="xmind-mapping-title">
+                <header><h3 id="xmind-mapping-title">模块映射</h3><span>{detail.cases.length} 条用例</span></header>
+                <div className="xmind-mapping-list">
+                  {directories.map((directory) => {
+                    const match = findMappedModule(directory, flatModules);
+                    return (
+                      <div className="xmind-mapping" key={directory}>
+                        <span className="xmind-mapping__label">用例目录</span>
+                        <strong>目录路径：{directory.replaceAll('/', ' / ')}</strong>
+                        <Select
+                          aria-label={`选择 ${directory} 目标模块`}
+                          value={moduleMapping[directory] || match?.id || undefined}
+                          placeholder="选择目标模块"
+                          options={flatModules.map((module) => ({ value: module.id, label: module.label }))}
+                          onChange={(value) => setModuleMapping((current) => ({ ...current, [directory]: value }))}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
-      ) : null}
-
-      {workflow.status === 'complete' ? (
-        <div className="xmind-complete" aria-live="polite">
-          <CheckCircleFilled className="xmind-complete__icon" aria-hidden="true" />
-          <span className="xmind-eyebrow">功能用例生成完成</span>
-          <h2>已生成 {workflow.generatedCount} 条测试用例</h2>
-          <p>{workflow.fileName} 的节点已完成目录映射并保存到用例库。</p>
-          <div className="xmind-complete__actions">
-            <Button aria-label="查看功能用例" type="primary" icon={<ArrowRightOutlined />} iconPlacement="end" onClick={() => navigate('/test-cases/functional')}>查看功能用例</Button>
-            <Button aria-label="重新上传" icon={<ReloadOutlined />} onClick={resetWorkflow}>重新上传</Button>
-          </div>
+          ) : detail.status === 'PENDING' || detail.status === 'RUNNING' ? (
+            <div className="xmind-uploading" aria-live="polite"><ApartmentOutlined /><p>后台正在生成，离开页面不会中断任务。</p></div>
+          ) : null}
+          {detail.cases.length ? (
+            <section className="xmind-case-preview" aria-labelledby="xmind-case-title">
+              <header><h3 id="xmind-case-title">功能用例预览</h3><span>{detail.cases.length} 条</span></header>
+              <div className="xmind-case-preview__table-wrap">
+                <table><thead><tr><th>用例目录</th><th>用例名称</th><th>用例等级</th><th>用例步骤</th><th>预期结果</th></tr></thead>
+                  <tbody>{detail.cases.map((item, index) => <tr key={`${item.用例名称}-${index}`}><td>{item.用例目录}</td><td>{item.用例名称}</td><td>{item.用例等级}</td><td>{item.用例步骤}</td><td>{item.预期结果}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+          {detail.status === 'COMPLETED' ? <div className="xmind-complete" aria-live="polite"><CheckCircleFilled className="xmind-complete__icon" aria-hidden="true" /><h2>已合并到功能用例</h2><p>{detail.fileName} 已按模块映射写入用例库。</p></div> : null}
         </div>
       ) : null}
     </section>

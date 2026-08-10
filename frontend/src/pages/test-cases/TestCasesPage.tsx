@@ -24,6 +24,7 @@ import type {
   TestCaseRecord,
   TestCaseStatus,
   TestCaseType,
+  PaginatedResult,
 } from '../../services/contracts';
 import { CaseDrawer } from './components/CaseDrawer';
 import { ModuleTreePanel } from './components/ModuleTreePanel';
@@ -116,7 +117,7 @@ export function TestCasesPage() {
     projectNames: [],
     iterations: [],
   });
-  const [rows, setRows] = useState<TestCaseRecord[] | null>(null);
+  const [rows, setRows] = useState<PaginatedResult<TestCaseRecord> | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [drawerOpen, setDrawerOpen] = useState(searchParams.get('create') === '1');
@@ -153,14 +154,14 @@ export function TestCasesPage() {
   useEffect(() => {
     let active = true;
     setRows(null);
-    void service.listTestCases(query).then((nextRows) => {
+    void service.listTestCasesPage(query, page, pageSize).then((nextRows) => {
       if (active) setRows(nextRows);
     });
 
     return () => {
       active = false;
     };
-  }, [query, service]);
+  }, [page, pageSize, query, service]);
 
   useEffect(() => {
     if (type !== 'functional') return;
@@ -179,17 +180,13 @@ export function TestCasesPage() {
     setSelectedStorageIds([]);
   }, [query]);
 
-  const totalPages = rows ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+  const totalPages = rows ? Math.max(1, Math.ceil(rows.total / pageSize)) : 1;
 
   useEffect(() => {
     setPage((currentPage) => Math.min(currentPage, totalPages));
   }, [totalPages]);
 
-  const visibleRows = useMemo(() => {
-    if (!rows) return [];
-    const start = (page - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [page, pageSize, rows]);
+  const visibleRows = rows?.items ?? [];
 
   const projectOptions = useMemo(
     () => filterOptions.projectNames.map((value) => ({ value, label: value })),
@@ -206,9 +203,9 @@ export function TestCasesPage() {
   };
 
   const refreshRows = async () => {
-    const nextRows = await service.listTestCases(query);
+    const nextRows = await service.listTestCasesPage(query, page, pageSize);
     setRows(nextRows);
-    return nextRows;
+    return nextRows.items;
   };
 
   const refreshRowsAndFilterOptions = async () => {
@@ -268,7 +265,7 @@ export function TestCasesPage() {
   const columns: ColumnsType<TestCaseRecord> = (() => {
     if (type === 'functional') {
       return [
-        { title: '用例目录', dataIndex: 'moduleId', width: 110 },
+        { title: '模块', dataIndex: 'moduleName', width: 130, render: (value: string | undefined) => value || '-' },
         { title: '用例名称', dataIndex: 'name', width: 180, ellipsis: true },
         { title: '前置条件', dataIndex: 'precondition', width: 180, ellipsis: true, render: (value) => value || '-' },
         { title: '用例步骤', dataIndex: 'steps', width: 220, ellipsis: true, render: (value) => value || '-' },
@@ -295,6 +292,7 @@ export function TestCasesPage() {
       ];
     }
     const base: ColumnsType<TestCaseRecord> = [
+      { title: '模块', dataIndex: 'moduleName', width: 130, render: (value: string | undefined) => value || '-' },
       { title: '用例名称', dataIndex: 'name', ellipsis: true },
     ];
     if (type === 'api') {
@@ -447,7 +445,7 @@ export function TestCasesPage() {
     return updated;
   };
 
-  const selectedCases = rows?.filter((row) => selectedStorageIds.includes(row.storageId)) ?? [];
+  const selectedCases = rows?.items.filter((row) => selectedStorageIds.includes(row.storageId)) ?? [];
 
   const listLabel = `${typeLabels[type]}列表`;
 
@@ -639,7 +637,7 @@ export function TestCasesPage() {
             className="case-list-table"
           >
             {rows ? (
-              rows.length ? (
+              rows.items.length ? (
                 <Table
                   rowKey="storageId"
                   columns={columns}
@@ -664,7 +662,7 @@ export function TestCasesPage() {
               <AppPagination
                 current={page}
                 pageSize={pageSize}
-                total={rows.length}
+                total={rows.total}
                 onChange={(nextPage, nextPageSize) => {
                   setPageSize(nextPageSize);
                   setPage(nextPageSize === pageSize ? nextPage : 1);

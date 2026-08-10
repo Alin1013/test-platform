@@ -27,7 +27,11 @@ import type {
   XMindConfirmInput,
   XMindConfirmResult,
   XMindGeneratedCase,
-  XMindGenerationResult,
+  XMindTreeNode,
+  XMindTaskConfirmInput,
+  XMindTaskDetail,
+  XMindTaskRecord,
+  XMindTaskStatus,
 } from './contracts';
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -80,6 +84,7 @@ interface ApiTestCase {
   title: string;
   type: TestCaseType;
   module_id: string;
+  module_name?: string;
   priority: TestCaseRecord['priority'];
   status: TestCaseStatus;
   author_name: string;
@@ -127,6 +132,34 @@ interface ApiEnvelope<T> {
   data: T;
 }
 
+interface ApiPaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+interface ApiXMindTaskRecord {
+  id: number;
+  file_name: string;
+  file_url: string;
+  uploader_id: number;
+  uploader_name: string;
+  status: XMindTaskStatus;
+  parsed_cases_count: number;
+  attempts: number;
+  available_at: string;
+  locked_at?: string | null;
+  last_error?: string | null;
+  created_at: string;
+}
+
+interface ApiXMindTaskDetail extends ApiXMindTaskRecord {
+  tree: XMindTreeNode[];
+  cases: XMindGeneratedCase[];
+  module_mapping: Record<string, string>;
+}
+
 function mapCase(testCase: ApiTestCase): TestCaseRecord {
   // 传输层使用蛇形字段，页面层继续消费既有的驼峰领域对象。
   const updatedDate = new Date(testCase.updated_at);
@@ -135,6 +168,7 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
     id: testCase.code,
     type: testCase.type,
     moduleId: testCase.module_id,
+    moduleName: testCase.module_name,
     name: testCase.title,
     priority: testCase.priority,
     status: testCase.status,
@@ -194,6 +228,32 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
           steps: testCase.ui_details.steps,
         }
       : undefined,
+  };
+}
+
+function mapXMindTaskRecord(record: ApiXMindTaskRecord): XMindTaskRecord {
+  return {
+    id: record.id,
+    fileName: record.file_name,
+    fileUrl: record.file_url,
+    uploaderId: record.uploader_id,
+    uploaderName: record.uploader_name,
+    status: record.status,
+    parsedCasesCount: record.parsed_cases_count,
+    attempts: record.attempts,
+    availableAt: record.available_at,
+    lockedAt: record.locked_at ?? null,
+    lastError: record.last_error ?? null,
+    createdAt: record.created_at,
+  };
+}
+
+function mapXMindTaskDetail(record: ApiXMindTaskDetail): XMindTaskDetail {
+  return {
+    ...mapXMindTaskRecord(record),
+    tree: record.tree,
+    cases: record.cases,
+    moduleMapping: record.module_mapping ?? {},
   };
 }
 
@@ -407,6 +467,28 @@ export function createApiPlatformService({
       return page.items.map(mapCase);
     },
 
+    async listTestCasesPage(query: TestCaseQuery = {}, page = 1, pageSize = 20) {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (query.type) params.set('type', query.type);
+      if (query.moduleId) params.set('module_id', query.moduleId);
+      if (query.keyword) params.set('keyword', query.keyword);
+      if (query.priority) params.set('priority', query.priority);
+      if (query.status) params.set('status', query.status);
+      if (query.projectName) params.set('project_name', query.projectName);
+      if (query.iteration) params.set('iteration', query.iteration);
+      if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
+      const response = await request<ApiPaginatedResponse<ApiTestCase>>(`/test-cases?${params}`);
+      return {
+        items: response.items.map(mapCase),
+        page: response.page,
+        pageSize: response.page_size,
+        total: response.total,
+      };
+    },
+
     async createTestCase(input: CreateTestCaseInput) {
       const apiDetails =
         input.type === 'api' ? mapApiDetailsInput(input) : undefined;
@@ -614,15 +696,45 @@ export function createApiPlatformService({
       file: File,
       uploaderId = 1,
       signal?: AbortSignal,
-    ): Promise<XMindGenerationResult> {
+    ): Promise<XMindTaskDetail> {
       const body = new FormData();
       body.append('file', file);
       body.append('uploader_id', String(uploaderId));
-      return request<XMindGenerationResult>('/xmind/generate', {
+      const response = await request<ApiXMindTaskDetail>('/xmind/generate', {
         method: 'POST',
         body,
         signal,
       });
+      return mapXMindTaskDetail(response);
+    },
+
+    async listXMindTasks(page = 1, pageSize = 20, status?: XMindTaskStatus) {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (status) params.set('status', status);
+      const response = await request<ApiPaginatedResponse<ApiXMindTaskRecord>>(
+        `/xmind/tasks?${params}`,
+      );
+      return {
+        items: response.items.map(mapXMindTaskRecord),
+        page: response.page,
+        pageSize: response.page_size,
+        total: response.total,
+      };
+    },
+
+    async getXMindTask(taskId: number) {
+      const response = await request<ApiXMindTaskDetail>(`/xmind/tasks/${taskId}`);
+      return mapXMindTaskDetail(response);
+    },
+
+    async retryXMindTask(taskId: number) {
+      const response = await request<ApiXMindTaskDetail>(`/xmind/tasks/${taskId}/retry`, {
+        method: 'POST',
+      });
+      return mapXMindTaskDetail(response);
     },
 
     async confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult> {
@@ -632,6 +744,15 @@ export function createApiPlatformService({
           uploader_id: input.uploaderId,
           module_mapping: input.moduleMapping,
           cases: input.cases,
+        }),
+      });
+    },
+
+    async confirmXMindTask(taskId: number, input: XMindTaskConfirmInput) {
+      return request<XMindConfirmResult>(`/xmind/tasks/${taskId}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          module_mapping: input.moduleMapping,
         }),
       });
     },

@@ -29,6 +29,10 @@ import type {
   XMindConfirmResult,
   XMindGeneratedCase,
   XMindGenerationResult,
+  XMindTaskDetail,
+  XMindTaskRecord,
+  XMindTaskStatus,
+  PaginatedResult,
 } from './contracts';
 
 interface MockServiceOptions {
@@ -95,6 +99,13 @@ function flattenModules(modules: TestModule[]): TestModule[] {
   return modules.flatMap((module) => [module, ...flattenModules(module.children)]);
 }
 
+function addModuleName(testCase: TestCaseRecord, modules: TestModule[]): TestCaseRecord {
+  return {
+    ...testCase,
+    moduleName: findModuleById(modules, testCase.moduleId)?.name ?? testCase.moduleName,
+  };
+}
+
 export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
   let testCases = copy(initialTestCases);
   let modules = copy(initialTestModules);
@@ -105,6 +116,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let userSequence = 2000;
   let systemSettings = copy(initialSystemSettings);
   let executionSequence = 1;
+  let xmindTaskSequence = 1;
+  let xmindTasks: XMindTaskDetail[] = [];
   const uiExecutions = new Map<string, UiExecutionResult>();
   const apiExecutions = new Map<string, ApiExecutionReport>();
 
@@ -164,7 +177,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       return respond({
         counts,
         total: counts.functional + counts.api + counts.ui,
-        recentCases: testCases.slice(0, 6),
+        recentCases: testCases.slice(0, 6).map((testCase) => addModuleName(testCase, modules)),
       });
     },
 
@@ -275,7 +288,18 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           (query.isSmoke === undefined || testCase.isSmoke === query.isSmoke)
         );
       });
-      return respond(rows);
+      return respond(rows.map((testCase) => addModuleName(testCase, modules)));
+    },
+
+    async listTestCasesPage(query: TestCaseQuery = {}, page = 1, pageSize = 20): Promise<PaginatedResult<TestCaseRecord>> {
+      const rows = await this.listTestCases(query);
+      const start = (page - 1) * pageSize;
+      return respond({
+        items: rows.slice(start, start + pageSize),
+        page,
+        pageSize,
+        total: rows.length,
+      });
     },
 
     async createTestCase(input: CreateTestCaseInput) {
@@ -292,7 +316,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         updatedAt: '刚刚',
       };
       testCases = [created, ...testCases];
-      return respond(created);
+      return respond(addModuleName(created, modules));
     },
 
     async updateTestCase(storageId: number, input: UpdateTestCaseInput) {
@@ -309,7 +333,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         updatedAt: '刚刚',
       };
       testCases = testCases.map((testCase) => (testCase.storageId === storageId ? updated : testCase));
-      return respond(updated);
+      return respond(addModuleName(updated, modules));
     },
 
     async deleteTestCase(storageId: number) {
@@ -543,15 +567,19 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         用例步骤: `1. 执行登录场景 ${index + 1}`,
         预期结果: `1. 系统正确处理登录场景 ${index + 1}`,
       }));
-      return respond({
-        record: {
-          id: 1,
-          file_name: file.name,
-          file_url: '/uploads/mock.xmind',
-          uploader_id: uploaderId,
-          parsed_cases_count: cases.length,
-          created_at: new Date().toISOString(),
-        },
+      const task: XMindTaskDetail = {
+        id: xmindTaskSequence++,
+        fileName: file.name,
+        fileUrl: '/uploads/mock.xmind',
+        uploaderId,
+        uploaderName: users.find((user) => Number(user.id) === uploaderId)?.name ?? '江珊',
+        status: 'PENDING',
+        parsedCasesCount: 0,
+        attempts: 0,
+        availableAt: new Date().toISOString(),
+        lockedAt: null,
+        lastError: null,
+        createdAt: new Date().toISOString(),
         tree: [
           {
             title: '登录',
@@ -561,8 +589,44 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
             ],
           },
         ],
-        cases,
+        cases: [],
+        moduleMapping: {},
+      };
+      task.cases = cases;
+      xmindTasks = [task, ...xmindTasks];
+      return respond(task);
+    },
+
+    async listXMindTasks(page = 1, pageSize = 20, status?: XMindTaskStatus) {
+      const matching = xmindTasks.filter((task) => !status || task.status === status);
+      const start = (page - 1) * pageSize;
+      return respond({
+        items: matching.slice(start, start + pageSize).map(({ tree, cases, moduleMapping, ...record }) => record),
+        page,
+        pageSize,
+        total: matching.length,
       });
+    },
+
+    async getXMindTask(taskId: number) {
+      const task = xmindTasks.find((item) => item.id === taskId);
+      if (!task) throw new Error('XMind 生成任务不存在');
+      if (task.status === 'PENDING' || task.status === 'RUNNING') {
+        task.status = 'WAITING_REVIEW';
+        task.attempts = Math.max(1, task.attempts);
+        task.parsedCasesCount = task.cases.length;
+      }
+      return respond(task);
+    },
+
+    async retryXMindTask(taskId: number) {
+      const task = xmindTasks.find((item) => item.id === taskId);
+      if (!task) throw new Error('XMind 生成任务不存在');
+      if (task.status !== 'FAILED') throw new Error('只有失败的 XMind 任务可以重试');
+      task.status = 'PENDING';
+      task.lastError = null;
+      task.parsedCasesCount = 0;
+      return respond(task);
     },
 
     async confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult> {
@@ -607,6 +671,20 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           module_id: created.moduleId,
         })),
       });
+    },
+
+    async confirmXMindTask(taskId: number, input: { moduleMapping: Record<string, string> }) {
+      const task = xmindTasks.find((item) => item.id === taskId);
+      if (!task) throw new Error('XMind 生成任务不存在');
+      if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
+      const result = await this.confirmXMind({
+        uploaderId: task.uploaderId,
+        moduleMapping: input.moduleMapping,
+        cases: task.cases,
+      });
+      task.moduleMapping = { ...input.moduleMapping };
+      task.status = 'COMPLETED';
+      return result;
     },
 
     async exportXMind(cases: XMindGeneratedCase[]): Promise<Blob> {

@@ -1,9 +1,8 @@
-import { act, fireEvent, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
 import { renderApp } from '../../tests/renderApp';
 
-it('校验 XMind 文件并生成测试用例', async () => {
+it('校验 XMind 文件并将有效文件创建为后台生成任务', async () => {
   const user = userEvent.setup();
   renderApp('/xmind');
   const fileInput = screen.getByLabelText('选择 XMind 文件');
@@ -15,20 +14,14 @@ it('校验 XMind 文件并生成测试用例', async () => {
     fileInput,
     new File(['xmind content'], '用户登录.xmind', { type: 'application/octet-stream' }),
   );
-  expect(await screen.findByRole('heading', { name: '解析预览' })).toBeInTheDocument();
+  expect(await screen.findByText('用户登录.xmind')).toBeInTheDocument();
+  expect(await screen.findByText('待审核')).toBeInTheDocument();
   expect(screen.getByRole('treeitem', { name: '登录' })).toBeInTheDocument();
   expect(screen.getByRole('treeitem', { name: '成功登录' })).toBeInTheDocument();
-  expect(screen.getByRole('treeitem', { name: '登录失败' })).toBeInTheDocument();
   expect(screen.getByText('核心模块 / 鉴权')).toBeInTheDocument();
-
-  await user.click(screen.getByRole('button', { name: '开始完整解析' }));
-  expect(await screen.findByText('已生成 6 条测试用例')).toBeInTheDocument();
-
-  await user.click(screen.getByRole('button', { name: '查看功能用例' }));
-  expect(await screen.findByRole('heading', { name: '测试用例' })).toBeInTheDocument();
 });
 
-it('支持大小写不敏感的扩展名并可重新上传', async () => {
+it('待审核任务确认后合并到功能用例并可继续查看任务列表', async () => {
   const user = userEvent.setup();
   renderApp('/xmind');
 
@@ -36,49 +29,23 @@ it('支持大小写不敏感的扩展名并可重新上传', async () => {
     screen.getByLabelText('选择 XMind 文件'),
     new File(['xmind content'], '用户登录.XMIND', { type: 'application/octet-stream' }),
   );
-  expect(await screen.findByRole('heading', { name: '解析预览' })).toBeInTheDocument();
+  expect(await screen.findByText('待审核')).toBeInTheDocument();
+  await user.click(screen.getByText('审核并合并'));
 
-  await user.click(screen.getByRole('button', { name: '开始完整解析' }));
-  await user.click(await screen.findByRole('button', { name: '重新上传' }));
-
-  expect(screen.getByLabelText('选择 XMind 文件')).toBeInTheDocument();
+  expect(await screen.findByText('已合并到功能用例')).toBeInTheDocument();
+  expect(screen.getAllByText('已完成').length).toBeGreaterThan(0);
+  await user.click(screen.getByRole('button', { name: '查看功能用例' }));
+  expect(await screen.findByRole('heading', { name: '测试用例' })).toBeInTheDocument();
 });
 
-it('取消或离开页面时会停止上传任务', () => {
-  const userAgent = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('测试浏览器');
-  vi.useFakeTimers();
-
-  try {
-    const view = renderApp('/xmind');
-    fireEvent.change(screen.getByLabelText('选择 XMind 文件'), {
-      target: {
-        files: [new File(['xmind content'], '待取消.xmind', { type: 'application/octet-stream' })],
-      },
-    });
-
-    expect(screen.getByText('待取消.xmind')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '8');
-    act(() => vi.advanceTimersByTime(140));
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '24');
-    fireEvent.click(screen.getByRole('button', { name: '取消上传' }));
-
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(screen.getByLabelText('选择 XMind 文件')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '解析预览' })).not.toBeInTheDocument();
-    expect(vi.getTimerCount()).toBe(0);
-
-    fireEvent.change(screen.getByLabelText('选择 XMind 文件'), {
-      target: {
-        files: [new File(['xmind content'], '离开页面.xmind', { type: 'application/octet-stream' })],
-      },
-    });
-    expect(vi.getTimerCount()).toBe(1);
-
-    view.unmount();
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(vi.getTimerCount()).toBe(0);
-  } finally {
-    userAgent.mockRestore();
-    vi.useRealTimers();
-  }
+it('任务列表支持主动刷新并保持任务状态', async () => {
+  const user = userEvent.setup();
+  renderApp('/xmind');
+  await user.upload(
+    screen.getByLabelText('选择 XMind 文件'),
+    new File(['xmind content'], '持久任务.xmind', { type: 'application/octet-stream' }),
+  );
+  expect(await screen.findByText('持久任务.xmind')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '刷新生成任务' }));
+  expect(await screen.findByText('待审核')).toBeInTheDocument();
 });

@@ -21,6 +21,7 @@ export interface TestCaseRecord {
   id: string;
   type: TestCaseType;
   moduleId: string;
+  moduleName?: string;
   name: string;
   priority: Priority;
   status: TestCaseStatus;
@@ -39,6 +40,13 @@ export interface TestCaseRecord {
   expectedStatus?: number;
   apiDetails?: ApiAutomationCaseDetails;
   uiDetails?: UiAutomationCaseDetails;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export interface TestModule {
@@ -155,6 +163,8 @@ export interface XMindTreeNode {
   children: XMindTreeNode[];
 }
 
+export type XMindTaskStatus = 'PENDING' | 'RUNNING' | 'WAITING_REVIEW' | 'FAILED' | 'COMPLETED';
+
 export interface XMindGeneratedCase {
   用例目录: string;
   用例名称: string;
@@ -169,23 +179,39 @@ export interface XMindGeneratedCase {
   预期结果: string;
 }
 
-export interface XMindGenerationResult {
-  record: {
-    id: number;
-    file_name: string;
-    file_url: string;
-    uploader_id: number;
-    parsed_cases_count: number;
-    created_at: string;
-  };
+export interface XMindTaskRecord {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  uploaderId: number;
+  uploaderName: string;
+  status: XMindTaskStatus;
+  parsedCasesCount: number;
+  attempts: number;
+  availableAt: string;
+  lockedAt?: string | null;
+  lastError?: string | null;
+  createdAt: string;
+}
+
+export interface XMindTaskDetail extends XMindTaskRecord {
   tree: XMindTreeNode[];
   cases: XMindGeneratedCase[];
+  moduleMapping: Record<string, string>;
 }
+
+export type XMindGenerationResult = XMindTaskDetail;
+
+export interface XMindTaskListResult extends PaginatedResult<XMindTaskRecord> {}
 
 export interface XMindConfirmInput {
   uploaderId: number;
   moduleMapping: Record<string, string>;
   cases: XMindGeneratedCase[];
+}
+
+export interface XMindTaskConfirmInput {
+  moduleMapping: Record<string, string>;
 }
 
 export interface XMindConfirmResult {
@@ -433,6 +459,7 @@ export interface PlatformService {
   deleteTestModule(moduleId: string): Promise<void>;
   getTestCaseFilterOptions(type?: TestCaseType): Promise<TestCaseFilterOptions>;
   listTestCases(query?: TestCaseQuery): Promise<TestCaseRecord[]>;
+  listTestCasesPage(query?: TestCaseQuery, page?: number, pageSize?: number): Promise<PaginatedResult<TestCaseRecord>>;
   createTestCase(input: CreateTestCaseInput): Promise<TestCaseRecord>;
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;
   deleteTestCase(storageId: number): Promise<void>;
@@ -460,7 +487,11 @@ export interface PlatformService {
     file: File,
     uploaderId?: number,
     signal?: AbortSignal,
-  ): Promise<XMindGenerationResult>;
+  ): Promise<XMindTaskDetail>;
+  listXMindTasks(page?: number, pageSize?: number, status?: XMindTaskStatus): Promise<PaginatedResult<XMindTaskRecord>>;
+  getXMindTask(taskId: number): Promise<XMindTaskDetail>;
+  retryXMindTask(taskId: number): Promise<XMindTaskDetail>;
   confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult>;
+  confirmXMindTask(taskId: number, input: XMindTaskConfirmInput): Promise<XMindConfirmResult>;
   exportXMind(cases: XMindGeneratedCase[]): Promise<Blob>;
 }
