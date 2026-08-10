@@ -447,6 +447,19 @@ it('功能用例支持按项目归属、是否冒烟和归属迭代组合筛选'
   });
 });
 
+it('是否冒烟统一使用绿色是和红色否标签', async () => {
+  renderApp('/test-cases/functional');
+
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+  const smokeRow = within(list).getByText('用户登录成功').closest('tr');
+  const nonSmokeRow = within(list).getByText('订单退款成功').closest('tr');
+
+  expect(smokeRow).not.toBeNull();
+  expect(nonSmokeRow).not.toBeNull();
+  expect(within(smokeRow!).getByText('是')).toHaveClass('ant-tag-success');
+  expect(within(nonSmokeRow!).getByText('否')).toHaveClass('ant-tag-error');
+});
+
 it('项目归属读取设置选项且新建用例默认使用官网环境', async () => {
   const user = userEvent.setup();
   const service = createMockPlatformService({ delay: 0 });

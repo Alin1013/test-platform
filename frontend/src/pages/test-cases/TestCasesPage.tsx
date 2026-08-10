@@ -278,7 +278,7 @@ export function TestCasesPage() {
           render: (name: string) => <span className="case-person"><PersonAvatar name={name} size={22} />{name}</span>,
         },
         { title: '归属迭代', dataIndex: 'iteration', width: 120, render: (value) => value || '-' },
-        { title: '是否冒烟', dataIndex: 'isSmoke', width: 92, render: (value: boolean) => value ? <Tag color="success">是</Tag> : '否' },
+        { title: '是否冒烟', dataIndex: 'isSmoke', width: 92, render: (value: boolean) => <Tag color={value ? 'success' : 'error'}>{value ? '是' : '否'}</Tag> },
         { title: '项目归属', dataIndex: 'projectName', width: 120, render: (value) => value || '-' },
         {
           title: '操作', key: 'actions', width: 96, fixed: 'right',
