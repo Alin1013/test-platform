@@ -12,7 +12,11 @@ import { PersonAvatar } from '../../components/PersonAvatar';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
-import type { NotificationChannel, SystemSettings } from '../../services/contracts';
+import {
+  DEFAULT_PROJECT_NAME,
+  type NotificationChannel,
+  type SystemSettings,
+} from '../../services/contracts';
 import './settings.css';
 
 const { TextArea } = Input;
@@ -194,17 +198,6 @@ export function SettingsPage() {
     if (defaultEnvironmentId === removingId) {
       const nextEnvironment = environments.find((environment, environmentIndex) => environmentIndex !== index);
       form.setFieldValue(['execution', 'defaultEnvironmentId'], nextEnvironment?.id ?? '');
-    }
-  };
-
-  const removeProjectName = (index: number, remove: (index: number | number[]) => void) => {
-    const removingName = projectNames[index];
-    const defaultProjectName = form.getFieldValue(['caseManagement', 'defaultProjectName']);
-    remove(index);
-
-    if (defaultProjectName === removingName) {
-      const nextProjectName = projectNames.find((_, projectIndex) => projectIndex !== index);
-      form.setFieldValue(['caseManagement', 'defaultProjectName'], nextProjectName ?? '');
     }
   };
 
@@ -462,15 +455,19 @@ export function SettingsPage() {
                           },
                         ]}
                       >
-                        <Input maxLength={128} placeholder="例如：官网环境" />
+                        <Input
+                          disabled={projectNames[index] === DEFAULT_PROJECT_NAME}
+                          maxLength={128}
+                          placeholder="例如：官网环境"
+                        />
                       </Form.Item>
                       <Button
                         danger
                         type="text"
                         icon={<DeleteOutlined aria-hidden="true" />}
                         aria-label={`删除${projectNames[index] || `第${index + 1}个项目归属`}`}
-                        disabled={fields.length <= 1}
-                        onClick={() => removeProjectName(index, remove)}
+                        disabled={projectNames[index] === DEFAULT_PROJECT_NAME}
+                        onClick={() => remove(index)}
                       />
                     </div>
                   ))}
@@ -479,20 +476,6 @@ export function SettingsPage() {
             )}
           </Form.List>
 
-          <Form.Item
-            className="settings-default-project"
-            name={['caseManagement', 'defaultProjectName']}
-            label="默认项目归属"
-            rules={[{ required: true, message: '请选择默认项目归属' }]}
-          >
-            <Select
-              aria-label="默认项目归属"
-              options={projectNames
-                .filter((projectName) => projectName?.trim())
-                .map((projectName) => ({ value: projectName, label: projectName }))}
-              placeholder="选择默认项目归属"
-            />
-          </Form.Item>
         </div>
       ),
     },

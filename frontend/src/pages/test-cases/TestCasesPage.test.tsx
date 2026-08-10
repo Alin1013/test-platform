@@ -468,7 +468,6 @@ it('项目归属读取设置选项且新建用例默认使用官网环境', asyn
     ...settings,
     caseManagement: {
       projectNames: ['官网环境', '管理后台'],
-      defaultProjectName: '官网环境',
     },
   });
   const createTestCase = vi.spyOn(service, 'createTestCase');
@@ -583,7 +582,6 @@ it('项目归属与用例目录独立选择', async () => {
     ...settings,
     caseManagement: {
       projectNames: ['官网环境', '管理后台'],
-      defaultProjectName: '官网环境',
     },
   });
   const createTestCase = vi.spyOn(service, 'createTestCase');
@@ -616,7 +614,6 @@ it('切换项目归属不会改写用例目录', async () => {
     ...settings,
     caseManagement: {
       projectNames: ['官网环境', '管理后台'],
-      defaultProjectName: '官网环境',
     },
   });
   const createTestCase = vi.spyOn(service, 'createTestCase');

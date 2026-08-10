@@ -3,6 +3,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from .domain_defaults import DEFAULT_PROJECT_NAME
+
 
 CaseType = Literal["functional", "api", "ui"]
 Priority = Literal["P0", "P1", "P2", "P3"]
@@ -244,7 +246,7 @@ class TestCaseCreate(BaseModel):
     expected_result: str = Field(default="", max_length=10000)
     iteration: str = Field(default="", max_length=128)
     is_smoke: bool = False
-    project_name: str = Field(default="官网环境", min_length=1, max_length=128)
+    project_name: str = Field(default=DEFAULT_PROJECT_NAME, min_length=1, max_length=128)
     api_details: ApiDetailsCreate | None = None
     ui_details: UiDetailsCreate | None = None
 
@@ -379,21 +381,24 @@ class GeneralSettings(SettingsModel):
 
 class CaseManagementSettings(SettingsModel):
     projectNames: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
-        default_factory=lambda: ["官网环境"], min_length=1, max_length=32
+        default_factory=lambda: [DEFAULT_PROJECT_NAME], min_length=1, max_length=32
     )
-    defaultProjectName: str = Field(default="官网环境", min_length=1, max_length=128)
 
     @model_validator(mode="after")
-    def default_project_exists(self) -> "CaseManagementSettings":
+    def website_project_is_available(self) -> "CaseManagementSettings":
         normalized_names = [name.strip().casefold() for name in self.projectNames]
         if any(not name for name in normalized_names):
             raise ValueError("project names cannot be blank")
         if len(normalized_names) != len(set(normalized_names)):
             raise ValueError("project names must be unique")
-        if self.defaultProjectName.strip().casefold() not in normalized_names:
-            raise ValueError("defaultProjectName must reference a project name")
-        self.projectNames = [name.strip() for name in self.projectNames]
-        self.defaultProjectName = self.defaultProjectName.strip()
+        default_key = DEFAULT_PROJECT_NAME.casefold()
+        if default_key not in normalized_names:
+            raise ValueError("project names must include the website project")
+        trimmed_names = [name.strip() for name in self.projectNames]
+        self.projectNames = [
+            DEFAULT_PROJECT_NAME,
+            *[name for name in trimmed_names if name.casefold() != default_key],
+        ]
         return self
 
 

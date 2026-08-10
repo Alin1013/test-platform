@@ -91,7 +91,7 @@ function FunctionalCaseDrawer({
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [modules, setModules] = useState<TestModule[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
-  const [projectNames, setProjectNames] = useState<string[]>(['官网环境']);
+  const [projectNames, setProjectNames] = useState<string[]>([]);
   const title = `${initialCase ? '编辑' : '新建'}${typeLabels.functional}`;
 
   useEffect(() => {
@@ -128,7 +128,7 @@ function FunctionalCaseDrawer({
         setProjectNames(nextProjectNames);
         form.setFieldValue(
           'projectName',
-          initialCase?.projectName ?? settings.caseManagement.defaultProjectName,
+          initialCase?.projectName ?? settings.caseManagement.projectNames[0],
         );
         if (initialCase) {
           const author = nextUsers.find((item) => item.name === initialCase.creator);

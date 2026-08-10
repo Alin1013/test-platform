@@ -1,9 +1,10 @@
-import type {
-  PermissionRole,
-  SystemSettings,
-  TestCaseRecord,
-  TestModule,
-  UserRecord,
+import {
+  DEFAULT_PROJECT_NAME,
+  type PermissionRole,
+  type SystemSettings,
+  type TestCaseRecord,
+  type TestModule,
+  type UserRecord,
 } from '../services/contracts';
 
 export const initialTestModules: TestModule[] = [
@@ -26,8 +27,7 @@ export const initialSystemSettings: SystemSettings = {
     caseNumberPrefix: 'TC-',
   },
   caseManagement: {
-    projectNames: ['官网环境'],
-    defaultProjectName: '官网环境',
+    projectNames: [DEFAULT_PROJECT_NAME],
   },
   execution: {
     environments: [
@@ -65,7 +65,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '登录成功并进入首页',
     iteration: 'Sprint 12',
     isSmoke: true,
-    projectName: '官网环境',
+    projectName: DEFAULT_PROJECT_NAME,
     maintainer: '江珊',
     creator: '江珊',
     updatedAt: '8 分钟前',
@@ -141,7 +141,7 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '退款成功，订单状态更新为已退款',
     iteration: 'Sprint 12',
     isSmoke: false,
-    projectName: '官网环境',
+    projectName: DEFAULT_PROJECT_NAME,
     maintainer: '林然',
     creator: '林然',
     updatedAt: '昨天 18:10',

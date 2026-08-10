@@ -120,6 +120,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let xmindTasks: XMindTaskDetail[] = [];
   const uiExecutions = new Map<string, UiExecutionResult>();
   const apiExecutions = new Map<string, ApiExecutionReport>();
+  const defaultProjectName = () => systemSettings.caseManagement.projectNames[0];
 
   const respond = async <T,>(value: T): Promise<T> => {
     if (delay > 0) {
@@ -312,7 +313,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
       const created: TestCaseRecord = {
         ...input,
-        projectName: input.projectName ?? systemSettings.caseManagement.defaultProjectName,
+        projectName: input.projectName ?? defaultProjectName(),
         storageId: storageIdSequence++,
         id: `${input.type.toUpperCase()}-${caseSequence++}`,
         creator: author?.name ?? '江珊',
@@ -394,7 +395,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           iteration: String(row[10] ?? '').trim(),
           isSmoke: ['是', 'true', '1', 'yes'].includes(String(row[11] ?? '').trim().toLowerCase()),
           projectName:
-            String(row[12] ?? '').trim() || systemSettings.caseManagement.defaultProjectName,
+            String(row[12] ?? '').trim() || defaultProjectName(),
           updatedAt: '刚刚',
         };
         return record;
@@ -660,7 +661,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           steps: item.用例步骤,
           expectedResult: item.预期结果,
           iteration: item.归属迭代,
-          projectName: systemSettings.caseManagement.defaultProjectName,
+          projectName: defaultProjectName(),
           isSmoke: false,
         };
         return created;

@@ -142,19 +142,17 @@ it('配置项目归属并同步默认选项', async () => {
   await screen.findByDisplayValue('测试平台');
   await user.click(screen.getByRole('tab', { name: '用例配置' }));
   expect(screen.getByDisplayValue('官网环境')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '删除官网环境' })).toBeDisabled();
   await user.click(screen.getByRole('button', { name: '添加项目归属' }));
 
   const projectNames = screen.getAllByLabelText('项目名称');
   await user.type(projectNames.at(-1)!, '管理后台');
-  await user.click(screen.getByRole('combobox', { name: '默认项目归属' }));
-  await user.click(await screen.findByTitle('管理后台'));
   await user.click(screen.getByRole('button', { name: '保存设置' }));
 
   expect(await screen.findByText('设置已保存')).toBeInTheDocument();
   await expect(service.getSystemSettings()).resolves.toMatchObject({
     caseManagement: {
       projectNames: ['官网环境', '管理后台'],
-      defaultProjectName: '管理后台',
     },
   });
 });

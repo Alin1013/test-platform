@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..case_file_schemas import TestCaseExportRequest
+from ..domain_defaults import DEFAULT_PROJECT_NAME
 from ..models import Module, TestCase, User
 from ..schemas import ApiDetailsCreate, TestCaseCreate, UiDetailsCreate
 from . import test_cases
@@ -152,7 +153,7 @@ def _export_row(test_case: dict) -> list[Any]:
         test_case.get("expected_result", ""),
         test_case.get("iteration", ""),
         "是" if test_case.get("is_smoke") else "否",
-        test_case.get("project_name", "官网环境"),
+        test_case.get("project_name", DEFAULT_PROJECT_NAME),
     ]
 
 
@@ -290,7 +291,7 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
         "expected_result": str(row.get("expected_result") or "").strip(),
         "iteration": str(row.get("iteration") or "").strip(),
         "is_smoke": str(row.get("is_smoke") or "").strip().lower() in {"是", "yes", "true", "1", "y"},
-        "project_name": str(row.get("project_name") or "官网环境").strip(),
+        "project_name": str(row.get("project_name") or DEFAULT_PROJECT_NAME).strip(),
     }
     if case_type == "api":
         common["api_details"] = ApiDetailsCreate(

@@ -254,6 +254,8 @@ export interface DashboardData {
 
 export type NotificationChannel = 'wechatWork' | 'feishu' | 'dingtalk';
 
+export const DEFAULT_PROJECT_NAME = '官网环境';
+
 export interface TestEnvironment {
   id: string;
   name: string;
@@ -268,7 +270,6 @@ export interface SystemSettings {
   };
   caseManagement: {
     projectNames: string[];
-    defaultProjectName: string;
   };
   execution: {
     environments: TestEnvironment[];

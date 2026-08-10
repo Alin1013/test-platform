@@ -12,7 +12,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(sa.text("UPDATE test_cases SET project_name = '官网环境'"))
+    op.execute(
+        sa.text(
+            "UPDATE test_cases SET project_name = '官网环境' "
+            "WHERE project_name = '测试平台' OR TRIM(project_name) = ''"
+        )
+    )
     with op.batch_alter_table("test_cases") as batch_op:
         batch_op.alter_column(
             "project_name",
@@ -23,12 +28,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            "UPDATE test_cases SET project_name = '测试平台' "
-            "WHERE project_name = '官网环境'"
-        )
-    )
     with op.batch_alter_table("test_cases") as batch_op:
         batch_op.alter_column(
             "project_name",
