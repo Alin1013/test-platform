@@ -46,9 +46,10 @@ it('XMind 确认存在无效目录映射时不会保存部分用例', async () =
   const service = createMockPlatformService({ delay: 0 });
   const before = await service.listTestCases({ type: 'functional' });
   const generated = await service.generateXMind(new File(['xmind'], '登录.xmind'));
+  const ready = await service.getXMindTask(generated.id);
   const cases = [
-    generated.cases[0],
-    { ...generated.cases[1], 用例目录: '不存在/目录' },
+    ready.cases[0],
+    { ...ready.cases[1], 用例目录: '不存在/目录' },
   ];
 
   await expect(

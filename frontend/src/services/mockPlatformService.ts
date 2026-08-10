@@ -594,7 +594,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       };
       task.cases = cases;
       xmindTasks = [task, ...xmindTasks];
-      return respond(task);
+      return respond({ ...task, cases: [], parsedCasesCount: 0 });
     },
 
     async listXMindTasks(page = 1, pageSize = 20, status?: XMindTaskStatus) {
