@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Event, Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from .routers.test_cases import router as test_cases_router
 from .routers.xmind import router as xmind_router
 from .request_logging import LOG_FILE_NAME, RequestLoggingMiddleware, RequestLogWriter
 from .services.playwright_runner import PlaywrightUiRunner
+from .worker import run_worker_loop
 from .seed import seed_database
 
 
@@ -26,6 +28,7 @@ def create_app(
     database_url: str = DEFAULT_DATABASE_URL,
     upload_dir: Path | None = None,
     log_dir: Path | None = None,
+    start_background_workers: bool = False,
 ) -> FastAPI:
     session_factory = create_session_factory(database_url)
     resolved_upload_dir = upload_dir or Path(__file__).resolve().parents[1] / "uploads"
@@ -35,12 +38,33 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         resolved_upload_dir.mkdir(parents=True, exist_ok=True)
+        worker_stop_event: Event | None = None
+        worker_thread: Thread | None = None
         try:
             # 初始化演示数据是幂等操作，测试和首次本地启动共用这一入口。
             with session_factory() as session:
                 seed_database(session)
+            if start_background_workers:
+                worker_stop_event = Event()
+                worker_thread = Thread(
+                    target=run_worker_loop,
+                    kwargs={
+                        "session_factory": session_factory,
+                        "upload_dir": resolved_upload_dir,
+                        "ui_runner": app.state.ui_runner,
+                        "xmind_llm_transport_getter": lambda: app.state.xmind_llm_transport,
+                        "stop_event": worker_stop_event,
+                    },
+                    name="background-worker",
+                    daemon=True,
+                )
+                worker_thread.start()
             yield
         finally:
+            if worker_stop_event is not None:
+                worker_stop_event.set()
+            if worker_thread is not None:
+                worker_thread.join(timeout=5)
             request_log_writer.close()
 
     app = FastAPI(title="Test Platform API", version="1.0.0", lifespan=lifespan)
@@ -75,4 +99,4 @@ def create_app(
     return app
 
 
-app = create_app()
+app = create_app(start_background_workers=True)

@@ -192,7 +192,7 @@ python3 -m venv .venv
 ./.venv/bin/uvicorn backend.app.main:app --reload --port 8000
 ```
 
-另开一个终端启动自动化 Worker；首次使用 Playwright 时先安装浏览器：
+后端启动后会自动拉起生成与执行的后台 worker；如果要单独跑 worker 进程，也可以另外启动。首次使用 Playwright 时先安装浏览器：
 
 ```bash
 ./.venv/bin/playwright install chromium firefox webkit

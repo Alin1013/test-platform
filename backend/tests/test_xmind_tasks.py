@@ -1,11 +1,15 @@
 import io
 import json
 import zipfile
+from pathlib import Path
+from time import monotonic, sleep
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.database import Base
+from backend.app.main import create_app
 from backend.app.services.xmind_worker import run_next_xmind_task
 
 
@@ -42,6 +46,27 @@ def configure_llm(client: TestClient, transport: httpx.BaseTransport) -> None:
     settings["ai"]["apiKey"] = "test-key"
     client.post("/api/v1/settings", json=settings)
     client.app.state.xmind_llm_transport = transport
+
+
+def wait_for_task_status(
+    client: TestClient,
+    task_id: int,
+    expected_status: str,
+    *,
+    timeout_seconds: float = 6.0,
+) -> dict:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | None = None
+    while monotonic() < deadline:
+        response = client.get(f"/api/v1/xmind/tasks/{task_id}")
+        assert response.status_code == 200
+        last_body = response.json()
+        if last_body["status"] == expected_status:
+            return last_body
+        sleep(0.1)
+    raise AssertionError(
+        f"XMind task {task_id} did not reach {expected_status}; last body: {last_body}"
+    )
 
 
 def test_xmind_generation_task_is_processed_in_background(client: TestClient) -> None:
@@ -111,6 +136,58 @@ def test_xmind_generation_task_is_processed_in_background(client: TestClient) ->
 
     functional_cases = client.get("/api/v1/test-cases", params={"keyword": "账号密码登录成功"})
     assert functional_cases.json()["total"] == 1
+
+
+def test_xmind_generation_task_is_processed_by_app_background_worker(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        f"sqlite:///{tmp_path / 'background-worker.db'}",
+        upload_dir=tmp_path / "uploads",
+        log_dir=tmp_path / "logs",
+        start_background_workers=True,
+    )
+    app.state.xmind_llm_transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "cases": [
+                                        {
+                                            "用例名称": "账号密码登录成功",
+                                            "用例步骤": "1. 提交正确账号密码",
+                                            "预期结果": "1. 登录成功",
+                                        }
+                                    ]
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+    )
+    Base.metadata.create_all(app.state.session_factory.kw["bind"])
+
+    with TestClient(app) as client:
+        configure_llm(client, app.state.xmind_llm_transport)
+        response = client.post(
+            "/api/v1/xmind/generate",
+            files={"file": ("自动推进.xmind", make_xmind_file(), "application/octet-stream")},
+            data={"uploader_id": "1"},
+        )
+        assert response.status_code == 201
+        created = response.json()
+
+        detail = wait_for_task_status(client, created["id"], "WAITING_REVIEW")
+
+    assert detail["parsed_cases_count"] == 1
+    assert detail["cases"][0]["用例名称"] == "账号密码登录成功"
 
 
 def test_failed_xmind_task_can_be_retried(client: TestClient) -> None:
