@@ -1,5 +1,4 @@
 import {
-  BellOutlined,
   BookOutlined,
   BulbOutlined,
   DashboardOutlined,
@@ -11,7 +10,7 @@ import {
   SwapOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Badge, Button, Dropdown, Drawer, Input, Layout, Menu, Select, Space, Tooltip } from 'antd';
+import { Button, Dropdown, Drawer, Input, Layout, Menu, Select, Space, Tooltip } from 'antd';
 import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { PersonAvatar } from '../components/PersonAvatar';
@@ -139,11 +138,6 @@ export function AppShell() {
               value="alpha"
               options={[{ value: 'alpha', label: '测试平台' }]}
             />
-            <Tooltip title="通知">
-              <Badge dot offset={[-4, 5]}>
-                <Button type="text" icon={<BellOutlined />} aria-label="通知" />
-              </Badge>
-            </Tooltip>
             <Dropdown
               trigger={['click']}
               menu={{ items: accountMenuItems, onClick: handleAccountMenuClick }}
