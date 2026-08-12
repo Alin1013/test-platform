@@ -35,6 +35,7 @@ it('配置并启动 UI 自动化执行后展示实时进度', async () => {
     expect(screen.getByRole('combobox', { name: '运行环境' }).closest('.ant-select')).toHaveTextContent('TEST'),
   );
   expect(screen.getByRole('combobox', { name: '浏览器' }).closest('.ant-select')).toHaveTextContent('Chrome');
+  expect(screen.getByRole('spinbutton', { name: '并发数' })).toHaveDisplayValue('1');
   expect(screen.getByRole('switch', { name: '无头模式' })).toBeChecked();
 
   await user.click(await screen.findByRole('checkbox', { name: '选择 UI-13533 登录表单校验' }));

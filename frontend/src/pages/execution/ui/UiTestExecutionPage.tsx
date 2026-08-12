@@ -89,7 +89,7 @@ export function UiTestExecutionPage() {
   const [environment, setEnvironment] = useState<UiExecutionInput['environment']>('');
   const [browser, setBrowser] = useState<UiExecutionInput['browser']>('chrome');
   const [headless, setHeadless] = useState(true);
-  const [concurrency, setConcurrency] = useState(2);
+  const [concurrency, setConcurrency] = useState(1);
   const [execution, setExecution] = useState<UiExecutionResult | null>(null);
   const [executionId, setExecutionId] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
