@@ -58,6 +58,14 @@ const statusColors: Record<ExecutionDetailStatus, string> = {
   SKIPPED: 'warning',
 };
 
+const buildTraceViewerUrl = (traceUrl: string | null | undefined) => {
+  if (!traceUrl) return null;
+  const absoluteTraceUrl = /^https?:\/\//.test(traceUrl)
+    ? traceUrl
+    : new URL(traceUrl, globalThis.location?.origin ?? 'http://localhost').toString();
+  return `https://trace.playwright.dev/?trace=${encodeURIComponent(absoluteTraceUrl)}`;
+};
+
 interface UiCaseRow extends UiExecutionCase {
   code: string;
   moduleId: string;
@@ -181,6 +189,10 @@ export function UiTestExecutionPage() {
   );
 
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const traceViewerUrl = useMemo(
+    () => buildTraceViewerUrl(detail?.traceUrl),
+    [detail?.traceUrl],
+  );
 
   useEffect(() => {
     setPage((currentPage) => Math.min(currentPage, totalPages));
@@ -467,8 +479,19 @@ export function UiTestExecutionPage() {
                   <div className="execution-media">
                     {detail.screenshotUrl ? <img src={detail.screenshotUrl} alt={`${detail.caseName} 失败截图`} /> : null}
                     {detail.videoUrl ? <video src={detail.videoUrl} controls aria-label={`${detail.caseName} 执行录屏`} /> : null}
+                    {traceViewerUrl ? (
+                      <a href={traceViewerUrl} target="_blank" rel="noreferrer">
+                        查看 Trace Viewer
+                      </a>
+                    ) : null}
                   </div>
-                ) : <Empty description="暂无失败截图或录屏" />,
+                ) : traceViewerUrl ? (
+                  <div className="execution-media">
+                    <a href={traceViewerUrl} target="_blank" rel="noreferrer">
+                      查看 Trace Viewer
+                    </a>
+                  </div>
+                ) : <Empty description="暂无失败截图、录屏或追踪文件" />,
               },
               {
                 key: 'logs',

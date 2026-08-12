@@ -247,6 +247,7 @@ def test_ui_debug_renders_environment_and_variables_before_running(
                 "logs": ["步骤 1 执行成功"],
                 "screenshotUrl": None,
                 "videoUrl": "/uploads/executions/debug.webm",
+                "traceUrl": "/uploads/executions/debug.trace.zip",
                 "errorMessage": None,
             }
 
@@ -275,6 +276,7 @@ def test_ui_debug_renders_environment_and_variables_before_running(
     assert data["success"] is True
     assert data["stepResults"][0]["status"] == "PASSED"
     assert data["videoUrl"] == "/uploads/executions/debug.webm"
+    assert data["traceUrl"] == "/uploads/executions/debug.trace.zip"
 
     unified = client.post(
         "/api/v1/debug-run",

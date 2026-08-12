@@ -76,7 +76,11 @@ def create_app(
     app.state.ui_runner = PlaywrightUiRunner(resolved_upload_dir)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:56789", "http://127.0.0.1:56789"],
+        allow_origins=[
+            "http://localhost:56789",
+            "http://127.0.0.1:56789",
+            "https://trace.playwright.dev",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

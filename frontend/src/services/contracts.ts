@@ -322,6 +322,7 @@ export interface UiExecutionCase {
   errorMessage?: string | null;
   screenshotUrl?: string | null;
   videoUrl?: string | null;
+  traceUrl?: string | null;
   steps?: Array<Record<string, unknown> | string>;
   logs?: string[];
 }
@@ -453,6 +454,7 @@ export interface UiDebugResult {
   logs: string[];
   screenshotUrl: string | null;
   videoUrl: string | null;
+  traceUrl: string | null;
   errorMessage: string | null;
 }
 

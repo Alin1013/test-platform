@@ -347,8 +347,13 @@ export function createApiPlatformService({
 }: ApiPlatformServiceOptions): PlatformService {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
   const resolveArtifactUrl = (url: string | null) => {
-    if (!url || !/^https?:\/\//.test(normalizedBaseUrl)) return url;
-    return new URL(url, normalizedBaseUrl).toString();
+    if (!url) return url;
+    if (/^https?:\/\//.test(url)) return url;
+    if (/^https?:\/\//.test(normalizedBaseUrl)) return new URL(url, normalizedBaseUrl).toString();
+    if (globalThis.location?.origin) {
+      return new URL(url, globalThis.location.origin).toString();
+    }
+    return url;
   };
 
   const request = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
@@ -622,7 +627,15 @@ export function createApiPlatformService({
       const response = await request<ApiEnvelope<UiExecutionResult>>(
         `/ui-test/executions/${encodeURIComponent(executionId)}`,
       );
-      return response.data;
+      return {
+        ...response.data,
+        cases: response.data.cases.map((item) => ({
+          ...item,
+          screenshotUrl: resolveArtifactUrl(item.screenshotUrl ?? null),
+          videoUrl: resolveArtifactUrl(item.videoUrl ?? null),
+          traceUrl: resolveArtifactUrl(item.traceUrl ?? null),
+        })),
+      };
     },
 
     async stopUiExecution(executionId: string) {
@@ -689,6 +702,7 @@ export function createApiPlatformService({
         ...response.data,
         screenshotUrl: resolveArtifactUrl(response.data.screenshotUrl),
         videoUrl: resolveArtifactUrl(response.data.videoUrl),
+        traceUrl: resolveArtifactUrl(response.data.traceUrl),
       };
     },
 

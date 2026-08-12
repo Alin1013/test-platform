@@ -77,6 +77,7 @@ def run_ui(
             "logs": [str(error)],
             "screenshotUrl": None,
             "videoUrl": None,
+            "traceUrl": None,
             "errorMessage": str(error),
         }
     return {"success": result["status"] == "PASSED", **result}

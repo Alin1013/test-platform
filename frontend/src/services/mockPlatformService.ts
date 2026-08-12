@@ -483,6 +483,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           logs: ['测试用例已加入执行队列'],
           screenshotUrl: null,
           videoUrl: null,
+          traceUrl: null,
         })),
       });
       return respond({ executionId, status: 'RUNNING' as const, startTime: new Date().toISOString() });
@@ -767,6 +768,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         logs: input.steps.map((step) => `步骤 ${step.stepIndex} 执行成功`),
         screenshotUrl: null,
         videoUrl: '/uploads/executions/debug-demo.webm',
+        traceUrl: 'http://localhost:8000/uploads/executions/debug-demo.trace.zip',
         errorMessage: null,
       });
     },

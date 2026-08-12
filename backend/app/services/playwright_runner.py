@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from shutil import copyfile
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlaywrightUiRunner:
@@ -70,12 +74,14 @@ class PlaywrightUiRunner:
         run_id = uuid4().hex
         screenshot_path = self.artifact_dir / f"{run_id}.png"
         video_path = self.artifact_dir / f"{run_id}.webm"
+        trace_path = self.artifact_dir / f"trace_{run_id}.zip"
         logs: list[str] = []
         step_results: list[dict[str, Any]] = []
         error_message: str | None = None
         cancelled = False
         started_at = perf_counter()
         video = None
+        trace_started = False
         should_cancel = config.get("shouldCancel")
         on_step = config.get("onStep")
 
@@ -87,6 +93,11 @@ class PlaywrightUiRunner:
             }.get(browser_name, playwright.chromium)
             browser = browser_type.launch(headless=config.get("headless", True))
             context = browser.new_context(record_video_dir=str(self.artifact_dir))
+            try:
+                context.tracing.start(screenshots=True, snapshots=True, sources=True)
+                trace_started = True
+            except Exception:
+                logger.exception("Failed to start Playwright tracing")
             page = context.new_page()
             page.set_default_timeout(config.get("timeoutSeconds", 30) * 1000)
             video = page.video
@@ -126,6 +137,11 @@ class PlaywrightUiRunner:
                 if callable(on_step):
                     on_step(step_results[-1], error_message)
             finally:
+                if trace_started:
+                    try:
+                        context.tracing.stop(path=str(trace_path))
+                    except Exception:
+                        logger.exception("Failed to stop Playwright tracing")
                 context.close()
             if video is not None:
                 recorded_path = Path(video.path())
@@ -144,6 +160,9 @@ class PlaywrightUiRunner:
             ),
             "videoUrl": (
                 f"/uploads/executions/{video_path.name}" if video_path.exists() else None
+            ),
+            "traceUrl": (
+                f"/uploads/executions/{trace_path.name}" if trace_path.exists() else None
             ),
             "errorMessage": error_message,
         }

@@ -333,6 +333,7 @@ def ui_execution_result(session: Session, execution_code: str) -> dict:
                 "errorMessage": (detail.response_payload or {}).get("errorMessage"),
                 "screenshotUrl": (detail.response_payload or {}).get("screenshotUrl"),
                 "videoUrl": (detail.response_payload or {}).get("videoUrl"),
+                "traceUrl": (detail.response_payload or {}).get("traceUrl"),
                 "steps": (detail.request_payload or {}).get("steps", []),
                 "stepResults": (detail.response_payload or {}).get(
                     "stepResults", []

@@ -368,6 +368,7 @@ def test_queued_ui_execution_uses_configured_runner(client: TestClient) -> None:
                 "logs": [f"执行 {len(steps)} 个步骤"],
                 "screenshotUrl": None,
                 "videoUrl": "/uploads/executions/demo.webm",
+                "traceUrl": "/uploads/executions/demo.trace.zip",
                 "errorMessage": None,
             }
 
@@ -629,6 +630,7 @@ def test_ui_execution_honors_case_concurrency(client: TestClient) -> None:
                 "logs": [],
                 "screenshotUrl": None,
                 "videoUrl": None,
+                "traceUrl": None,
                 "errorMessage": None,
             }
 
@@ -792,6 +794,7 @@ def test_ui_step_log_is_persisted_before_case_finishes(client: TestClient) -> No
                 "logs": ["步骤 1 执行成功"],
                 "screenshotUrl": None,
                 "videoUrl": None,
+                "traceUrl": None,
                 "errorMessage": None,
             }
 

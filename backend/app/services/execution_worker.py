@@ -190,6 +190,7 @@ def _execute_detail(
                 "stepResults": [],
                 "screenshotUrl": None,
                 "videoUrl": None,
+                "traceUrl": None,
                 "errorMessage": None,
             }
         session.commit()
@@ -222,7 +223,12 @@ def _execute_detail(
             outcome = {
                 "status": "FAILED",
                 "duration_ms": 0,
-                "response_payload": {"errorMessage": str(error)},
+                "response_payload": {
+                    "errorMessage": str(error),
+                    "screenshotUrl": None,
+                    "videoUrl": None,
+                    "traceUrl": None,
+                },
                 "assertion_results": [],
             }
 

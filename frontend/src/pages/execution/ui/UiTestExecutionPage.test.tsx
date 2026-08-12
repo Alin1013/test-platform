@@ -122,9 +122,21 @@ it('执行列表使用统一的分页控件', async () => {
   expect(screen.queryByText('分页用例 1')).not.toBeInTheDocument();
 });
 
-it('UI 用例详情抽屉展示步骤日志和媒体区域', async () => {
+it('UI 用例详情抽屉展示步骤日志、媒体和 Trace Viewer', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+  const originalGetUiExecution = service.getUiExecution;
+  service.getUiExecution = async (executionId: string) => {
+    const result = await originalGetUiExecution(executionId);
+    return {
+      ...result,
+      cases: result.cases.map((item) => ({
+        ...item,
+        traceUrl: 'http://localhost:8000/uploads/executions/ui_exec_demo.trace.zip',
+      })),
+    };
+  };
   const user = userEvent.setup();
-  renderApp('/execution/ui-test');
+  renderUiExecutionPageWithService(service);
 
   await screen.findByRole('heading', { name: 'UI 自动化' });
   await user.click(await screen.findByRole('checkbox', { name: '选择 UI-13533 登录表单校验' }));
@@ -139,4 +151,11 @@ it('UI 用例详情抽屉展示步骤日志和媒体区域', async () => {
   expect(within(drawer).getByRole('tab', { name: '步骤明细' })).toBeInTheDocument();
   expect(within(drawer).getByRole('tab', { name: '失败媒体' })).toBeInTheDocument();
   expect(within(drawer).getByRole('tab', { name: '终端日志' })).toBeInTheDocument();
+  await user.click(within(drawer).getByRole('tab', { name: '失败媒体' }));
+  expect(await within(drawer).findByRole('link', { name: '查看 Trace Viewer' })).toHaveAttribute(
+    'href',
+    `https://trace.playwright.dev/?trace=${encodeURIComponent(
+      'http://localhost:8000/uploads/executions/ui_exec_demo.trace.zip',
+    )}`,
+  );
 });

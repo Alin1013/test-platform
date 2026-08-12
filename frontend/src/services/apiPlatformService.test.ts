@@ -466,7 +466,18 @@ test('uses the dedicated UI execution endpoints and request shape', async () => 
           executionId: 'ui_exec_20260803_001',
           status: 'RUNNING',
           summary: { total: 1, passed: 0, failed: 0, running: 0, pending: 1, durationMs: 0 },
-          cases: [],
+          cases: [
+            {
+              caseId: 2,
+              caseName: '登录表单校验',
+              browser: 'chrome',
+              status: 'PENDING',
+              durationMs: 0,
+              screenshotUrl: '/uploads/executions/ui_exec_20260803_001.png',
+              videoUrl: '/uploads/executions/ui_exec_20260803_001.webm',
+              traceUrl: '/uploads/executions/ui_exec_20260803_001.trace.zip',
+            },
+          ],
         },
       });
     }
@@ -486,6 +497,12 @@ test('uses the dedicated UI execution endpoints and request shape', async () => 
 
   expect(started.status).toBe('RUNNING');
   expect(result.summary.pending).toBe(1);
+  const origin = globalThis.location.origin;
+  expect(result.cases[0]).toMatchObject({
+    screenshotUrl: new URL('/uploads/executions/ui_exec_20260803_001.png', origin).toString(),
+    videoUrl: new URL('/uploads/executions/ui_exec_20260803_001.webm', origin).toString(),
+    traceUrl: new URL('/uploads/executions/ui_exec_20260803_001.trace.zip', origin).toString(),
+  });
 });
 
 test('uses the dedicated API execution report and stop endpoints', async () => {
@@ -649,6 +666,7 @@ test('sends UI debug configuration to the dedicated endpoint and unwraps step re
         logs: ['步骤 1 执行成功'],
         screenshotUrl: null,
         videoUrl: '/uploads/executions/debug.webm',
+        traceUrl: '/uploads/executions/debug.trace.zip',
         errorMessage: null,
       },
     });
@@ -679,5 +697,6 @@ test('sends UI debug configuration to the dedicated endpoint and unwraps step re
     status: 'PASSED',
     durationMs: 31,
     videoUrl: 'http://localhost:8001/uploads/executions/debug.webm',
+    traceUrl: 'http://localhost:8001/uploads/executions/debug.trace.zip',
   });
 });

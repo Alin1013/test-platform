@@ -68,6 +68,14 @@ const createStep = (action: UiAction = 'navigate'): UiAutomationStep => ({
   expected: '',
 });
 
+const buildTraceViewerUrl = (traceUrl: string | null | undefined) => {
+  if (!traceUrl) return null;
+  const absoluteTraceUrl = /^https?:\/\//.test(traceUrl)
+    ? traceUrl
+    : new URL(traceUrl, globalThis.location?.origin ?? 'http://localhost').toString();
+  return `https://trace.playwright.dev/?trace=${encodeURIComponent(absoluteTraceUrl)}`;
+};
+
 interface UiCaseFormValues {
   name: string;
   moduleId: string;
@@ -237,6 +245,7 @@ export function UiAutomationCaseModal({
   const [debugResult, setDebugResult] = useState<UiDebugResult | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
   const steps = Form.useWatch('steps', form) ?? [];
+  const traceViewerUrl = buildTraceViewerUrl(debugResult?.traceUrl);
 
   useEffect(() => {
     if (!open) return;
@@ -622,7 +631,7 @@ export function UiAutomationCaseModal({
                       <pre>{debugResult.logs.join('\n')}</pre>
                     </div>
                   ) : null}
-                  {debugResult.screenshotUrl || debugResult.videoUrl ? (
+                  {debugResult.screenshotUrl || debugResult.videoUrl || traceViewerUrl ? (
                     <div className="ui-debug-artifacts">
                       {debugResult.screenshotUrl ? (
                         <a href={debugResult.screenshotUrl} target="_blank" rel="noreferrer">
@@ -632,6 +641,11 @@ export function UiAutomationCaseModal({
                       {debugResult.videoUrl ? (
                         <a href={debugResult.videoUrl} target="_blank" rel="noreferrer">
                           查看录屏
+                        </a>
+                      ) : null}
+                      {traceViewerUrl ? (
+                        <a href={traceViewerUrl} target="_blank" rel="noreferrer">
+                          查看 Trace Viewer
                         </a>
                       ) : null}
                     </div>

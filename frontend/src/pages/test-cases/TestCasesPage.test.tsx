@@ -202,6 +202,12 @@ it('UI 调试运行后展示逐步结果、日志和录屏链接', async () => {
     'href',
     '/uploads/executions/debug-demo.webm',
   );
+  expect(await within(dialog).findByRole('link', { name: '查看 Trace Viewer' })).toHaveAttribute(
+    'href',
+    `https://trace.playwright.dev/?trace=${encodeURIComponent(
+      'http://localhost:8000/uploads/executions/debug-demo.trace.zip',
+    )}`,
+  );
 });
 
 it('切换模块后过滤用例', async () => {
