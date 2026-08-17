@@ -183,8 +183,10 @@ export function TestCasesPage() {
   const totalPages = rows ? Math.max(1, Math.ceil(rows.total / pageSize)) : 1;
 
   useEffect(() => {
-    setPage((currentPage) => Math.min(currentPage, totalPages));
-  }, [totalPages]);
+    if (rows) {
+      setPage((currentPage) => Math.min(currentPage, totalPages));
+    }
+  }, [rows, totalPages]);
 
   const visibleRows = rows?.items ?? [];
 

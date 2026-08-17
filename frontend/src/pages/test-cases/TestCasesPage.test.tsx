@@ -510,6 +510,56 @@ it('测试用例分页提供统一的每页条数和页码跳转控件', async (
   expect(await screen.findByRole('option', { name: '50 条/页' })).toBeInTheDocument();
 });
 
+it('切换页码后停留在目标页，不会自动回到第一页', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  for (let index = 1; index <= 12; index += 1) {
+    await service.createTestCase({
+      type: 'functional',
+      moduleId: 'auth',
+      name: `分页数据${index}`,
+      priority: 'P1',
+      status: '草稿',
+    });
+  }
+  renderTestCasesPageWithService(service);
+
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+  expect(await within(list).findByText('分页数据12')).toBeInTheDocument();
+  expect(within(list).queryByText('分页数据1')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('listitem', { name: '2' }));
+
+  expect(await within(list).findByText('分页数据1')).toBeInTheDocument();
+  expect(within(list).queryByText('分页数据12')).not.toBeInTheDocument();
+});
+
+it('使用跳转页码输入框后停留在目标页，不会自动回到第一页', async () => {
+  const user = userEvent.setup();
+  const service = createMockPlatformService({ delay: 0 });
+  for (let index = 1; index <= 12; index += 1) {
+    await service.createTestCase({
+      type: 'functional',
+      moduleId: 'auth',
+      name: `跳转数据${index}`,
+      priority: 'P1',
+      status: '草稿',
+    });
+  }
+  renderTestCasesPageWithService(service);
+
+  const list = await screen.findByRole('region', { name: '功能用例列表' });
+  expect(await within(list).findByText('跳转数据12')).toBeInTheDocument();
+
+  const jumpInput = screen.getByRole('spinbutton', { name: '跳转页码' });
+  await user.clear(jumpInput);
+  await user.type(jumpInput, '2');
+  await user.keyboard('{Enter}');
+
+  expect(await within(list).findByText('跳转数据1')).toBeInTheDocument();
+  expect(within(list).queryByText('跳转数据12')).not.toBeInTheDocument();
+});
+
 it('模块栏可折叠并通过分隔线调整宽度', async () => {
   const user = userEvent.setup();
   renderApp('/test-cases/functional');
