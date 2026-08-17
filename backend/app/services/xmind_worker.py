@@ -1,3 +1,5 @@
+"""XMind 异步任务消费者：领取 PENDING 任务并驱动 AI 生成。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +15,7 @@ from .xmind import generate_task_preview
 
 
 def _claim_task(session_factory: sessionmaker[Session]) -> int | None:
+    """原子领取下一个可执行任务，防止多个 worker 重复消费。"""
     claimed_at = datetime.now(timezone.utc)
     with session_factory() as session:
         task_id = session.scalar(
@@ -53,6 +56,7 @@ def run_xmind_task(
     upload_dir: Path,
     llm_transport: Any = None,
 ) -> bool:
+    """同步包装异步生成流程：创建事件循环并运行任务预览生成。"""
     asyncio.run(
         generate_task_preview(
             session_factory,
@@ -70,6 +74,7 @@ def run_next_xmind_task(
     upload_dir: Path,
     llm_transport: Any = None,
 ) -> int | None:
+    """领取并执行一个任务，无任务可领时返回 None。"""
     task_id = _claim_task(session_factory)
     if task_id is None:
         return None
