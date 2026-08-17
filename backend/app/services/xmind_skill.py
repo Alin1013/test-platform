@@ -148,6 +148,7 @@ class OpenAICompatibleClient:
         transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
         timeout_seconds: float = 90,
     ) -> None:
+        """记录传输层（测试注入用）与请求超时。"""
         self.transport = transport
         self.timeout_seconds = timeout_seconds
 
@@ -160,6 +161,7 @@ class OpenAICompatibleClient:
         base_url: str,
         api_key: str,
     ) -> str:
+        """调用 Chat Completions 接口，返回模型生成的文本内容。"""
         endpoint = f"{base_url.rstrip('/')}/chat/completions"
         payload = {
             "model": model,

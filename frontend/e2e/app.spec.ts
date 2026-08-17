@@ -1,3 +1,6 @@
+/**
+ * 端到端冒烟测试：桌面/移动端导航、核心页面可达性、响应式布局与执行流程。
+ */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
@@ -12,6 +15,7 @@ const pages = [
 ] as const;
 
 function collectBrowserErrors(page: Page) {
+  // 收集页面 console 错误、未捕获异常与 4xx/5xx 响应，用于断言无前端报错。
   const errors: string[] = [];
 
   page.on('console', (message) => {
@@ -28,6 +32,7 @@ function collectBrowserErrors(page: Page) {
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
+  // 断言 body/root/#root 三个层面均无横向溢出，防止响应式回归。
   const dimensions = await page.evaluate(() => ({
     body: { client: document.body.clientWidth, scroll: document.body.scrollWidth },
     root: {
@@ -46,6 +51,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 async function expectTableScroll(page: Page, wrapperSelector: string) {
+  // 断言表格容器横向可滚动（内容超宽时出现滚动条）。
   const geometry = await page.locator(wrapperSelector).evaluate((element) => {
     const scrollingTable = element.querySelector<HTMLElement>('.ant-table-content');
     return {
@@ -60,6 +66,7 @@ async function expectTableScroll(page: Page, wrapperSelector: string) {
 }
 
 async function expectGridColumns(page: Page, selector: string, columns: number) {
+  // 断言网格布局在指定断点下的列数。
   const count = await page.locator(selector).evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(' ').length,
   );
@@ -67,6 +74,7 @@ async function expectGridColumns(page: Page, selector: string, columns: number) 
 }
 
 async function loginWithDemoAccount(page: Page) {
+  // 用预置演示账号登录，供需要登录态的执行用例复用。
   await page.goto('/login');
   await page.getByRole('textbox', { name: '账号' }).fill('jiangshan');
   await page.getByRole('textbox', { name: '密码' }).fill('Test1234');
@@ -75,6 +83,7 @@ async function loginWithDemoAccount(page: Page) {
 }
 
 async function waitForDashboardChart(page: Page) {
+  // 等待饼图渲染完成并连续 5 帧保持稳定（形状/路径不再变化）。
   const chart = page.locator('.dashboard-chart svg');
   await expect(chart).toBeVisible();
   await expect(page.locator('.recharts-pie-sector path')).toHaveCount(3);

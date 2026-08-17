@@ -366,6 +366,7 @@ def confirm_generated_cases(session: Session, payload: XMindConfirmRequest) -> d
 
 
 def _task_upload_path(upload_dir: Path, record: XMindRecord) -> Path:
+    """根据记录中的 file_url 反推出上传文件的本地路径。"""
     return upload_dir / Path(record.file_url).name
 
 
@@ -380,6 +381,7 @@ def _root_cause_text(error: Exception) -> str:
 
 
 def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
+    """序列化任务主记录（不含树与预览内容）。"""
     return {
         "id": record.id,
         "file_name": record.file_name,
@@ -397,6 +399,7 @@ def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
 
 
 def _serialize_task_detail(record: XMindRecord) -> dict[str, Any]:
+    """序列化任务完整详情：主记录 + 树、预览用例与模块映射。"""
     return {
         **_serialize_task_record(record),
         "tree": record.tree_json or [],
@@ -628,6 +631,7 @@ async def generate_task_preview(
     upload_dir: Path,
     llm_transport: Any = None,
 ) -> dict:
+    """执行任务的生成流程：加载/解析树、调用 LLM 生成并落库为待审核状态。"""
     try:
         with session_factory() as session:
             record = session.scalar(

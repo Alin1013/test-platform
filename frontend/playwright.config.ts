@@ -1,7 +1,11 @@
+/**
+ * Playwright E2E 配置：桌面/移动两个项目，优先复用本机 Chrome。
+ */
 import { existsSync } from 'node:fs';
 import { chromium, defineConfig } from '@playwright/test';
 
 const systemChromiumCandidates = [
+  // 兜底候选 Chrome 路径（含各平台常见安装位置）。
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome',
@@ -16,6 +20,7 @@ const systemChromiumCandidates = [
 ].filter((candidate): candidate is string => Boolean(candidate));
 const chromiumExecutable = existsSync(chromium.executablePath())
   ? undefined
+  // Playwright 自带 Chromium 不存在时，回退到系统 Chrome。
   : systemChromiumCandidates.find((candidate) => existsSync(candidate));
 
 export default defineConfig({

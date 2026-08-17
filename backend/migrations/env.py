@@ -1,3 +1,5 @@
+"""Alembic 迁移环境：读取配置、连接数据库并执行迁移命令。"""
+
 from logging.config import fileConfig
 import os
 
