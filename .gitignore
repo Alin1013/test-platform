@@ -3,6 +3,7 @@
 /.playwright-cli
 /.worktrees/
 /.venv/
+/.tmp/
 
 # Python 缓存与本地运行数据
 __pycache__/
