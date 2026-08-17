@@ -17,6 +17,7 @@ __pycache__/
 .coverage.*
 htmlcov/
 /backend/test_platform.db
+# 产物目录：UI 自动化产物（截图/录屏/Trace）保存在本地，不入库以避免体积膨胀
 /backend/uploads/
 /backend/logs/
 
@@ -26,6 +27,7 @@ htmlcov/
 /frontend/.vite
 /frontend/playwright-report
 /frontend/test-results
+# 前端 e2e 产物（截图/Trace）保存在本地，不入库
 /frontend/output
 /output/
 node_modules/

@@ -226,3 +226,18 @@ npm run dev -- --host 127.0.0.1
 当前技术栈为 React 18、TypeScript、Vite、Ant Design、React Router、Recharts、Vitest、Testing Library 和 Playwright。
 
 后端技术栈为 Python 3.12、FastAPI、SQLAlchemy 2、Alembic、SQLite、Pydantic、OpenPyXL 和 Pytest。后端验证命令为 `./.venv/bin/pytest`。
+
+## 8. UI 自动化产物（Trace 与截图）
+
+UI 自动化执行与 e2e 测试的产物默认保存在本地、不纳入版本库（见 `.gitignore`），运行后可直接回看，不会被自动清理：
+
+- **后端 UI 自动化执行**：产物位于 `backend/uploads/executions/`，包含整页截图 `*.png`、录屏 `*.webm` 与 Playwright Trace `trace_*.zip`；平台接口返回的 `screenshotUrl`/`videoUrl`/`traceUrl` 以 `/uploads/executions/...` 形式访问，且无论用例通过或失败都会保留截图与 Trace。
+- **前端 e2e 测试**：产物位于 `frontend/output/playwright/artifacts/`，每个用例均保留截图与 `trace_*.zip`（配置为 `screenshot: 'on'`、`trace: 'on'`）。
+
+查看 Trace：
+
+```bash
+./.venv/bin/playwright show-trace backend/uploads/executions/trace_<id>.zip
+# 前端 e2e
+cd frontend && npx playwright show-trace output/playwright/artifacts/trace_<id>.zip
+```
