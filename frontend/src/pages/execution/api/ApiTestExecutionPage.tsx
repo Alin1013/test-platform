@@ -206,8 +206,8 @@ export function ApiTestExecutionPage() {
 
       <section className="execution-config" aria-labelledby="api-execution-config-title">
         <div className="execution-section-title">
+          {/* 内部执行编号对用户无意义（仅后端轮询与中断需要），按用户反馈移除展示，避免与业务信息混淆。 */}
           <h2 id="api-execution-config-title">执行配置</h2>
-          {executionId ? <code>{executionId}</code> : null}
         </div>
         <div className="execution-config-grid execution-config-grid--api">
           <label>

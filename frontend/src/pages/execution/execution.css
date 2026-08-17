@@ -39,14 +39,10 @@
   line-height: 1.5;
 }
 
-.execution-section-title span,
-.execution-section-title code {
+/* 标题旁的辅助说明文字（如 “已选择 X 条”）：放大写 + 灰色，与标题区分。 */
+.execution-section-title span {
   color: var(--muted);
   font-size: 12px;
-}
-
-.execution-section-title code {
-  overflow-wrap: anywhere;
 }
 
 .execution-directory-filter {
