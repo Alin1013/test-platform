@@ -180,9 +180,14 @@ class OpenAICompatibleClient:
             ) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
         except httpx.HTTPError as error:
-            raise XMindSkillError("LLM 请求失败") from error
+            # 保留底层异常原文，便于区分超时/断连等具体网络错误。
+            raise XMindSkillError(f"LLM 请求失败：{error}") from error
         if response.status_code >= 400:
-            raise XMindSkillError("LLM 服务返回错误")
+            # 携带状态码与响应体片段，让 401/400/429 等失败可直接定位配置问题。
+            detail = response.text.strip()[:500]
+            raise XMindSkillError(
+                f"LLM 服务返回错误（HTTP {response.status_code}）：{detail or '无响应内容'}"
+            )
         try:
             data = response.json()
             content = data["choices"][0]["message"]["content"]
