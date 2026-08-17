@@ -1,3 +1,6 @@
+/**
+ * 通用分页组件样式：右对齐布局与跳页输入框。
+ */
 .app-pagination {
   display: flex;
   align-items: center;

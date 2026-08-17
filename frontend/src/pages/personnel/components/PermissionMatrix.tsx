@@ -1,7 +1,11 @@
+/**
+ * 权限矩阵：角色 × 权限项的勾选表格。
+ */
 import { Checkbox, Empty, Skeleton } from 'antd';
 import type { PermissionKey, PermissionRole } from '../../../services/contracts';
 
 const permissionColumns: Array<{ key: PermissionKey; label: string }> = [
+  // 权限列顺序与后端权限键一致。
   { key: 'caseView', label: '用例查看' },
   { key: 'caseEdit', label: '用例编辑' },
   { key: 'xmindConvert', label: 'XMind 转换' },
@@ -16,6 +20,7 @@ interface PermissionMatrixProps {
 }
 
 export function PermissionMatrix({ roles, disabled = false, onToggle }: PermissionMatrixProps) {
+  // roles 为 null 显示骨架，空数组显示加载失败提示。
 
   if (!roles) {
     return <Skeleton active paragraph={{ rows: 4 }} />;

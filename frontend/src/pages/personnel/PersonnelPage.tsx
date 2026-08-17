@@ -1,3 +1,6 @@
+/**
+ * 人员管理页：用户列表（搜索/筛选/启停/删除）与角色权限矩阵两个 Tab。
+ */
 import { DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Empty, Input, Select, Skeleton, Space, Switch, Table, Tabs, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -27,6 +30,7 @@ const roleColors: Record<UserRole, string> = {
 };
 
 export function PersonnelPage() {
+  // users 为 null 表示加载中；权限矩阵维护“已保存快照”以便计算变更。
   const service = usePlatformService();
   const { message, modal } = App.useApp();
   const [activeTab, setActiveTab] = useState('users');
@@ -41,6 +45,7 @@ export function PersonnelPage() {
   const [savingPermissions, setSavingPermissions] = useState(false);
 
   const loadUsers = useCallback(async () => {
+    // 加载失败降级为空列表并提示，避免整页报错。
     try {
       setUsers(await service.listUsers());
     } catch {
@@ -68,6 +73,7 @@ export function PersonnelPage() {
   }, [activeTab, loadRoles, permissionRoles]);
 
   const changedPermissionRoles = useMemo(
+    // 与已保存快照对比，只提交发生变化的角色。
     () =>
       permissionRoles?.filter((role) => {
         const saved = savedPermissionRoles.find((candidate) => candidate.id === role.id);
@@ -77,6 +83,7 @@ export function PersonnelPage() {
   );
 
   const togglePermission = (roleId: string, permission: PermissionKey) => {
+    // 不可变更新权限位，触发变更列表重新计算。
     setPermissionRoles((current) =>
       current?.map((role) =>
         role.id === roleId
@@ -93,6 +100,7 @@ export function PersonnelPage() {
   };
 
   const savePermissions = async () => {
+    // 并行保存变更角色；部分失败时用服务端最新数据刷新并保留未保存的编辑。
     if (!changedPermissionRoles.length || savingPermissions) return;
     setSavingPermissions(true);
     const pendingEdits = new Map(changedPermissionRoles.map((role) => [role.id, role]));
@@ -130,6 +138,7 @@ export function PersonnelPage() {
   };
 
   const filteredUsers = useMemo(() => {
+    // 客户端过滤：姓名/邮箱关键字 + 角色 + 启用状态。
     const normalizedKeyword = keyword.trim().toLowerCase();
 
     return users?.filter((user) => {
@@ -147,6 +156,7 @@ export function PersonnelPage() {
 
   const setUserEnabled = useCallback(
     async (user: UserRecord, enabled: boolean) => {
+      // 先乐观更新 UI，失败时回滚到原状态。
       setUsers((current) =>
         current?.map((item) => (item.id === user.id ? { ...item, enabled } : item)) ?? null,
       );
@@ -184,6 +194,7 @@ export function PersonnelPage() {
 
   const confirmDeleteUser = useCallback(
     (user: UserRecord) => {
+      // 后端约束启用账号不可删除，前端先拦截提示。
       if (user.enabled) {
         void message.warning('请先停用账号');
         return;
@@ -201,6 +212,7 @@ export function PersonnelPage() {
   );
 
   const columns = useMemo<ColumnsType<UserRecord>>(
+    // 用户表格列：姓名/邮箱/部门/角色/状态/操作。
     () => [
       {
         title: '姓名',
@@ -264,6 +276,7 @@ export function PersonnelPage() {
   );
 
   const addUser = async (input: CreateUserInput) => {
+    // 添加用户成功后刷新列表，让新账号立即可见。
     const created = await service.addUser(input);
     await loadUsers();
     return created;

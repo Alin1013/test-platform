@@ -1,3 +1,6 @@
+/**
+ * 应用外壳测试：导航、顶栏与产品文案。
+ */
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../tests/renderApp';

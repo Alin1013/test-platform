@@ -1,3 +1,8 @@
+/**
+ * 前端与后端共享的领域类型契约（纯类型，无运行时代码）。
+ */
+
+// ===== 基础枚举 =====
 export type TestCaseType = 'functional' | 'api' | 'ui';
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
 export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已失败' | '已停用';
@@ -16,6 +21,7 @@ export type PermissionKey =
   | 'personnelManage'
   | 'systemSettings';
 
+// ===== 用例 =====
 export interface TestCaseRecord {
   storageId: number;
   id: string;
@@ -43,12 +49,14 @@ export interface TestCaseRecord {
 }
 
 export interface PaginatedResult<T> {
+  /** 通用分页结果结构。 */
   items: T[];
   page: number;
   pageSize: number;
   total: number;
 }
 
+// ===== 模块 =====
 export interface TestModule {
   id: string;
   name: string;
@@ -67,6 +75,7 @@ export interface UpdateTestModuleInput {
   name: string;
 }
 
+// ===== API 自动化详情 =====
 export interface ApiKeyValueItem {
   enabled: boolean;
   key: string;
@@ -95,6 +104,7 @@ export interface ApiAutomationCaseDetails {
   extracts: ApiExtractVariable[];
 }
 
+// ===== UI 自动化详情 =====
 export interface UiAutomationStep {
   action: UiAction;
   locatorType: UiLocatorType;
@@ -114,6 +124,7 @@ export interface UiAutomationCaseDetails {
   steps: UiAutomationStep[];
 }
 
+// ===== 查询与创建 =====
 export interface TestCaseQuery {
   type?: TestCaseType;
   moduleId?: string;
@@ -158,6 +169,7 @@ export interface TestCaseImportResult {
   codes: string[];
 }
 
+// ===== XMind =====
 export interface XMindTreeNode {
   title: string;
   children: XMindTreeNode[];
@@ -223,6 +235,7 @@ export interface XMindConfirmResult {
   }>;
 }
 
+// ===== 人员与角色 =====
 export interface UserRecord {
   id: string;
   name: string;
@@ -246,6 +259,7 @@ export interface PermissionRole {
   permissions: Record<PermissionKey, boolean>;
 }
 
+// ===== 仪表盘与系统设置 =====
 export interface DashboardData {
   counts: Record<TestCaseType, number>;
   total: number;
@@ -295,6 +309,7 @@ export interface TestConnectionResult {
   message: string;
 }
 
+// ===== 执行 =====
 export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 export type ExecutionDetailStatus = 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED' | 'SKIPPED';
 
@@ -385,6 +400,7 @@ export interface ApiExecutionReport {
   results: ApiExecutionResult[];
 }
 
+// ===== 调试 =====
 export interface ApiDebugInput {
   environment?: string;
   variables: Record<string, string>;
@@ -458,6 +474,7 @@ export interface UiDebugResult {
   errorMessage: string | null;
 }
 
+// ===== 平台服务接口 =====
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
   listTestModules(projectId?: number): Promise<TestModule[]>;

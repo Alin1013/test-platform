@@ -1,3 +1,6 @@
+/**
+ * 接口自动化执行页测试：启动执行、KPI 与请求分析。
+ */
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../../../tests/renderApp';

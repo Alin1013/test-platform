@@ -1,3 +1,6 @@
+/**
+ * UI 自动化执行页：选择用例与执行配置，启动执行、轮询进度并查看详情。
+ */
 import {
   CloseCircleOutlined,
   EyeOutlined,
@@ -59,6 +62,7 @@ const statusColors: Record<ExecutionDetailStatus, string> = {
 };
 
 const buildTraceViewerUrl = (traceUrl: string | null | undefined) => {
+  // 相对 Trace 地址补全为绝对地址后交给 Playwright Trace Viewer。
   if (!traceUrl) return null;
   const absoluteTraceUrl = /^https?:\/\//.test(traceUrl)
     ? traceUrl
@@ -72,10 +76,12 @@ interface UiCaseRow extends UiExecutionCase {
 }
 
 function flattenModules(modules: TestModule[]): TestModule[] {
+  // 递归展开模块树为扁平列表，便于按 id 查询。
   return modules.flatMap((module) => [module, ...flattenModules(module.children)]);
 }
 
 function descendantModuleIds(module: TestModule): string[] {
+  // 收集模块自身及其全部子孙 id，用于“目录筛选包含子目录”的语义。
   return [
     module.id,
     ...module.children.flatMap(descendantModuleIds),
@@ -87,6 +93,7 @@ function isModuleVisible(moduleId: string, visibleModuleIds: Set<string> | null)
 }
 
 export function UiTestExecutionPage() {
+  // 初次加载拉取用例/环境/模块；执行中每 2 秒轮询一次进度。
   const service = usePlatformService();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
@@ -127,6 +134,7 @@ export function UiTestExecutionPage() {
   }, [service]);
 
   useEffect(() => {
+    // 仅当执行状态为 RUNNING 时轮询，避免终态后继续请求。
     if (!executionId || execution?.status !== 'RUNNING') return;
     const timer = window.setInterval(() => {
       void service.getUiExecution(executionId).then(setExecution).catch(() => undefined);
@@ -135,6 +143,7 @@ export function UiTestExecutionPage() {
   }, [execution?.status, executionId, service]);
 
   const rows = useMemo<UiCaseRow[]>(() => {
+    // 未启动执行时展示全部用例（PENDING）；执行后把结果按用例表合并。
     if (!cases) return [];
     if (!execution) {
       return cases.map((testCase) => ({
@@ -204,6 +213,7 @@ export function UiTestExecutionPage() {
   }, [page, pageSize, visibleRows]);
 
   const changeModule = (value: string) => {
+    // 切换目录时清掉不可见用例的选中项，避免提交隐藏用例。
     const moduleId = value || null;
     setSelectedModuleId(moduleId);
     setPage(1);
@@ -218,6 +228,7 @@ export function UiTestExecutionPage() {
   };
 
   const run = async () => {
+    // 校验选中项与项目后启动执行，并立即拉取一次初始结果。
     if (!selectedIds.length) {
       message.warning('请至少选择一个 UI 自动化用例');
       return;
@@ -253,6 +264,7 @@ export function UiTestExecutionPage() {
   };
 
   const rowSelection: TableRowSelection<UiCaseRow> | undefined = execution
+    // 执行开始后禁用选择，避免执行期间变更集合。
     ? undefined
     : {
         selectedRowKeys: selectedIds,

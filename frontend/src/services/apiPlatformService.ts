@@ -1,3 +1,6 @@
+/**
+ * 真实后端 API 适配器：实现 PlatformService 契约，负责请求封装、错误归一化与字段映射。
+ */
 import type {
   CreateTestCaseInput,
   CreateTestModuleInput,
@@ -46,6 +49,7 @@ interface ApiPlatformServiceOptions {
 export const DEFAULT_PLATFORM_API_BASE_URL = '/api/v1';
 
 interface Page<T> {
+  /** 后端分页响应结构。 */
   items: T[];
   total: number;
 }
@@ -161,6 +165,7 @@ interface ApiXMindTaskDetail extends ApiXMindTaskRecord {
 }
 
 function mapCase(testCase: ApiTestCase): TestCaseRecord {
+  // 后端 snake_case 字段映射为前端 camelCase 用例结构。
   // 传输层使用蛇形字段，页面层继续消费既有的驼峰领域对象。
   const updatedDate = new Date(testCase.updated_at);
   return {
@@ -232,6 +237,7 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
 }
 
 function mapXMindTaskRecord(record: ApiXMindTaskRecord): XMindTaskRecord {
+  // 后端 XMind 任务记录字段映射。
   return {
     id: record.id,
     fileName: record.file_name,
@@ -258,6 +264,7 @@ function mapXMindTaskDetail(record: ApiXMindTaskDetail): XMindTaskDetail {
 }
 
 function mapUser(user: ApiUser): UserRecord {
+  // 后端用户字段映射（id 转字符串）。
   return {
     id: String(user.id),
     name: user.name,
@@ -269,6 +276,7 @@ function mapUser(user: ApiUser): UserRecord {
 }
 
 function mapModule(module: ApiTestModule): TestModule {
+  // 后端模块字段映射，递归转换子模块。
   return {
     id: module.id,
     name: module.name,
@@ -279,6 +287,7 @@ function mapModule(module: ApiTestModule): TestModule {
 }
 
 function mapUiDetailsToApi(uiDetails: NonNullable<CreateTestCaseInput['uiDetails']>): ApiUiCaseDetails {
+  // 前端 UI 详情转后端 snake_case 结构。
   return {
     description: uiDetails.description,
     dependency_case_id: uiDetails.dependencyCaseId,
@@ -299,6 +308,7 @@ function mapRole(role: ApiRole): PermissionRole {
 }
 
 function mapApiDetailsInput(input: CreateTestCaseInput | UpdateTestCaseInput) {
+  // 前端 API 详情转后端兼容结构（含旧版 automation_config）。
   if (!input.endpoint) return undefined;
   const enabledHeaders = input.apiDetails?.headers.filter((item) => item.enabled && item.key.trim());
   const requestBody = (() => {
@@ -347,6 +357,7 @@ export function createApiPlatformService({
 }: ApiPlatformServiceOptions): PlatformService {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
   const resolveArtifactUrl = (url: string | null) => {
+    // 相对产物地址（截图/视频）解析为可访问的绝对地址。
     if (!url) return url;
     if (/^https?:\/\//.test(url)) return url;
     if (/^https?:\/\//.test(normalizedBaseUrl)) return new URL(url, normalizedBaseUrl).toString();
@@ -357,6 +368,7 @@ export function createApiPlatformService({
   };
 
   const request = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
+    // 统一 JSON 请求封装：自动设置 Content-Type、解析错误并抛出异常。
     const headers = new Headers(init.headers);
     if (init.body && !(init.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
@@ -378,6 +390,7 @@ export function createApiPlatformService({
   };
 
   const download = async (path: string, init: RequestInit): Promise<Blob> => {
+    // 下载类请求：返回 Blob，错误处理与 request 一致。
     const headers = new Headers(init.headers);
     if (init.body && !(init.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
@@ -398,6 +411,7 @@ export function createApiPlatformService({
 
   return {
     async getDashboard(): Promise<DashboardData> {
+      // 仪表盘：并发请求统计与最近用例。
       const [stats, recent] = await Promise.all([
         request<Record<TestCaseType, number> & { total: number }>('/dashboard/stats'),
         request<Page<ApiTestCase>>('/dashboard/recent-cases?page_size=6'),

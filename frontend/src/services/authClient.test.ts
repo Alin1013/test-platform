@@ -1,3 +1,6 @@
+/**
+ * 认证客户端测试：登录/注册/资料更新与错误映射。
+ */
 import {
   createApiAuthClient,
   createConfiguredAuthClient,

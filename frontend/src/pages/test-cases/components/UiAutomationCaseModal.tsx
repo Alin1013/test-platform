@@ -1,3 +1,6 @@
+/**
+ * UI 自动化用例表单：步骤编辑器（拖拽排序）、执行配置、调试运行与结果展示。
+ */
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -30,6 +33,7 @@ import { testCaseStatusOptions } from '../testCaseOptions';
 const { TextArea } = Input;
 
 const actionOptions: Array<{ value: UiAction; label: string }> = [
+  // 步骤动作下拉选项。
   { value: 'click', label: 'Click（点击）' },
   { value: 'input', label: 'Input（输入）' },
   { value: 'navigate', label: 'Navigate（页面跳转）' },
@@ -60,6 +64,7 @@ const priorityColors: Record<Priority, string | undefined> = {
 };
 
 const createStep = (action: UiAction = 'navigate'): UiAutomationStep => ({
+  // 新建步骤的默认值。
   action,
   locatorType: 'css',
   target: '',
@@ -69,6 +74,7 @@ const createStep = (action: UiAction = 'navigate'): UiAutomationStep => ({
 });
 
 const buildTraceViewerUrl = (traceUrl: string | null | undefined) => {
+  // 相对 Trace 地址先补全为绝对地址，再交给 Playwright Trace Viewer。
   if (!traceUrl) return null;
   const absoluteTraceUrl = /^https?:\/\//.test(traceUrl)
     ? traceUrl
@@ -113,12 +119,14 @@ interface StepFieldsProps {
 }
 
 function StepFields({ index }: StepFieldsProps) {
+  // 单个步骤的动态表单：按动作类型联动显隐定位方式/操作值/断言字段。
   return (
     <Form.Item noStyle shouldUpdate>
       {({ getFieldValue, setFieldValue }) => {
         const action = getFieldValue(['steps', index, 'action']) as UiAction | undefined;
         const assertion = getFieldValue(['steps', index, 'assertion']) as UiAssertion | undefined;
         const skipsLocator = action === 'navigate' || action === 'wait';
+        // 导航/等待不需要定位器；导航/点击/悬停/断言不需要操作值。
         const skipsValue = action === 'navigate' || action === 'click' || action === 'hover' || action === 'assert';
 
         return (
@@ -232,6 +240,7 @@ export function UiAutomationCaseModal({
   onClose,
   onSubmit,
 }: UiAutomationCaseModalProps) {
+  // steps 使用 Form.useWatch 实时读取，用于步骤计数与拖拽排序。
   const [form] = Form.useForm<UiCaseFormValues>();
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -248,6 +257,7 @@ export function UiAutomationCaseModal({
   const traceViewerUrl = buildTraceViewerUrl(debugResult?.traceUrl);
 
   useEffect(() => {
+    // 打开时初始化表单并并行加载依赖用例/模块/环境配置。
     if (!open) return;
     const details = initialCase?.uiDetails;
     form.resetFields();
@@ -290,6 +300,7 @@ export function UiAutomationCaseModal({
   }, [defaultModule, form, initialCase, open, service, user?.name]);
 
   const requestClose = () => {
+    // 有未保存改动时先弹放弃确认。
     if (!form.isFieldsTouched()) {
       form.resetFields();
       onClose();
@@ -299,6 +310,7 @@ export function UiAutomationCaseModal({
   };
 
   const submit = async (values: UiCaseFormValues) => {
+    // 提交时把步骤原样传给后端；成功提示并关闭。
     const created = await onSubmit({
       type: 'ui',
       authorId: user?.id,
@@ -322,6 +334,7 @@ export function UiAutomationCaseModal({
   };
 
   const debugRequest = async () => {
+    // 先用表单校验拦截缺项，再调用后端执行；校验失败只提示不打断编辑。
     try {
       const values = await form.validateFields(uiDebugFieldNames, { recursive: true });
       setDebugLoading(true);
@@ -397,6 +410,7 @@ export function UiAutomationCaseModal({
           onFinish={(values) => void submit(values)}
         >
           <section className="ui-case-section" aria-labelledby="ui-basic-info-title">
+            {/* 基本信息：名称、模块、优先级、维护人与描述。 */}
             <h3 id="ui-basic-info-title" className="ui-case-section__title">
               基本信息
             </h3>
@@ -447,6 +461,7 @@ export function UiAutomationCaseModal({
           </section>
 
           <section className="ui-case-section" aria-labelledby="ui-execution-config-title">
+            {/* 执行配置：依赖用例、浏览器、环境、超时、重试与临时变量。 */}
             <h3 id="ui-execution-config-title" className="ui-case-section__title">
               执行配置
             </h3>
@@ -494,6 +509,7 @@ export function UiAutomationCaseModal({
           </section>
 
           <section className="ui-case-section" aria-labelledby="ui-step-editor-title">
+            {/* 自动化步骤：支持拖拽/按钮排序与逐步骤字段联动。 */}
             <div className="ui-case-section__heading">
               <h3 id="ui-step-editor-title" className="ui-case-section__title">
                 自动化步骤
@@ -590,6 +606,7 @@ export function UiAutomationCaseModal({
 
           {debugResult || debugError ? (
             <section className="ui-case-section ui-debug-result" aria-labelledby="ui-debug-result-title">
+              {/* 调试结果：状态/耗时、步骤结果、日志与截图/录屏/Trace 链接。 */}
               <div className="ui-debug-result__heading">
                 <h3 id="ui-debug-result-title" className="ui-case-section__title">
                   调试结果

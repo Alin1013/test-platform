@@ -1,3 +1,6 @@
+/**
+ * 应用入口测试：路由跳转与登录守卫。
+ */
 import { render, screen } from '@testing-library/react';
 import { App } from './App';
 

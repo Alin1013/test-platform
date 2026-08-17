@@ -1,3 +1,6 @@
+/**
+ * 应用外壳：侧边导航、顶栏（搜索/项目/用户菜单）与内容区，含移动端抽屉导航。
+ */
 import {
   BookOutlined,
   BulbOutlined,
@@ -20,6 +23,7 @@ import './app-shell.css';
 const { Content, Header, Sider } = Layout;
 
 const menuItems = [
+  // 主导航配置：key 即路由路径，子菜单用于用例/执行分类。
   { key: '/dashboard', icon: <DashboardOutlined aria-hidden="true" />, label: '仪表盘' },
   {
     key: 'test-cases',
@@ -46,6 +50,7 @@ const menuItems = [
 ];
 
 function Brand() {
+  /** 品牌标识：左侧 Logo 块与平台名称。 */
   return (
     <div className="app-brand" aria-label="测试平台">
       <span className="app-brand__mark">测</span>
@@ -59,6 +64,7 @@ interface NavigationProps {
 }
 
 function Navigation({ onNavigate }: NavigationProps) {
+  /** 侧边导航：按当前路径高亮，点击后跳转；onNavigate 用于移动端关闭抽屉。 */
   const navigate = useNavigate();
   const location = useLocation();
   const selectedKey = useMemo(() => location.pathname, [location.pathname]);
@@ -86,6 +92,7 @@ function Navigation({ onNavigate }: NavigationProps) {
 }
 
 export function AppShell() {
+  // 移动端抽屉开关 + 账号菜单（编辑资料/切换账号/退出登录）。
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -98,6 +105,7 @@ export function AppShell() {
   ];
 
   const handleAccountMenuClick = async ({ key }: { key: string }) => {
+    // 编辑资料进入设置页；切换账号/退出登录都先登出再回登录页。
     if (key === 'profile') {
       navigate('/settings?tab=profile');
       return;

@@ -1,3 +1,6 @@
+/**
+ * Mock 平台服务测试：内存实现的用例/模块/用户/执行等行为。
+ */
 import { createMockPlatformService } from './mockPlatformService';
 
 it('返回项目测试用例目录树', async () => {

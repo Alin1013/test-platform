@@ -1,3 +1,6 @@
+/**
+ * UI 自动化执行页测试：配置选择、启动执行与进度展示。
+ */
 import { App as AntdApp } from 'antd';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

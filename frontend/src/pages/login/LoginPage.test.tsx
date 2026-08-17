@@ -1,3 +1,6 @@
+/**
+ * 登录页测试：登录跳转、错误提示与注册流程。
+ */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

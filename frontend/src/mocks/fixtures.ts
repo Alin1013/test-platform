@@ -1,3 +1,6 @@
+/**
+ * Mock 服务使用的演示数据：模块、系统设置、用例、用户与角色。
+ */
 import {
   DEFAULT_PROJECT_NAME,
   type PermissionRole,

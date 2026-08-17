@@ -1,3 +1,6 @@
+/**
+ * 认证上下文：管理登录用户状态、令牌与登录/注册/登出/资料更新。
+ */
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 import {
   createConfiguredAuthClient,
@@ -27,6 +30,7 @@ interface AuthProviderProps {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function createDefaultClient() {
+  // 与 PlatformService 相同：测试环境使用内存实现。
   return createConfiguredAuthClient({
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
     mode: import.meta.env.MODE,
@@ -34,6 +38,7 @@ function createDefaultClient() {
 }
 
 export function AuthProvider({ children, client }: AuthProviderProps) {
+  // 初始用户与令牌从客户端携带（例如刷新后恢复会话）。
   const [authClient] = useState(() => client ?? createDefaultClient());
   const [user, setUser] = useState<AuthUser | null>(authClient.initialUser);
   const [token, setToken] = useState<string | null>(null);
@@ -66,6 +71,7 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
       async updateProfile(input) {
         const result = await authClient.updateProfile(token, input);
         setUser(result.user);
+        // 修改密码后旧令牌已吊销，强制前端回到未登录状态。
         if (result.passwordChanged) setToken(null);
         return result.passwordChanged;
       },
@@ -77,6 +83,7 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
 }
 
 export function useAuth() {
+  /** 读取认证状态与方法；在 AuthProvider 外调用时直接报错。 */
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth 必须在 AuthProvider 内使用');
   return context;

@@ -1,3 +1,6 @@
+/**
+ * 登录页：账号密码登录 + 注册弹窗，成功后跳转仪表盘。
+ */
 import { LoginOutlined, UserAddOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Modal } from 'antd';
 import { useState } from 'react';
@@ -19,6 +22,7 @@ interface RegisterFormValues {
 }
 
 export function LoginPage() {
+  // 登录/注册共用表单状态、错误提示与提交锁。
   const navigate = useNavigate();
   const { login, register } = useAuth();
   const [loginForm] = Form.useForm<LoginFormValues>();
@@ -31,6 +35,7 @@ export function LoginPage() {
   const [registerSubmitting, setRegisterSubmitting] = useState(false);
 
   const submit = async (values: LoginFormValues) => {
+    // 登录失败区分“账号禁用”与通用错误，成功后进入仪表盘。
     setError('');
     setRegistrationSuccess('');
     setSubmitting(true);
@@ -57,6 +62,7 @@ export function LoginPage() {
   };
 
   const closeRegistration = () => {
+    // 提交中禁止关闭弹窗，防止状态错乱。
     if (registerSubmitting) return;
     setRegisterOpen(false);
     setRegisterError('');
@@ -64,6 +70,7 @@ export function LoginPage() {
   };
 
   const submitRegistration = async (values: RegisterFormValues) => {
+    // 注册成功自动回填账号并关闭弹窗，提示去登录。
     const account = values.account.trim().toLowerCase();
     setRegisterError('');
     setRegisterSubmitting(true);

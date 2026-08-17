@@ -1,3 +1,6 @@
+/**
+ * 内存 Mock 平台服务：实现 PlatformService 契约，用于测试与离线演示，数据不持久化。
+ */
 import {
   initialRoles,
   initialSystemSettings,
@@ -40,11 +43,13 @@ interface MockServiceOptions {
 }
 
 const copy = <T,>(value: T): T => {
+  // 深拷贝隔离，避免调用方直接改写内部状态。
   if (value === undefined) return value;
   return JSON.parse(JSON.stringify(value)) as T;
 };
 
 function findModuleById(modules: TestModule[], moduleId: string): TestModule | undefined {
+  // 递归查找模块节点。
   for (const module of modules) {
     if (module.id === moduleId) return module;
     const child = findModuleById(module.children, moduleId);
@@ -58,6 +63,7 @@ function updateModuleChildren(
   moduleId: string,
   update: (children: TestModule[]) => TestModule[],
 ): TestModule[] {
+  // 不可变更新指定模块的子列表。
   return modules.map((module) => {
     if (module.id === moduleId) {
       return { ...module, children: update(module.children) };
@@ -75,6 +81,7 @@ function updateModule(
   moduleId: string,
   update: (module: TestModule) => TestModule,
 ): TestModule[] {
+  // 不可变替换指定模块节点。
   return modules.map((module) => {
     if (module.id === moduleId) return update(module);
     if (!module.children.length) return module;
@@ -83,6 +90,7 @@ function updateModule(
 }
 
 function removeModule(modules: TestModule[], moduleId: string): TestModule[] {
+  // 不可变删除模块及其子树。
   return modules
     .filter((module) => module.id !== moduleId)
     .map((module) => ({
@@ -92,6 +100,7 @@ function removeModule(modules: TestModule[], moduleId: string): TestModule[] {
 }
 
 function flattenModuleIds(module: TestModule): string[] {
+  // 收集模块自身与全部子孙 id。
   return [module.id, ...module.children.flatMap(flattenModuleIds)];
 }
 
@@ -100,6 +109,7 @@ function flattenModules(modules: TestModule[]): TestModule[] {
 }
 
 function addModuleName(testCase: TestCaseRecord, modules: TestModule[]): TestCaseRecord {
+  // 按模块 id 补充模块名称，供列表展示。
   return {
     ...testCase,
     moduleName: findModuleById(modules, testCase.moduleId)?.name ?? testCase.moduleName,
@@ -107,6 +117,7 @@ function addModuleName(testCase: TestCaseRecord, modules: TestModule[]): TestCas
 }
 
 export function createMockPlatformService({ delay = 120 }: MockServiceOptions = {}): PlatformService {
+  // 模块级内存状态：用例/模块/用户/角色/设置与执行记录，随实例生命周期存在。
   let testCases = copy(initialTestCases);
   let modules = copy(initialTestModules);
   let users = copy(initialUsers);
@@ -123,6 +134,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   const defaultProjectName = () => systemSettings.caseManagement.projectNames[0];
 
   const respond = async <T,>(value: T): Promise<T> => {
+    // 模拟网络延迟并返回深拷贝，行为上接近真实 API。
     if (delay > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, delay));
     }
@@ -130,6 +142,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   };
 
   const typeAliases: Record<string, TestCaseRecord['type']> = {
+    // 导入时的类型中文别名映射。
     功能用例: 'functional',
     功能测试: 'functional',
     功能测试用例: 'functional',
@@ -166,6 +179,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     已停用: '已停用',
   };
   const normalizeValue = <T extends string>(value: string, aliases: Record<string, T>) =>
+    // 未知值原样返回，仅命中别名时归一化。
     (aliases[value] ?? value) as T;
 
   return {

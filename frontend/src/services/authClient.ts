@@ -1,3 +1,6 @@
+/**
+ * 认证客户端：真实 API 实现与测试用内存实现，统一 AuthClient 接口。
+ */
 import { initialAuthProfile } from '../mocks/authFixtures';
 
 export interface AuthUser {
@@ -31,6 +34,7 @@ export interface ProfileUpdateResult {
 }
 
 export interface AuthClient {
+  /** 认证客户端接口：登录/注册/登出/资料更新。 */
   initialUser: AuthUser | null;
   login(account: string, password: string): Promise<AuthSession>;
   register(input: RegisterInput): Promise<AuthUser>;
@@ -39,6 +43,7 @@ export interface AuthClient {
 }
 
 export class AuthClientError extends Error {
+  /** 带 HTTP 状态码与业务错误码的认证错误。 */
   readonly code?: string;
   readonly status: number;
 
@@ -99,6 +104,7 @@ interface ApiErrorDetail {
 const DEFAULT_API_BASE_URL = '/api/v1';
 
 function mapUser(user: ApiUser): AuthUser {
+  // 后端用户结构裁剪为前端需要的精简字段。
   return {
     id: user.id,
     account: user.account,
@@ -113,6 +119,7 @@ export function createApiAuthClient({
 }: ApiAuthClientOptions): AuthClient {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
+  // 统一请求封装：附带令牌、解析错误详情并抛出 AuthClientError。
   const request = async <T>(
     path: string,
     init: RequestInit = {},
@@ -128,6 +135,7 @@ export function createApiAuthClient({
       headers: { ...headers, ...(init.headers as Record<string, string> | undefined) },
     });
     if (!response.ok) {
+      // 后端可能返回字符串或结构化 {code, message} 两种错误体。
       const errorBody = (await response.json().catch(() => null)) as { detail?: unknown } | null;
       const detail = errorBody?.detail;
       const structuredDetail =
@@ -191,6 +199,7 @@ export function createConfiguredAuthClient({
   mode,
   fetcher,
 }: ConfiguredAuthClientOptions): AuthClient {
+  // 测试环境使用内存实现，其余环境走真实 API。
   if (mode === 'test') return createMemoryAuthClient();
   return createApiAuthClient({
     baseUrl: apiBaseUrl?.trim() || DEFAULT_API_BASE_URL,
@@ -204,6 +213,7 @@ interface MemoryProfile extends AuthUser {
 }
 
 export function createMemoryAuthClient(): AuthClient {
+  // 内存实现：仅用于测试与离线演示，账号信息不持久化。
   const profiles: MemoryProfile[] = [{ ...initialAuthProfile }];
   let userSequence = Math.max(...profiles.map((profile) => profile.id)) + 1;
 

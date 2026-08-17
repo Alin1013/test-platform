@@ -1,8 +1,12 @@
+/**
+ * 调试变量编辑器：可开关的键值对列表，供 API/UI 调试表单复用。
+ */
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Form, Input, Tooltip } from 'antd';
 import type { ApiKeyValueItem } from '../../../services/contracts';
 
 export function debugVariablesToRecord(items: ApiKeyValueItem[] = []) {
+  // 只取启用且变量名非空的项，转换为 {key: value} 对象。
   return Object.fromEntries(
     items
       .filter((item) => item.enabled && item.key.trim())

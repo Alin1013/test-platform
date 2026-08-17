@@ -1,3 +1,6 @@
+/**
+ * 角色权限服务测试：真实 API 与 Mock 实现的权限保存契约。
+ */
 import { createApiPlatformService } from './apiPlatformService';
 import { createMockPlatformService } from './mockPlatformService';
 

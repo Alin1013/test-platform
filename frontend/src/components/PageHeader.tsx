@@ -1,3 +1,6 @@
+/**
+ * 页面统一页头：标题、描述与右侧操作区。
+ */
 import type { ReactNode } from 'react';
 
 interface PageHeaderProps {
@@ -7,6 +10,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
+  /** 标题/描述左侧展示，操作按钮右侧展示。 */
   return (
     <header className="page-header">
       <div>

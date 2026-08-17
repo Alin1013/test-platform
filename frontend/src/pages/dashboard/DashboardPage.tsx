@@ -1,3 +1,6 @@
+/**
+ * 仪表盘：用例类型分布图、导入导出/快捷操作与最近用例列表。
+ */
 import {
   ArrowRightOutlined,
   DownloadOutlined,
@@ -34,6 +37,7 @@ const chartColors: Record<TestCaseType, string> = {
 type ExportFormat = 'csv' | 'xlsx';
 
 function downloadBlob(blob: Blob, filename: string) {
+  // 通过临时 <a> 触发浏览器下载，用完立即释放对象 URL。
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = filename;
@@ -42,6 +46,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 const columns: ColumnsType<TestCaseRecord> = [
+  // 最近用例表格列定义。
   { title: '模块', dataIndex: 'moduleName', width: 130, render: (moduleName: string | undefined) => moduleName || '-' },
   { title: '用例名称', dataIndex: 'name', ellipsis: true },
   {
@@ -77,6 +82,7 @@ const columns: ColumnsType<TestCaseRecord> = [
 ];
 
 export function DashboardPage() {
+  // reloadToken 变化时重新拉取仪表盘数据，用于失败后的重试。
   const service = usePlatformService();
   const navigate = useNavigate();
   const { message } = App.useApp();
@@ -88,6 +94,7 @@ export function DashboardPage() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
+    // active 标志防止组件卸载后 setState；依赖 reloadToken 触发刷新。
     let active = true;
     setData(null);
     setLoadError(false);
@@ -109,6 +116,7 @@ export function DashboardPage() {
   const openCreate = (type: TestCaseType) => navigate(`/test-cases/${type}?create=1`);
 
   const exportCases = async () => {
+    // 按 CSV/XLSX 两种格式导出最近用例；XLSX 依赖按需动态加载。
     if (!data) return;
     const rows = [
       ['模块', '用例名称', '类型', '优先级', '状态'],
@@ -142,6 +150,7 @@ export function DashboardPage() {
   };
 
   if (!data) {
+    // 加载中显示骨架屏，失败显示错误提示与重试按钮。
     return (
       <section className="page-section">
         <PageHeader title="仪表盘" description="测试资产与协作进度总览" />

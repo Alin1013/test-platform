@@ -1,3 +1,6 @@
+/**
+ * 系统设置页测试：配置保存、Webhook 测试与个人资料。
+ */
 import { App as AntdApp, ConfigProvider } from 'antd';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

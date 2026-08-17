@@ -1,3 +1,6 @@
+/**
+ * Apifox OpenAPI JSON 导入：解析 paths 并转换为 API 用例输入。
+ */
 import type {
   ApiAutomationCaseDetails,
   ApiKeyValueItem,
@@ -10,10 +13,13 @@ type JsonRecord = Record<string, unknown>;
 
 const supportedMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
 
+// ===== OpenAPI 文档解析工具 =====
 const asRecord = (value: unknown): JsonRecord | undefined =>
+  // 把任意值安全地收敛为普通对象，非对象返回 undefined。
   value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : undefined;
 
 const asString = (value: unknown): string | undefined =>
+  // 基本类型转字符串，undefined/null 之外的复杂类型忽略。
   typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
     ? String(value)
     : undefined;
@@ -22,6 +28,7 @@ const firstNonEmpty = (...values: unknown[]): string | undefined =>
   values.map(asString).find((value) => value?.trim());
 
 const resolveReference = (value: unknown, root: JsonRecord): unknown => {
+  // 解析 $ref 引用（支持嵌套），带环检测防止无限循环。
   let current = value;
   const seen = new Set<unknown>();
   while (true) {
@@ -37,6 +44,7 @@ const resolveReference = (value: unknown, root: JsonRecord): unknown => {
 };
 
 const valueExample = (schema: unknown, root: JsonRecord): unknown => {
+  // 从 schema 生成示例值：优先 example/default/enum，再按类型递归构造。
   const record = asRecord(resolveReference(schema, root));
   if (!record) return undefined;
   if (record.example !== undefined) return record.example;
@@ -68,6 +76,7 @@ const parameterValue = (parameter: JsonRecord, root: JsonRecord): string =>
   '';
 
 const keyValues = (parameters: unknown[], location: 'header' | 'query', root: JsonRecord): ApiKeyValueItem[] =>
+  // 从参数列表提取 header/query 参数为可编辑键值项。
   parameters
     .map((parameter) => asRecord(resolveReference(parameter, root)))
     .filter((parameter): parameter is JsonRecord => Boolean(parameter && parameter.in === location))
@@ -79,6 +88,7 @@ const keyValues = (parameters: unknown[], location: 'header' | 'query', root: Js
     .filter((item) => item.key);
 
 const requestBody = (value: unknown, root: JsonRecord): Pick<ApiAutomationCaseDetails, 'bodyType' | 'bodyContent'> => {
+  // 提取 JSON 请求体的示例内容；无 JSON 内容时返回 none。
   const body = asRecord(resolveReference(value, root));
   const content = asRecord(body?.content);
   if (!content) return { bodyType: 'none', bodyContent: '' };
@@ -95,6 +105,7 @@ const requestBody = (value: unknown, root: JsonRecord): Pick<ApiAutomationCaseDe
 };
 
 const expectedStatus = (responses: unknown): number => {
+  // 优先取三位状态码响应，缺省按 200。
   const responseMap = asRecord(responses);
   const code = responseMap
     ? Object.keys(responseMap).find((key) => /^\d{3}$/.test(key)) ?? '200'
@@ -103,6 +114,7 @@ const expectedStatus = (responses: unknown): number => {
 };
 
 export function parseApifoxOpenApi(value: unknown, moduleId: string): CreateTestCaseInput[] {
+  // 遍历所有 path × 支持方法，生成 API 用例并附带状态码断言。
   const document = asRecord(value);
   const paths = asRecord(document?.paths);
   if (!paths) throw new Error('导入文件不是有效的 Apifox OpenAPI JSON（缺少 paths）');

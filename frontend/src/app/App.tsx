@@ -1,3 +1,6 @@
+/**
+ * 应用根组件：路由表、认证守卫与全局 Provider 装配。
+ */
 import { App as AntdApp, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -19,6 +22,7 @@ interface AppProps {
 }
 
 function AppRoutes() {
+  // 未登录一律重定向到 /login；登录后由 AppShell 承载所有业务页面。
   const { user } = useAuth();
 
   return (
@@ -39,6 +43,7 @@ function AppRoutes() {
 }
 
 function Providers({ children }: { children: React.ReactNode }) {
+  /** 全局依赖：AntD 中文语言包/主题 + 认证 + 平台服务。 */
   return (
     <ConfigProvider
       locale={zhCN}
@@ -54,6 +59,7 @@ function Providers({ children }: { children: React.ReactNode }) {
 }
 
 export function App({ router = 'browser', initialEntries = ['/'] }: AppProps) {
+  // 支持 MemoryRouter 以便单测隔离路由状态。
   const future = { v7_relativeSplatPath: true, v7_startTransition: true } as const;
 
   if (router === 'memory') {

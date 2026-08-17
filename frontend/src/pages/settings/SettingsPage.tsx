@@ -1,3 +1,6 @@
+/**
+ * 系统设置页：基础设置、环境与执行配置、用例配置、通知推送、AI 模型与个人信息。
+ */
 import {
   DeleteOutlined,
   LinkOutlined,
@@ -42,6 +45,7 @@ function validateUniqueName(
   value: string,
   message: string,
 ) {
+  // 校验列表内名称唯一（排除当前行），用于环境名/项目名。
   const normalizedName = value?.trim().toLowerCase();
   const duplicate = names.some(
     (name, index) =>
@@ -51,6 +55,7 @@ function validateUniqueName(
 }
 
 export function SettingsPage() {
+  // initialTab 支持从其他页面（如“编辑个人信息”）带 tab 跳转。
   const service = usePlatformService();
   const { message } = App.useApp();
   const { user, logout, updateProfile } = useAuth();
@@ -73,6 +78,7 @@ export function SettingsPage() {
   const projectNames = Form.useWatch(['caseManagement', 'projectNames'], form) ?? [];
 
   useEffect(() => {
+    // URL 上的 tab 参数变化时同步切换，例如从顶栏账号菜单进入个人资料。
     const tab = new URLSearchParams(location.search).get('tab');
     setActiveTab(tab === 'profile' || tab === 'ai' ? tab : 'general');
   }, [location.search]);
@@ -83,6 +89,7 @@ export function SettingsPage() {
   }, [user?.avatar, user?.name]);
 
   useEffect(() => {
+    // active 标志避免卸载后 setState；加载完成前显示骨架。
     let active = true;
 
     void service
@@ -115,6 +122,7 @@ export function SettingsPage() {
   };
 
   const saveProfile = async () => {
+    // 修改密码成功后旧会话已失效，强制重新登录。
     setProfileError('');
     if (!profileName.trim()) {
       setProfileError('请输入用户名');
@@ -150,6 +158,7 @@ export function SettingsPage() {
   };
 
   const handleAvatarUpload = (file: File) => {
+    // 头像转为 base64 Data URL 提交；返回 false 阻止 antd 自动上传。
     if (!file.type.startsWith('image/')) {
       void message.error('请选择图片文件');
       return false;
@@ -164,6 +173,7 @@ export function SettingsPage() {
   };
 
   const testWebhook = async (channel: NotificationChannel) => {
+    // 先本地校验字段，再调用后端发送测试消息。
     const namePath: ['notifications', NotificationChannel] = ['notifications', channel];
     const webhookUrl = form.getFieldValue(namePath)?.trim();
 
@@ -194,6 +204,7 @@ export function SettingsPage() {
   };
 
   const addEnvironment = (add: (defaultValue?: SystemSettings['execution']['environments'][number]) => void) => {
+    // 生成不冲突的环境 id（时间戳 + 冲突后缀）。
     const usedIds = new Set(environments.map((environment) => environment.id));
     const baseId = `env-${Date.now()}`;
     let id = baseId;
@@ -205,6 +216,7 @@ export function SettingsPage() {
   };
 
   const removeEnvironment = (index: number, remove: (index: number | number[]) => void) => {
+    // 删除的是默认环境时，自动把默认值改到剩余的第一个环境。
     const removingId = environments[index]?.id;
     const defaultEnvironmentId = form.getFieldValue(['execution', 'defaultEnvironmentId']);
     remove(index);
@@ -216,6 +228,7 @@ export function SettingsPage() {
   };
 
   const profileTab = {
+    // 个人信息 Tab：头像上传、用户名与密码修改。
     key: 'profile',
     label: '个人信息',
     children: (

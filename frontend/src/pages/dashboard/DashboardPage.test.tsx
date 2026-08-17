@@ -1,3 +1,6 @@
+/**
+ * 仪表盘测试：统计数据展示、快捷操作与导出。
+ */
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App as AntdApp, ConfigProvider } from 'antd';

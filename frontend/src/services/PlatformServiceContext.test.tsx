@@ -1,3 +1,6 @@
+/**
+ * 平台服务上下文测试：服务解析与 Provider 注入。
+ */
 import { render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { createMockPlatformService } from './mockPlatformService';

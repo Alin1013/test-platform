@@ -1,3 +1,6 @@
+/**
+ * 人员管理页测试：添加/停用用户与权限编辑。
+ */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../../tests/renderApp';

@@ -1,3 +1,6 @@
+/**
+ * 真实 API 平台服务测试：请求封装、错误归一化与字段映射。
+ */
 import { createApiPlatformService } from './apiPlatformService';
 
 function jsonResponse(body: unknown, status = 200) {

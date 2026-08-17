@@ -1,3 +1,6 @@
+/**
+ * 认证上下文测试：登录状态、注册与登出流程。
+ */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from './AuthContext';

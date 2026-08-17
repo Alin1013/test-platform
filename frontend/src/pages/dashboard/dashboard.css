@@ -1,3 +1,6 @@
+/**
+ * 仪表盘样式：概览卡片网格、饼图、最近用例表格与导出弹窗。
+ */
 .dashboard-overview-grid {
   display: grid;
   grid-template-columns: minmax(340px, 1.35fr) minmax(240px, 0.9fr) minmax(240px, 0.9fr);

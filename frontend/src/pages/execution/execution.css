@@ -1,3 +1,6 @@
+/**
+ * 执行页公共样式：执行配置、进度统计、结果表格与详情抽屉。
+ */
 .execution-page {
   display: grid;
   gap: 16px;

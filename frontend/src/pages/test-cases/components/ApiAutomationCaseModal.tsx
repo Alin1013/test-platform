@@ -1,3 +1,6 @@
+/**
+ * API 自动化用例表单：请求配置（Headers/Params/Body）、断言、变量提取与调试控制台。
+ */
 import {
   CopyOutlined,
   DeleteOutlined,
@@ -65,6 +68,7 @@ const createKeyValue = (key = '', value = ''): ApiKeyValueItem => ({
 });
 
 const createAssertion = (): ApiResponseAssertion => ({
+  // 默认断言：JSONPath $.code 等于 0。
   type: 'jsonPath',
   target: '$.code',
   comparison: 'equals',
@@ -128,6 +132,7 @@ function KeyValueEditor({
   keyPlaceholder,
   valuePlaceholder,
 }: KeyValueEditorProps) {
+  // 可复用的键值对编辑器（请求头/查询参数/表单字段共用）。
   return (
     <Form.List name={name}>
       {(fields, { add, remove }) => (
@@ -182,8 +187,10 @@ function KeyValueEditor({
 }
 
 function JsonCodeEditor({ value = '', onChange }: { value?: string; onChange?: (value: string) => void }) {
+  // JSON 高亮编辑器：透明 textarea 叠在语法高亮层上，滚动同步。
   const highlightRef = useRef<HTMLPreElement>(null);
   const highlighted = useMemo(() => {
+    // 轻量分词：字符串/键、数字、布尔、null 分别着色。
     const tokenPattern = /("(?:\\.|[^"\\])*")(\s*:)?|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\b(?:true|false|null)\b/g;
     const parts: Array<{ text: string; type?: string }> = [];
     let cursor = 0;
@@ -230,6 +237,7 @@ function JsonCodeEditor({ value = '', onChange }: { value?: string; onChange?: (
 }
 
 function AssertionEditor() {
+  // 响应断言编辑器：类型联动禁用/校验目标表达式与期望值。
   const form = Form.useFormInstance<ApiCaseFormValues>();
 
   return (
@@ -273,6 +281,7 @@ function AssertionEditor() {
                           { value: 'responseTime', label: 'Response Time' },
                         ]}
                         onChange={(nextType: ApiAssertionType) => {
+                          // 状态码/响应时间断言无需 JSONPath，重置比较方式为 equals。
                           if (nextType !== 'jsonPath') {
                             form.setFieldValue(['assertions', field.name, 'comparison'], 'equals');
                             form.setFieldValue(['assertions', field.name, 'target'], '');
@@ -367,6 +376,7 @@ function AssertionEditor() {
 }
 
 function ExtractEditor() {
+  // 变量提取编辑器：名称 + JSONPath，并提供 {{var}} 引用复制。
   const { message } = App.useApp();
 
   return (
@@ -463,6 +473,7 @@ export function ApiAutomationCaseModal({
   onClose,
   onSubmit,
 }: ApiAutomationCaseModalProps) {
+  // 打开时初始化默认请求（含 {{token}} 头与示例 JSON 体）并加载配置。
   const [form] = Form.useForm<ApiCaseFormValues>();
   const { message } = App.useApp();
   const service = usePlatformService();
@@ -542,6 +553,7 @@ export function ApiAutomationCaseModal({
   };
 
   const submit = async (values: ApiCaseFormValues) => {
+    // 从状态码断言解析 expectedStatus，请求体仅在 JSON 类型时保留。
     const statusAssertion = values.assertions.find((assertion) => assertion.type === 'statusCode');
     const parsedStatus = Number(statusAssertion?.expected ?? 200);
     const apiDetails: ApiAutomationCaseDetails = {
@@ -570,6 +582,7 @@ export function ApiAutomationCaseModal({
   };
 
   const validateJson = async (_: unknown, value?: string) => {
+    // JSON 请求体必须在提交/调试前可解析。
     if (bodyType !== 'json' || !value?.trim()) return;
     try {
       JSON.parse(value);
@@ -579,6 +592,7 @@ export function ApiAutomationCaseModal({
   };
 
   const debugRequest = async () => {
+    // 组装调试请求：启用项转对象，附变量与环境后调用后端。
     try {
       const values = await form.validateFields(apiDebugFieldNames, { recursive: true });
       const statusAssertion = values.assertions.find((assertion) => assertion.type === 'statusCode');
@@ -619,6 +633,7 @@ export function ApiAutomationCaseModal({
   };
 
   const requestItems = [
+    // 请求参数 Tab：Headers / Params / Body。
     {
       key: 'headers',
       label: `Headers (${headers.filter((item) => item?.key?.trim()).length})`,

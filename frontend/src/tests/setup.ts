@@ -1,3 +1,6 @@
+/**
+ * 测试初始化：jest-dom 断言扩展与 ResizeObserver 桩。
+ */
 import '@testing-library/jest-dom/vitest';
 
 class ResizeObserverStub implements ResizeObserver {

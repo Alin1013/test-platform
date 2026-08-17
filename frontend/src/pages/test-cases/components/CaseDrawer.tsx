@@ -1,3 +1,6 @@
+/**
+ * 用例编辑抽屉：按用例类型分派到功能/API/UI 各自的表单组件。
+ */
 import { App, Button, Checkbox, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../services/AuthContext';
@@ -50,6 +53,7 @@ interface CaseFormValues {
 }
 
 export function CaseDrawer(props: CaseDrawerProps) {
+  // 按类型分派：API/UI 走专用自动化表单，其余走功能用例表单。
   if (props.type === 'api') {
     return (
       <ApiAutomationCaseModal
@@ -84,6 +88,7 @@ function FunctionalCaseDrawer({
   onClose,
   onSubmit,
 }: CaseDrawerProps) {
+  // 功能用例表单：加载模块/用户/项目配置，支持新建与编辑。
   const [form] = Form.useForm<CaseFormValues>();
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -95,6 +100,7 @@ function FunctionalCaseDrawer({
   const title = `${initialCase ? '编辑' : '新建'}${typeLabels.functional}`;
 
   useEffect(() => {
+    // 打开时初始化表单；并行拉取模块、用户与项目配置，避免表单空白。
     if (!open) return;
     form.resetFields();
     form.setFieldsValue({
@@ -142,6 +148,7 @@ function FunctionalCaseDrawer({
   }, [defaultModule, form, initialCase, open, service, user?.id]);
 
   const closeDrawer = () => {
+    // 有未保存输入时先确认放弃。
     if (!form.isFieldsTouched()) {
       form.resetFields();
       onClose();
@@ -157,6 +164,7 @@ function FunctionalCaseDrawer({
   };
 
   const submit = async (values: CaseFormValues) => {
+    // 提交前裁剪空白字符串；成功后复位并关闭。
     const created = await onSubmit({
       type: 'functional',
       authorId: values.authorId,

@@ -1,3 +1,6 @@
+/**
+ * 模块树面板：展示/筛选模块、增删改模块，并支持拖拽与键盘调整宽度。
+ */
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -33,14 +36,17 @@ const MAX_PANEL_WIDTH = 420;
 const KEYBOARD_RESIZE_STEP = 16;
 
 function clampPanelWidth(width: number) {
+  // 面板宽度限制在 MIN..MAX 之间。
   return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
 }
 
 function FolderIcon() {
+  /** 模块文件夹图标（纯装饰）。 */
   return <span className="module-panel__folder-icon" aria-hidden="true" />;
 }
 
 function toModuleNodes(modules: TestModule[]): ModuleNode[] {
+  // 服务端模块树转为内部树节点，并过滤隐藏分组。
   return visibleModuleTree(modules).map((module) => ({
     id: module.id,
     label: module.name,
@@ -49,6 +55,7 @@ function toModuleNodes(modules: TestModule[]): ModuleNode[] {
 }
 
 type DialogState =
+  // 弹窗状态机：重命名 / 新增子目录 / 新增根目录 / 删除。
   | { type: 'rename'; node: ModuleNode }
   | { type: 'add'; node: ModuleNode }
   | { type: 'addRoot' }
@@ -60,6 +67,7 @@ function updateNode(
   nodeId: string,
   update: (node: ModuleNode) => ModuleNode,
 ): ModuleNode[] {
+  // 不可变地按 id 更新节点（递归查找）。
   return nodes.map((node) => {
     if (node.id === nodeId) return update(node);
     if (!node.children?.length) return node;
@@ -68,6 +76,7 @@ function updateNode(
 }
 
 function removeNode(nodes: ModuleNode[], nodeId: string): ModuleNode[] {
+  // 不可变地按 id 移除节点及其子树。
   return nodes
     .filter((node) => node.id !== nodeId)
     .map((node) => ({
@@ -77,6 +86,7 @@ function removeNode(nodes: ModuleNode[], nodeId: string): ModuleNode[] {
 }
 
 function findNode(nodes: ModuleNode[], nodeId: string): ModuleNode | undefined {
+  // 深度优先查找节点，用于判断删除范围是否包含当前选中项。
   for (const node of nodes) {
     if (node.id === nodeId) return node;
     const child = findNode(node.children ?? [], nodeId);
@@ -94,6 +104,7 @@ export function ModuleTreePanel({
   onWidthChange,
   onCollapse,
 }: ModuleTreePanelProps) {
+  // resizeOrigin 记录拖拽起点，用于计算新的面板宽度。
   const service = usePlatformService();
   const { message } = App.useApp();
   const [moduleTree, setModuleTree] = useState<ModuleNode[]>([]);
@@ -104,6 +115,7 @@ export function ModuleTreePanel({
   const resizeOrigin = useRef<{ pointerX: number; width: number } | null>(null);
 
   const reloadModules = async () => {
+    // 从服务端重新拉取模块树（增删改成功后调用）。
     const modules = await service.listTestModules(1);
     setModuleTree(toModuleNodes(modules));
   };
@@ -119,6 +131,7 @@ export function ModuleTreePanel({
   }, [refreshToken, service]);
 
   useEffect(() => {
+    // 监听全局指针事件实现拖拽调宽；卸载时清理监听。
     const handlePointerMove = (event: PointerEvent) => {
       if (!resizeOrigin.current) return;
       onWidthChange(
@@ -165,6 +178,7 @@ export function ModuleTreePanel({
   });
 
   const submitName = async () => {
+    // 新增/重命名：先乐观更新 UI，请求成功后刷新；失败则回滚并提示。
     const label = draftName.trim();
     if (!label || !dialog || dialog.type === 'delete') return;
 
@@ -206,6 +220,7 @@ export function ModuleTreePanel({
   };
 
   const deleteNode = async () => {
+    // 删除模块：若当前选中项在被删子树内则重置为“全部模块”。
     if (!dialog || dialog.type !== 'delete') return;
 
     const currentDialog = dialog;

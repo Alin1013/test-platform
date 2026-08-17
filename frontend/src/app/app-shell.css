@@ -1,3 +1,6 @@
+/**
+ * 应用外壳样式：固定侧边栏、顶栏、内容区与移动端抽屉。
+ */
 .app-shell {
   min-height: 100vh;
   background: var(--workspace);

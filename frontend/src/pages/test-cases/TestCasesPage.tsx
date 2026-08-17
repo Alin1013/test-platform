@@ -1,3 +1,6 @@
+/**
+ * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量删除与导入（CSV/XLSX/Apifox）。
+ */
 import {
   DeleteOutlined,
   EditOutlined,
@@ -33,12 +36,14 @@ import { parseApifoxOpenApi } from './apifoxImport';
 import './test-cases.css';
 
 const typeLabels: Record<TestCaseType, string> = {
+  // 路由参数与页面标题/文案的映射。
   functional: '功能用例',
   api: '接口用例',
   ui: 'UI自动化',
 };
 
 function isTestCaseType(value: string | undefined): value is TestCaseType {
+  // 路由参数限定为三种合法类型，非法值回退到 api。
   return value === 'functional' || value === 'api' || value === 'ui';
 }
 
@@ -51,6 +56,7 @@ const MODULE_IMPORT_HEADERS = new Set([
 ]);
 
 function readFileAsText(file: File): Promise<string> {
+  // 以文本方式读取导入文件（用于 JSON/Apifox）。
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ''));
@@ -60,6 +66,7 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  // 以二进制方式读取导入文件（用于 xlsx 解析）。
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -72,6 +79,7 @@ function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 async function hasMissingFunctionalModule(file: File): Promise<boolean> {
+  // 预检功能用例导入文件：标准模板且存在“用例目录”列时检查是否为空。
   const extension = file.name.toLowerCase().split('.').pop();
   if (extension !== 'csv' && extension !== 'xlsx' && extension !== 'xls') return false;
 
@@ -100,6 +108,7 @@ async function hasMissingFunctionalModule(file: File): Promise<boolean> {
 }
 
 export function TestCasesPage() {
+  // 列表状态：筛选条件、分页、选中项、抽屉与模块栏宽度。
   const params = useParams();
   const type = isTestCaseType(params.type) ? params.type : 'api';
   const service = usePlatformService();
@@ -130,6 +139,7 @@ export function TestCasesPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
+    // 功能用例额外携带项目/迭代/冒烟筛选，其余类型不带。
     () => ({
       type,
       moduleId: selectedModule === 'all' ? undefined : selectedModule,
@@ -152,6 +162,7 @@ export function TestCasesPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    // active 防止卸载后更新；筛选/分页变化时重新请求列表。
     let active = true;
     setRows(null);
     void service.listTestCasesPage(query, page, pageSize).then((nextRows) => {
@@ -176,6 +187,7 @@ export function TestCasesPage() {
   }, [service, type]);
 
   useEffect(() => {
+    // 筛选条件变化时回到第一页并清空选中项。
     setPage(1);
     setSelectedStorageIds([]);
   }, [query]);
@@ -217,6 +229,7 @@ export function TestCasesPage() {
   };
 
   const deleteCases = (cases: TestCaseRecord[]) => {
+    // 删除前弹确认；批量删除部分失败时保留失败项选中，便于重试。
     if (!cases.length) return;
     const isBulk = cases.length > 1;
     modal.confirm({
@@ -265,6 +278,7 @@ export function TestCasesPage() {
   };
 
   const columns: ColumnsType<TestCaseRecord> = (() => {
+    // 功能用例显示完整字段，接口/UI 用例使用各自的精简列。
     if (type === 'functional') {
       return [
         { title: '模块', dataIndex: 'moduleName', width: 130, render: (value: string | undefined) => value || '-' },
@@ -367,6 +381,7 @@ export function TestCasesPage() {
   })();
 
   const closeDrawer = () => {
+    // 关闭抽屉时同步清理 URL 上的 create 参数。
     setDrawerOpen(false);
     const next = new URLSearchParams(searchParams);
     next.delete('create');
@@ -380,6 +395,7 @@ export function TestCasesPage() {
   };
 
   const importFunctionalCases = async (file: File) => {
+    // 功能用例导入：未选择模块且文件可能缺模块列时先提示。
     setIsImporting(true);
     try {
       if (selectedModule === 'all' && await hasMissingFunctionalModule(file)) {
@@ -409,6 +425,7 @@ export function TestCasesPage() {
     });
 
   const importApifoxCases = async (file: File) => {
+    // Apifox 导入：逐条创建，中途失败回滚已创建用例。
     if (selectedModule === 'all') {
       void message.warning('请先选择具体模块');
       return;
@@ -436,6 +453,7 @@ export function TestCasesPage() {
   };
 
   const updateCase = async ({ type: _type, ...input }: CreateTestCaseInput) => {
+    // 更新成功后刷新列表与筛选选项，并清理已删除项的选中状态。
     if (!editingCase) throw new Error('没有正在编辑的用例');
     const updated = await service.updateTestCase(editingCase.storageId, input);
     const nextRows = await refreshRowsAndFilterOptions();

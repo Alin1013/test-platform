@@ -1,3 +1,6 @@
+/**
+ * 添加用户抽屉：表单填写 + 未保存离开时的放弃确认。
+ */
 import { App, Button, Drawer, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
 import type { CreateUserInput, UserRecord, UserRole } from '../../../services/contracts';
@@ -17,12 +20,14 @@ export function UserDrawer({ open, onClose, onSubmit }: UserDrawerProps) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // 每次打开时重置部门与角色的默认值。
     if (open) {
       form.setFieldsValue({ department: '质量保障部', role: '测试工程师' });
     }
   }, [form, open]);
 
   const closeDrawer = () => {
+    // 表单未填写时直接关闭；已填写则先弹放弃确认。
     if (submitting) return;
 
     if (!form.isFieldsTouched()) {
@@ -41,6 +46,7 @@ export function UserDrawer({ open, onClose, onSubmit }: UserDrawerProps) {
   };
 
   const submit = async (values: CreateUserInput) => {
+    // 提交成功后复位表单并关闭抽屉。
     setSubmitting(true);
     try {
       await onSubmit(values);
