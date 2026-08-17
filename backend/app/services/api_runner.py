@@ -1,3 +1,5 @@
+"""API 用例执行器：渲染变量、发送请求、执行断言与提取字段。"""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +17,7 @@ from .variables import render_text, render_value
 
 
 def _environment(session: Session, environment_id: str | None) -> tuple[str, int]:
+    """解析执行环境：未指定时使用默认环境，返回 baseUrl 与超时毫秒数。"""
     execution_settings = get_settings(session)["execution"]
     selected_id = environment_id or execution_settings["defaultEnvironmentId"]
     environment = get_environment(session, selected_id)
@@ -22,6 +25,7 @@ def _environment(session: Session, environment_id: str | None) -> tuple[str, int
 
 
 def _request_url(base_url: str, configured_url: str, variables: dict[str, str]) -> str:
+    """拼接最终请求 URL：绝对地址直接用，相对地址挂到 baseUrl 下。"""
     rendered_url = render_text(configured_url, variables)
     if rendered_url.startswith(("http://", "https://")):
         return rendered_url
@@ -31,6 +35,7 @@ def _request_url(base_url: str, configured_url: str, variables: dict[str, str]) 
 
 
 def _json_path(document: Any, expression: str) -> Any:
+    """对响应体执行 JSONPath 提取；表达式非法时报 422。"""
     try:
         matches = parse_jsonpath(expression).find(document)
     except Exception as error:
@@ -42,6 +47,7 @@ def _json_path(document: Any, expression: str) -> Any:
 
 
 def _display(value: Any) -> str:
+    """把断言实际值转成可比较/可展示的字符串。"""
     if isinstance(value, str):
         return value
     if value is None:
@@ -50,6 +56,7 @@ def _display(value: Any) -> str:
 
 
 def _request_body(request: httpx.Request) -> Any:
+    """还原请求体：JSON 反序列化，其他类型按文本返回。"""
     if not request.content:
         return None
     text = request.content.decode(errors="replace")
@@ -68,6 +75,7 @@ def _assertion_result(
     response_time_ms: int,
     response_body: Any,
 ) -> dict[str, Any]:
+    """执行单条断言：状态码/响应时间走专用字段，其余走 JSONPath 取值比较。"""
     if assertion.type == "statusCode":
         expression = "response.status"
         actual = response_status
@@ -105,6 +113,7 @@ def debug_api_case(
     *,
     transport: httpx.BaseTransport | None = None,
 ) -> dict[str, Any]:
+    """发送调试请求并返回完整请求/响应信息、断言结果与提取字段。"""
     base_url, timeout_ms = _environment(session, payload.environment)
     variables = {**payload.variables, "baseUrl": base_url}
     request_url = _request_url(base_url, payload.url, variables)

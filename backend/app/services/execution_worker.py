@@ -1,3 +1,5 @@
+"""执行任务消费器：领取任务、并发运行用例明细并汇总执行结果。"""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -16,12 +18,16 @@ from . import api_runner, executions
 
 
 class UiRunner(Protocol):
+    """UI 运行器接口协议。"""
+
     def run(
         self, *, steps: list[dict[str, Any]], config: dict[str, Any]
     ) -> dict[str, Any]: ...
 
 
 class ExecutionCancelled(Exception):
+    """执行被取消时抛出，用于中止当前用例并跳过结果回写。"""
+
     pass
 
 
@@ -30,6 +36,7 @@ def _api_payload(
     detail: TestExecutionDetail,
     variables: dict[str, str],
 ) -> ApiCaseDebugRequest:
+    """把执行明细中保存的请求快照还原为可运行的 API 调试请求。"""
     request = detail.request_payload or {}
     return ApiCaseDebugRequest(
         environment=execution.env_name,
@@ -56,6 +63,7 @@ def _run_api_detail(
     transport: httpx.BaseTransport | None,
     should_cancel: Callable[[], bool],
 ) -> dict[str, Any]:
+    """按迭代数运行 API 用例；变量链式提取，压测参数控制间隔。"""
     iterations = execution.config_json.get("iterations", 1)
     ramp_up_ms = execution.config_json.get("rampUpTime", 0)
     total_duration = 0
@@ -70,6 +78,7 @@ def _run_api_detail(
         )
         total_duration += result["responseTimeMs"]
         variables.update(
+            # 前一次迭代提取的变量会参与后续迭代的请求渲染。
             {
                 key: str(value)
                 for key, value in result["extracts"].items()
@@ -102,6 +111,7 @@ def _run_ui_detail(
     should_cancel: Callable[[], bool],
     on_step: Callable[[dict[str, Any], str], None],
 ) -> dict[str, Any]:
+    """按重试次数运行 UI 用例；PASSED/SKIPPED 时提前结束重试。"""
     if ui_runner is None:
         raise RuntimeError("UI runner is not configured")
     request = detail.request_payload or {}
@@ -132,6 +142,7 @@ def _run_ui_detail(
 def _is_cancelled(
     session_factory: sessionmaker[Session], execution_code: str
 ) -> bool:
+    """检查执行主记录是否已被取消。"""
     with session_factory() as session:
         status = session.scalar(
             select(TestExecution.status).where(
@@ -148,6 +159,7 @@ def _record_ui_step(
     step_result: dict[str, Any],
     log: str,
 ) -> None:
+    """把 UI 单步执行结果实时追加到明细响应中（WebSocket 进度来源）。"""
     with session_factory() as session:
         execution_status = session.scalar(
             select(TestExecution.status).where(
@@ -175,6 +187,7 @@ def _execute_detail(
     api_transport: httpx.BaseTransport | None,
     ui_runner: UiRunner | None,
 ) -> None:
+    """执行单个用例明细：标记 RUNNING、运行、回写结果；支持中途取消。"""
     should_cancel = partial(_is_cancelled, session_factory, execution_code)
     with session_factory() as session:
         execution = executions.get_execution_by_code(session, execution_code)
@@ -249,6 +262,7 @@ def _execute_detail(
 
 
 def _finish_execution(session: Session, execution: TestExecution) -> None:
+    """汇总执行统计并收尾：通过/失败数、耗时与任务状态。"""
     execution.passed_count = sum(
         detail.status == "PASSED" for detail in execution.details
     )
@@ -281,6 +295,7 @@ def _finish_execution(session: Session, execution: TestExecution) -> None:
 def _claim_execution(
     session_factory: sessionmaker[Session], execution_code: str
 ) -> bool:
+    """原子领取执行任务：PENDING→RUNNING，防止多 worker 重复执行。"""
     claimed_at = datetime.now(timezone.utc)
     with session_factory() as session:
         execution_id = session.scalar(
@@ -325,6 +340,7 @@ def run_execution(
     api_transport: httpx.BaseTransport | None = None,
     ui_runner: UiRunner | None = None,
 ) -> bool:
+    """执行一次完整执行：领取任务、按并发度跑完所有明细、汇总结果。"""
     if not _claim_execution(session_factory, execution_code):
         return False
     variables: dict[str, str] = {}
@@ -337,6 +353,7 @@ def run_execution(
             concurrency = execution.config_json.get("concurrency", 1)
 
         if execution_type == "UI":
+            # UI 执行共享同一运行器实例，按配置并发度提交线程池。
             run_detail = partial(
                 _execute_detail,
                 session_factory,
@@ -350,6 +367,7 @@ def run_execution(
                 for future in futures:
                     future.result()
         elif concurrency > 1:
+            # API 并发执行时每个线程独立复制变量，避免互相污染。
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = [
                     executor.submit(
@@ -402,6 +420,7 @@ def run_next_execution(
     api_transport: httpx.BaseTransport | None = None,
     ui_runner: UiRunner | None = None,
 ) -> str | None:
+    """消费队列中最早的可执行任务；无任务时返回 None。"""
     with session_factory() as session:
         execution_code = session.scalar(
             select(TestExecution.execution_code)

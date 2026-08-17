@@ -1,3 +1,5 @@
+"""系统设置服务：读写平台全局配置并解析执行环境。"""
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ SETTINGS_KEY = "platform_settings"
 
 
 def get_settings(session: Session) -> dict:
+    """读取平台配置；caseManagement 中动态项目名不下发前端。"""
     config = session.scalar(select(SystemConfig).where(SystemConfig.key == SETTINGS_KEY))
     if config is None:
         raise HTTPException(status_code=404, detail="System settings not found")
@@ -21,11 +24,13 @@ def get_settings(session: Session) -> dict:
 
 
 def get_case_project_names(session: Session) -> list[str]:
+    """返回配置中允许使用的项目名称列表。"""
     case_management = get_settings(session).get("caseManagement", {})
     return CaseManagementSettings.model_validate(case_management).projectNames
 
 
 def get_environment(session: Session, environment_id: str) -> dict:
+    """按 id 查找执行环境；未配置时报 422。"""
     environment = next(
         (
             item
@@ -40,6 +45,7 @@ def get_environment(session: Session, environment_id: str) -> dict:
 
 
 def replace_settings(session: Session, payload: SystemSettings) -> dict:
+    """整体替换平台配置；不存在时先创建再写入。"""
     config = session.scalar(select(SystemConfig).where(SystemConfig.key == SETTINGS_KEY))
     if config is None:
         config = SystemConfig(

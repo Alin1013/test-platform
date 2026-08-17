@@ -1,3 +1,5 @@
+"""人员管理服务：用户查询/创建/启停/删除与角色权限维护。"""
+
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +17,7 @@ from .auth import hash_password
 
 
 def _serialize_user(user: User) -> dict:
+    """把 User ORM 对象转换为前端可用的字典（含角色名与 enabled 标志）。"""
     return {
         "id": user.id,
         "account": user.account,
@@ -39,6 +42,7 @@ def list_users(
     page: int,
     page_size: int,
 ) -> dict:
+    """按关键字/角色/状态组合筛选用户，并分页返回。"""
     query = select(User).join(User.role).options(selectinload(User.role))
     if keyword and keyword.strip():
         pattern = f"%{keyword.strip()}%"
@@ -63,6 +67,7 @@ def list_users(
 
 
 def create_user(session: Session, payload: UserCreate) -> dict:
+    """创建用户；账号由邮箱前缀派生，冲突时返回 409。"""
     try:
         user = create_account(
             session,
@@ -83,6 +88,7 @@ def create_user(session: Session, payload: UserCreate) -> dict:
 
 
 def set_user_status(session: Session, user_id: int, status: str) -> dict:
+    """启用或停用用户并返回最新状态。"""
     user = session.scalar(
         select(User).options(selectinload(User.role)).where(User.id == user_id)
     )
@@ -94,6 +100,7 @@ def set_user_status(session: Session, user_id: int, status: str) -> dict:
 
 
 def delete_user(session: Session, user_id: int) -> None:
+    """删除用户；启用中的用户必须先停用，有关联数据时拒绝删除。"""
     user = session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -110,6 +117,7 @@ def delete_user(session: Session, user_id: int) -> None:
 
 
 def list_roles(session: Session) -> list[dict]:
+    """返回全部角色及其权限表。"""
     roles = session.scalars(select(Role).order_by(Role.id)).all()
     return [
         {"id": role.id, "name": role.name, "permissions": role.permissions}
@@ -120,6 +128,7 @@ def list_roles(session: Session) -> list[dict]:
 def update_role_permissions(
     session: Session, role_id: int, payload: RolePermissionsUpdate
 ) -> dict:
+    """整体替换指定角色的权限表并返回最新结果。"""
     role = session.get(Role, role_id)
     if role is None:
         raise HTTPException(status_code=404, detail="Role not found")

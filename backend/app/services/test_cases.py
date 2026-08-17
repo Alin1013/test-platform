@@ -1,3 +1,5 @@
+"""用例与模块服务：模块树、用例 CRUD、筛选查询与序列化。"""
+
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -10,6 +12,7 @@ from .settings import get_case_project_names
 
 
 def module_tree(session: Session, project_id: int) -> list[dict]:
+    """返回项目下的模块树（含父子层级）。"""
     modules = session.scalars(
         select(Module).where(Module.project_id == project_id).order_by(Module.id)
     ).all()
@@ -34,6 +37,7 @@ def module_tree(session: Session, project_id: int) -> list[dict]:
 
 
 def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bool]:
+    """创建模块；同级同名模块已存在时返回 (已存在模块, False)。"""
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="Module name is required")
@@ -65,6 +69,7 @@ def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bo
 
 
 def update_module(session: Session, module_id: str, payload: TestModuleUpdate) -> dict:
+    """重命名模块，同级重名返回 409。"""
     module = session.get(Module, module_id)
     if module is None:
         raise HTTPException(status_code=404, detail="Module not found")
@@ -92,12 +97,14 @@ def update_module(session: Session, module_id: str, payload: TestModuleUpdate) -
 
 
 def delete_module(session: Session, module_id: str) -> None:
+    """删除模块及其全部子孙模块；含用例的模块拒绝删除。"""
     module = session.get(Module, module_id)
     if module is None:
         raise HTTPException(status_code=404, detail="Module not found")
 
     module_ids = [module_id]
     index = 0
+    # 广度优先收集所有子孙模块 id，随后从最深层开始删除。
     while index < len(module_ids):
         children = session.scalars(
             select(Module.id).where(Module.parent_id == module_ids[index])
@@ -122,6 +129,7 @@ def delete_module(session: Session, module_id: str) -> None:
 
 
 def _serialize_module(module: Module) -> dict:
+    """把模块转换为树节点字典。"""
     return {
         "id": module.id,
         "name": module.name,
@@ -132,6 +140,7 @@ def _serialize_module(module: Module) -> dict:
 
 
 def serialize_case(test_case: TestCase) -> dict:
+    """把用例（含 API/UI 详情）序列化为前端响应结构。"""
     result = {
         "id": test_case.id,
         "code": test_case.code,
@@ -198,6 +207,7 @@ def _distinct_case_values(
     column: InstrumentedAttribute[str],
     case_type: str | None,
 ) -> list[str]:
+    """查询某列去重后的非空取值，用于筛选下拉选项。"""
     query = select(column).where(column != "")
     if case_type:
         query = query.where(TestCase.type == case_type)
@@ -205,6 +215,7 @@ def _distinct_case_values(
 
 
 def get_filter_options(session: Session, *, case_type: str | None) -> dict:
+    """返回项目名与迭代的筛选选项（配置优先，兼容历史数据）。"""
     configured_names = get_case_project_names(session)
     stored_names = _distinct_case_values(session, TestCase.project_name, case_type)
     return {
@@ -224,6 +235,7 @@ def filtered_case_query(
     iteration: str | None = None,
     is_smoke: bool | None = None,
 ):
+    """按可选条件拼接用例查询；关键字命中编号/标题/接口地址。"""
     query = _case_query().outerjoin(ApiCaseDetails)
     if case_type:
         query = query.where(TestCase.type == case_type)
@@ -266,6 +278,7 @@ def list_cases(
     page: int,
     page_size: int,
 ) -> dict:
+    """分页查询用例列表并返回总数。"""
     query = filtered_case_query(
         case_type=case_type,
         module_id=module_id,
@@ -292,6 +305,7 @@ def list_cases(
 
 
 def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
+    """写入用例（仅 flush）；未指定编号时按类型前缀生成随机编号。"""
     # 此函数只 flush、不 commit，调用方可将单条创建组合进导入或 XMind 批量事务。
     if session.get(Module, payload.module_id) is None:
         raise HTTPException(status_code=404, detail="Module not found")
@@ -334,6 +348,7 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
 
 
 def create_case(session: Session, payload: TestCaseCreate) -> dict:
+    """创建用例并提交事务。"""
     test_case = add_case(session, payload)
     session.commit()
     return serialize_case(test_case)
@@ -342,6 +357,7 @@ def create_case(session: Session, payload: TestCaseCreate) -> dict:
 def create_automation_case(
     session: Session, payload: TestCaseCreate, expected_type: str
 ) -> dict:
+    """创建自动化用例；类型与端点不匹配时拒绝。"""
     if payload.type != expected_type:
         label = "API" if expected_type == "api" else "UI automation"
         raise HTTPException(status_code=422, detail=f"Only {label} cases are accepted")
@@ -354,6 +370,7 @@ def update_automation_case(
     payload: TestCaseUpdate,
     expected_type: str,
 ) -> dict:
+    """更新自动化用例；先校验用例类型与端点匹配。"""
     test_case = session.get(TestCase, case_id)
     if test_case is None:
         raise HTTPException(status_code=404, detail="Test case not found")
@@ -364,6 +381,7 @@ def update_automation_case(
 
 
 def update_case(session: Session, case_id: int, payload: TestCaseUpdate) -> dict:
+    """更新用例公共字段与 API/UI 详情（仅更新显式提供的字段）。"""
     test_case = session.scalar(_case_query().where(TestCase.id == case_id))
     if test_case is None:
         raise HTTPException(status_code=404, detail="Test case not found")
@@ -400,6 +418,7 @@ def update_case(session: Session, case_id: int, payload: TestCaseUpdate) -> dict
 
 
 def delete_case(session: Session, case_id: int) -> None:
+    """删除用例，级联清理详情记录。"""
     test_case = session.get(TestCase, case_id)
     if test_case is None:
         raise HTTPException(status_code=404, detail="Test case not found")

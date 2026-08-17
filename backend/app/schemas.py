@@ -1,3 +1,5 @@
+"""核心 Pydantic 模型：用例、模块、执行配置与系统设置的类型定义与校验。"""
+
 import json
 from typing import Annotated, Any, Literal
 
@@ -7,18 +9,30 @@ from .domain_defaults import DEFAULT_PROJECT_NAME
 
 
 CaseType = Literal["functional", "api", "ui"]
+# 用例类型：功能 / API / UI。
 Priority = Literal["P0", "P1", "P2", "P3"]
+# 优先级：P0 最高，P3 最低。
 CaseStatus = Literal["维护中", "已通过", "草稿", "已失败", "已停用"]
+# 用例状态。
 HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
+# API 用例支持的 HTTP 方法。
 UiAction = Literal["click", "input", "navigate", "hover", "wait", "assert"]
+# UI 用例支持的步骤动作。
 UiLocatorType = Literal["", "xpath", "css", "id", "text"]
+# UI 元素定位器类型。
 UiAssertion = Literal["none", "textEquals", "isVisible", "urlEquals"]
+# UI 断言类型。
 ApiBodyType = Literal["none", "json", "form-data", "x-www-form-urlencoded"]
+# API 请求体类型。
 ApiAssertionType = Literal["statusCode", "jsonPath", "responseTime"]
+# API 断言类型。
 ApiComparison = Literal["equals", "contains", "notNull"]
+# API 断言比较方式。
 
 
 class ApiKeyValueItem(BaseModel):
+    """API 请求的键值对：可开关、key 与 value。"""
+
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
@@ -27,6 +41,8 @@ class ApiKeyValueItem(BaseModel):
 
 
 class ApiResponseAssertion(BaseModel):
+    """API 响应断言：类型、取值表达式、比较方式与期望值。"""
+
     model_config = ConfigDict(extra="forbid")
 
     type: ApiAssertionType
@@ -36,6 +52,8 @@ class ApiResponseAssertion(BaseModel):
 
 
 class ApiExtractVariable(BaseModel):
+    """从响应中提取变量的声明：名称与 JSONPath。"""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -43,6 +61,7 @@ class ApiExtractVariable(BaseModel):
 
 
 def _normalize_legacy_automation_config(data: Any) -> Any:
+    """兼容旧版自动化配置：把 expected_response.automation_config 提升到顶层。"""
     if not isinstance(data, dict):
         return data
     normalized = dict(data)
@@ -68,6 +87,8 @@ def _normalize_legacy_automation_config(data: Any) -> Any:
 
 
 class ApiDetailsCreate(BaseModel):
+    """API 用例详情（创建）：URL、方法、请求体、断言与提取变量。"""
+
     model_config = ConfigDict(extra="forbid")
 
     url: str = Field(min_length=1, max_length=2048)
@@ -90,6 +111,8 @@ class ApiDetailsCreate(BaseModel):
 
 
 class ApiDetailsUpdate(BaseModel):
+    """API 用例详情（更新）：所有字段可空，仅更新提供的字段。"""
+
     model_config = ConfigDict(extra="forbid")
 
     url: str | None = Field(default=None, min_length=1, max_length=2048)
@@ -112,6 +135,8 @@ class ApiDetailsUpdate(BaseModel):
 
 
 class ApiCaseDebugRequest(ApiDetailsCreate):
+    """API 调试请求：在详情基础上追加环境与运行时变量。"""
+
     environment: str | None = Field(
         default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
     )
@@ -119,6 +144,8 @@ class ApiCaseDebugRequest(ApiDetailsCreate):
 
 
 class TestModuleCreate(BaseModel):
+    """模块创建：名称、父模块与所属项目。"""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=128)
@@ -127,12 +154,16 @@ class TestModuleCreate(BaseModel):
 
 
 class TestModuleUpdate(BaseModel):
+    """模块更新：仅支持重命名。"""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=128)
 
 
 class UiStep(BaseModel):
+    """UI 用例步骤：动作、定位器、输入值与断言。"""
+
     model_config = ConfigDict(extra="forbid")
 
     stepIndex: int | None = Field(default=None, ge=1)
@@ -146,6 +177,7 @@ class UiStep(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_design_step(cls, data: Any) -> Any:
+        """兼容设计稿格式：selector 映射到 target，动作/定位器别名归一化。"""
         if not isinstance(data, dict):
             return data
         normalized = dict(data)
@@ -178,12 +210,15 @@ class UiStep(BaseModel):
 
     @model_validator(mode="after")
     def assert_action_requires_assertion(self) -> "UiStep":
+        """断言动作必须显式指定断言类型。"""
         if self.action == "assert" and self.assertion == "none":
             raise ValueError("Assert steps must specify an assertion")
         return self
 
 
 class UiDetailsCreate(BaseModel):
+    """UI 用例详情：浏览器、环境、超时与步骤列表。"""
+
     model_config = ConfigDict(extra="forbid")
 
     description: str = Field(default="", max_length=4000)
@@ -198,6 +233,8 @@ class UiDetailsCreate(BaseModel):
 
 
 class UiCaseDebugRequest(BaseModel):
+    """UI 调试请求：环境、变量、浏览器参数与步骤。"""
+
     model_config = ConfigDict(extra="forbid")
 
     environment: str = Field(
@@ -211,6 +248,8 @@ class UiCaseDebugRequest(BaseModel):
 
 
 class ApiDebugRunRequest(BaseModel):
+    """API 调试运行请求（判别联合的一支）。"""
+
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["API"]
@@ -218,6 +257,8 @@ class ApiDebugRunRequest(BaseModel):
 
 
 class UiDebugRunRequest(BaseModel):
+    """UI 调试运行请求（判别联合的一支）。"""
+
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["UI"]
@@ -231,6 +272,8 @@ DebugRunRequest = Annotated[
 
 
 class TestCaseCreate(BaseModel):
+    """用例创建：公共字段 + 按类型携带 API/UI 详情。"""
+
     model_config = ConfigDict(extra="forbid")
 
     code: str | None = Field(default=None, max_length=32)
@@ -252,6 +295,7 @@ class TestCaseCreate(BaseModel):
 
     @model_validator(mode="after")
     def details_match_type(self) -> "TestCaseCreate":
+        """校验详情与用例类型匹配：API 必须有 api_details，UI 的 ui_details 互斥。"""
         if self.type == "api" and self.api_details is None:
             raise ValueError("api_details is required for API cases")
         if self.type != "api" and self.api_details is not None:
@@ -262,6 +306,8 @@ class TestCaseCreate(BaseModel):
 
 
 class TestCaseUpdate(BaseModel):
+    """用例更新：所有字段可空，仅更新提供的字段。"""
+
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=255)
@@ -281,6 +327,8 @@ class TestCaseUpdate(BaseModel):
 
 
 class UiExecutionCreate(BaseModel):
+    """UI 执行创建：项目、套件、环境、浏览器与并发数。"""
+
     model_config = ConfigDict(extra="forbid")
 
     projectId: int = Field(gt=0)
@@ -292,12 +340,15 @@ class UiExecutionCreate(BaseModel):
 
     @model_validator(mode="after")
     def suites_are_unique(self) -> "UiExecutionCreate":
+        """套件 ID 列表不允许重复。"""
         if len(self.suiteIds) != len(set(self.suiteIds)):
             raise ValueError("suiteIds must be unique")
         return self
 
 
 class ApiExecutionCreate(BaseModel):
+    """API 执行创建：项目、套件、环境、全局头、迭代与压测参数。"""
+
     model_config = ConfigDict(extra="forbid")
 
     projectId: int = Field(gt=0)
@@ -309,12 +360,15 @@ class ApiExecutionCreate(BaseModel):
 
     @model_validator(mode="after")
     def suites_are_unique(self) -> "ApiExecutionCreate":
+        """套件 ID 列表不允许重复。"""
         if len(self.suiteIds) != len(set(self.suiteIds)):
             raise ValueError("suiteIds must be unique")
         return self
 
 
 class UiExecutionConfig(BaseModel):
+    """UI 执行配置：浏览器、无头模式与并发数。"""
+
     model_config = ConfigDict(extra="forbid")
 
     browser: Literal["chrome", "firefox", "safari", "edge"]
@@ -323,6 +377,8 @@ class UiExecutionConfig(BaseModel):
 
 
 class ApiExecutionConfig(BaseModel):
+    """API 执行配置：全局头、变量、迭代、压测与并发。"""
+
     model_config = ConfigDict(extra="forbid")
 
     globalHeaders: dict[str, str] = Field(default_factory=dict)
@@ -333,6 +389,8 @@ class ApiExecutionConfig(BaseModel):
 
 
 class ExecutionStartRequest(BaseModel):
+    """通用执行启动请求：按 type 区分 UI/API，并携带对应配置。"""
+
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["UI", "API"]
@@ -343,6 +401,7 @@ class ExecutionStartRequest(BaseModel):
 
     @model_validator(mode="after")
     def config_matches_type(self) -> "ExecutionStartRequest":
+        """校验配置类型与执行类型一致，且用例 ID 不重复。"""
         expected_config = UiExecutionConfig if self.type == "UI" else ApiExecutionConfig
         if not isinstance(self.config, expected_config):
             raise ValueError(f"config does not match execution type {self.type}")
@@ -352,6 +411,8 @@ class ExecutionStartRequest(BaseModel):
 
 
 class UserCreate(BaseModel):
+    """人员管理：新建用户请求。"""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=64)
@@ -362,30 +423,41 @@ class UserCreate(BaseModel):
 
 
 class UserStatusUpdate(BaseModel):
+    """用户启停请求。"""
+
     status: Literal["enabled", "disabled"]
 
 
 class RolePermissionsUpdate(BaseModel):
+    """角色权限整体替换请求。"""
+
     permissions: dict[str, bool]
 
 
 class SettingsModel(BaseModel):
+    """设置分组的公共基类：禁止多余字段。"""
+
     model_config = ConfigDict(extra="forbid")
 
 
 class GeneralSettings(SettingsModel):
+    """通用设置：平台名称、公告与用例编号前缀。"""
+
     platformName: str = Field(min_length=1, max_length=40)
     announcement: str = Field(max_length=500)
     caseNumberPrefix: str = Field(pattern=r"^[A-Za-z0-9_-]+$", max_length=16)
 
 
 class CaseManagementSettings(SettingsModel):
+    """用例管理设置：项目名称列表，必须包含默认官网项目且不重复。"""
+
     projectNames: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
         default_factory=lambda: [DEFAULT_PROJECT_NAME], min_length=1, max_length=32
     )
 
     @model_validator(mode="after")
     def website_project_is_available(self) -> "CaseManagementSettings":
+        """校验项目名非空且唯一，并强制保留默认官网项目。"""
         normalized_names = [name.strip().casefold() for name in self.projectNames]
         if any(not name for name in normalized_names):
             raise ValueError("project names cannot be blank")
@@ -403,12 +475,16 @@ class CaseManagementSettings(SettingsModel):
 
 
 class TestEnvironment(SettingsModel):
+    """执行环境：id、展示名与 baseUrl。"""
+
     id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=32)
     baseUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
 
 
 class ExecutionSettings(SettingsModel):
+    """执行设置：环境列表、默认环境、重试与超时。"""
+
     environments: list[TestEnvironment] = Field(min_length=1, max_length=32)
     defaultEnvironmentId: str = Field(min_length=1, max_length=64)
     retryCount: int = Field(ge=0, le=3)
@@ -416,6 +492,7 @@ class ExecutionSettings(SettingsModel):
 
     @model_validator(mode="after")
     def default_environment_exists(self) -> "ExecutionSettings":
+        """校验环境 id/名称唯一且默认环境存在。"""
         environment_ids = [environment.id for environment in self.environments]
         if len(environment_ids) != len(set(environment_ids)):
             raise ValueError("environment ids must be unique")
@@ -428,18 +505,24 @@ class ExecutionSettings(SettingsModel):
 
 
 class NotificationSettings(SettingsModel):
+    """通知设置：三类 Webhook 地址（允许为空）。"""
+
     wechatWork: str = Field(max_length=2048, pattern=r"^$|^https?://")
     feishu: str = Field(max_length=2048, pattern=r"^$|^https?://")
     dingtalk: str = Field(max_length=2048, pattern=r"^$|^https?://")
 
 
 class AiSettings(SettingsModel):
+    """AI 设置：API Key、Base URL 与默认模型。"""
+
     apiKey: str = Field(max_length=4096)
     baseUrl: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
     defaultModel: str = Field(min_length=1, max_length=128)
 
 
 class SystemSettings(SettingsModel):
+    """系统设置聚合：通用、用例管理、执行、通知与 AI 五组配置。"""
+
     general: GeneralSettings
     caseManagement: CaseManagementSettings = Field(default_factory=CaseManagementSettings)
     execution: ExecutionSettings

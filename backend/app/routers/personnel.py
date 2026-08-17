@@ -1,3 +1,5 @@
+"""人员管理路由：用户增删改查、启停与角色权限维护。"""
+
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -19,6 +21,7 @@ def list_users(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
+    """GET /users：按关键字/角色/状态分页查询用户。"""
     return personnel.list_users(
         session,
         keyword=keyword,
@@ -33,6 +36,7 @@ def list_users(
 def create_user(
     payload: UserCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
+    """POST /users：新建用户。"""
     return personnel.create_user(session, payload)
 
 
@@ -42,6 +46,7 @@ def set_user_status(
     payload: UserStatusUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PATCH /users/{id}/status：启用或停用用户。"""
     return personnel.set_user_status(session, user_id, payload.status)
 
 
@@ -49,12 +54,14 @@ def set_user_status(
 def delete_user(
     user_id: int, session: Annotated[Session, Depends(get_session)]
 ) -> Response:
+    """DELETE /users/{id}：删除用户；已启用用户由服务层拒绝删除。"""
     personnel.delete_user(session, user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/roles")
 def list_roles(session: Annotated[Session, Depends(get_session)]) -> list[dict]:
+    """GET /roles：返回全部角色及其权限。"""
     return personnel.list_roles(session)
 
 
@@ -64,4 +71,5 @@ def update_role_permissions(
     payload: RolePermissionsUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PUT /roles/{id}/permissions：整体替换角色权限表。"""
     return personnel.update_role_permissions(session, role_id, payload)

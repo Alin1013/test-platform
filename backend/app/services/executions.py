@@ -1,3 +1,5 @@
+"""执行编排服务：创建 UI/API 执行、查询结果、取消执行与事件流推送。"""
+
 import asyncio
 import json
 from collections.abc import AsyncIterator
@@ -27,11 +29,13 @@ from .settings import get_environment
 
 
 def _execution_code(prefix: str) -> str:
+    """生成带时间戳与随机后缀的执行编号。"""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"{prefix}_{timestamp}_{uuid4().hex[:6]}"
 
 
 def _execution_query():
+    """预加载创建人与明细，供查询/汇总复用。"""
     return select(TestExecution).options(
         selectinload(TestExecution.creator),
         selectinload(TestExecution.details),
@@ -45,6 +49,7 @@ def _selected_cases(
     suite_ids: list[int],
     case_type: str,
 ) -> list[TestCase]:
+    """按项目校验所选用例存在且类型一致，并保持请求顺序返回。"""
     cases = session.scalars(
         select(TestCase)
         .join(Module)
@@ -67,6 +72,7 @@ def _selected_cases(
 
 
 def _creator(session: Session, user_id: int = 1) -> User:
+    """返回执行创建人；默认使用 1 号用户。"""
     user = session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="Execution creator not found")
@@ -79,6 +85,7 @@ def start_ui_execution(
     *,
     initial_status: str = "RUNNING",
 ) -> dict:
+    """创建 UI 执行：校验环境与用例，生成主记录与明细。"""
     get_environment(session, payload.environment)
     cases = _selected_cases(
         session,
@@ -138,6 +145,7 @@ def start_ui_execution(
 
 
 def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
+    """创建 API 执行（单并发入口，来自外部压测视图）。"""
     return _start_api_execution(
         session,
         project_id=payload.projectId,
@@ -164,6 +172,7 @@ def _start_api_execution(
     concurrency: int,
     initial_status: str = "RUNNING",
 ) -> dict:
+    """创建 API 执行：校验用例与提取规则，快照请求并生成任务。"""
     cases = _selected_cases(
         session,
         project_id=project_id,
@@ -174,6 +183,7 @@ def _start_api_execution(
         test_case.api_details and test_case.api_details.extracts
         for test_case in cases
     ):
+        # 并发线程之间共享变量会互相覆盖，带提取规则时禁止并发。
         raise HTTPException(
             status_code=422,
             detail="API concurrency requires cases without extraction rules",
@@ -245,6 +255,7 @@ def _start_api_execution(
 
 
 def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
+    """通用启动入口：按类型把请求转换为对应执行创建并进入队列。"""
     get_environment(session, payload.envName)
     if payload.type == "UI":
         config = payload.config
@@ -281,6 +292,7 @@ def start_execution(session: Session, payload: ExecutionStartRequest) -> dict:
 
 
 def get_execution(session: Session, execution_code: str, execution_type: str) -> TestExecution:
+    """按执行编号与类型查找执行记录。"""
     execution = session.scalar(
         _execution_query().where(
             TestExecution.execution_code == execution_code,
@@ -293,6 +305,7 @@ def get_execution(session: Session, execution_code: str, execution_type: str) ->
 
 
 def get_execution_by_code(session: Session, execution_code: str) -> TestExecution:
+    """按执行编号查找执行记录（不限类型）。"""
     execution = session.scalar(
         _execution_query().where(TestExecution.execution_code == execution_code)
     )
@@ -302,6 +315,7 @@ def get_execution_by_code(session: Session, execution_code: str) -> TestExecutio
 
 
 def _summary(execution: TestExecution) -> dict[str, int]:
+    """按状态汇总执行明细数量与总耗时。"""
     counts = {
         status: sum(detail.status == status for detail in execution.details)
         for status in ("PASSED", "FAILED", "RUNNING", "PENDING")
@@ -317,6 +331,7 @@ def _summary(execution: TestExecution) -> dict[str, int]:
 
 
 def ui_execution_result(session: Session, execution_code: str) -> dict:
+    """返回 UI 执行结果：逐用例状态、步骤结果、日志与截图/视频。"""
     execution = get_execution(session, execution_code, "UI")
     browser = execution.config_json["browser"]
     return {
@@ -346,6 +361,7 @@ def ui_execution_result(session: Session, execution_code: str) -> dict:
 
 
 def api_execution_report(session: Session, execution_code: str) -> dict:
+    """返回 API 执行报告：汇总统计与逐接口结果。"""
     execution = get_execution(session, execution_code, "API")
     passed = sum(detail.status == "PASSED" for detail in execution.details)
     failed = sum(detail.status == "FAILED" for detail in execution.details)
@@ -392,6 +408,7 @@ def api_execution_report(session: Session, execution_code: str) -> dict:
 
 
 def execution_summary(session: Session, execution_code: str) -> dict:
+    """返回执行汇总：通过率、平均延迟与耗时等关键指标。"""
     execution = get_execution_by_code(session, execution_code)
     summary = _summary(execution)
     completed_durations = [
@@ -427,6 +444,7 @@ def execution_summary(session: Session, execution_code: str) -> dict:
 
 
 def execution_details(session: Session, execution_code: str) -> dict:
+    """返回执行明细列表，UI/API 类型使用各自的结构。"""
     execution = get_execution_by_code(session, execution_code)
     if execution.type == "UI":
         items = ui_execution_result(session, execution_code)["cases"]
@@ -467,11 +485,13 @@ def execution_details(session: Session, execution_code: str) -> dict:
 
 
 def stop_execution(session: Session, execution_code: str, execution_type: str) -> None:
+    """按类型停止执行（用于 UI/API 专用端点）。"""
     execution = get_execution(session, execution_code, execution_type)
     _cancel_execution(session, execution)
 
 
 def _cancel_execution(session: Session, execution: TestExecution) -> None:
+    """取消执行：置 CANCELLED，未完成明细标 SKIPPED。"""
     if execution.status in {"COMPLETED", "FAILED", "CANCELLED"}:
         return
     execution.status = "CANCELLED"
@@ -493,11 +513,13 @@ def _cancel_execution(session: Session, execution: TestExecution) -> None:
 
 
 def stop_execution_by_code(session: Session, execution_code: str) -> None:
+    """按执行编号停止执行（通用端点）。"""
     execution = get_execution_by_code(session, execution_code)
     _cancel_execution(session, execution)
 
 
 def ui_execution_events(session: Session, execution_code: str) -> list[dict]:
+    """生成 UI 执行的初始事件（每个用例一条等待执行日志）。"""
     execution = get_execution(session, execution_code, "UI")
     return [
         {
@@ -513,6 +535,7 @@ def ui_execution_events(session: Session, execution_code: str) -> list[dict]:
 
 
 def execution_events(session: Session, execution_code: str) -> list[dict]:
+    """生成当前执行快照事件：进度、用例状态与 UI 步骤日志。"""
     execution = get_execution_by_code(session, execution_code)
     completed = sum(
         detail.status in {"PASSED", "FAILED", "SKIPPED"}
@@ -568,6 +591,7 @@ async def execution_event_stream(
     *,
     poll_interval: float = 0.25,
 ) -> AsyncIterator[dict]:
+    """轮询执行状态并增量推送事件；到达终态后结束流。"""
     seen_events: dict[tuple, str] = {}
     while True:
         with session_factory() as session:
@@ -579,6 +603,7 @@ async def execution_event_stream(
                 "CANCELLED",
             }
         for event in current_events:
+            # 以 (类型, 用例, 步骤) 为键去重，只推送新增或变化的事件。
             key = (
                 event["type"],
                 event.get("caseId"),

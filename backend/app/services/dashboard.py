@@ -1,3 +1,5 @@
+"""仪表盘数据服务：统计用例数量并查询最近更新用例。"""
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -6,6 +8,7 @@ from .test_cases import serialize_case
 
 
 def get_case_counts(session: Session) -> dict[str, int]:
+    """按用例类型统计数量；未出现的类型补 0，并汇总总数。"""
     rows = session.execute(
         select(TestCase.type, func.count(TestCase.id)).group_by(TestCase.type)
     ).all()
@@ -15,6 +18,7 @@ def get_case_counts(session: Session) -> dict[str, int]:
 
 
 def get_recent_cases(session: Session, page: int, page_size: int) -> dict:
+    """分页查询最近更新的用例，连带作者/模块/接口/UI 详情一起返回。"""
     total = session.scalar(select(func.count(TestCase.id))) or 0
     rows = session.scalars(
         select(TestCase)

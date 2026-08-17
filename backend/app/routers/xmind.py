@@ -1,3 +1,5 @@
+"""XMind 路由：上传解析、异步生成任务、任务确认与导出。"""
+
 import json
 from pathlib import Path
 from typing import Annotated
@@ -28,6 +30,7 @@ async def upload_and_parse_xmind(
     module_mapping: Annotated[str | None, Form()] = None,
     session: Session = Depends(get_session),
 ) -> dict:
+    """上传 .xmind 文件并解析；save_cases 为真时按模块映射保存用例。"""
     original_name = file.filename or "upload.xmind"
     if not original_name.lower().endswith(".xmind"):
         raise HTTPException(status_code=415, detail="Only .xmind files are supported")
@@ -67,6 +70,7 @@ async def create_xmind_generation_task(
     uploader_id: Annotated[int, Form()] = 1,
     session: Session = Depends(get_session),
 ) -> dict:
+    """上传 .xmind 并创建异步 AI 生成任务。"""
     original_name = file.filename or "upload.xmind"
     if not original_name.lower().endswith(".xmind"):
         raise HTTPException(status_code=415, detail="Only .xmind files are supported")
@@ -90,6 +94,7 @@ def list_xmind_tasks(
     page_size: int = Query(default=20, ge=1, le=100),
     status: str | None = None,
 ) -> dict:
+    """GET /tasks：分页列出 XMind 生成任务。"""
     return xmind.list_generation_tasks(
         session,
         page=page,
@@ -100,11 +105,13 @@ def list_xmind_tasks(
 
 @router.get("/tasks/{task_id}")
 def get_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+    """GET /tasks/{id}：查询单个生成任务详情。"""
     return xmind.get_generation_task(session, task_id)
 
 
 @router.post("/tasks/{task_id}/retry")
 def retry_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+    """POST /tasks/{id}/retry：重置失败任务并重新入队。"""
     return xmind.retry_generation_task(session, task_id)
 
 
@@ -114,6 +121,7 @@ def confirm_xmind_task(
     payload: XMindTaskConfirmRequest,
     session: Session = Depends(get_session),
 ) -> dict:
+    """POST /tasks/{id}/confirm：确认任务生成的用例并写入用例库。"""
     return xmind.confirm_generated_task(session, task_id, payload)
 
 
@@ -122,11 +130,13 @@ def confirm_xmind_cases(
     payload: XMindConfirmRequest,
     session: Session = Depends(get_session),
 ) -> dict:
+    """POST /confirm：直接确认一组生成的用例。"""
     return xmind.confirm_generated_cases(session, payload)
 
 
 @router.post("/export")
 def export_xmind_cases(payload: XMindExportRequest) -> StreamingResponse:
+    """POST /export：把生成结果导出为文件流下载。"""
     exported = case_files.export_generated_cases(
         [case.model_dump(by_alias=True) for case in payload.cases]
     )

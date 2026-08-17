@@ -1,3 +1,5 @@
+"""调试路由：API/UI 用例的即时试运行，统一包裹返回结构。"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -12,6 +14,7 @@ router = APIRouter(tags=["debug"])
 
 
 def _envelope(data: dict) -> dict:
+    """把调试结果包装成统一响应结构。"""
     return {"code": 200, "message": "Debug run completed", "data": data}
 
 
@@ -21,6 +24,7 @@ def debug_api(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """POST /api/v1/debug/api-run：调试单个 API 用例。"""
     return _envelope(
         debug_runner.run_api(
             session,
@@ -36,6 +40,7 @@ def debug_ui(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """POST /api/v1/debug/ui-run：调试单个 UI 用例。"""
     return _envelope(
         debug_runner.run_ui(session, payload, ui_runner=request.app.state.ui_runner)
     )
@@ -47,6 +52,7 @@ def debug_run(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """POST /api/v1/debug-run：通用调试入口，按用例类型分发。"""
     return _envelope(
         debug_runner.run_debug(
             session,

@@ -1,3 +1,5 @@
+"""后台工作线程：循环消费执行任务队列与 XMind 任务队列。"""
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +24,7 @@ def _run_worker_cycle(
     ui_runner: PlaywrightUiRunner,
     xmind_llm_transport=None,
 ) -> bool:
+    """执行一轮任务消费：先取执行任务，再取 XMind 任务，返回是否处理了任务。"""
     did_work = False
     try:
         execution_code = run_next_execution(
@@ -53,6 +56,7 @@ def run_worker_loop(
     stop_event: Event | None = None,
     idle_sleep_seconds: float = 1.0,
 ) -> None:
+    """常驻循环：有任务立即处理，空闲时按 idle_sleep_seconds 休眠。"""
     runner = ui_runner or PlaywrightUiRunner(upload_dir)
     try:
         while stop_event is None or not stop_event.is_set():
@@ -78,6 +82,7 @@ def run_worker_loop(
 
 
 def main() -> None:
+    """独立进程入口：从环境变量读取数据库并启动工作线程。"""
     database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
     session_factory = create_session_factory(database_url)
     upload_dir = Path(__file__).resolve().parents[1] / "uploads"

@@ -1,3 +1,5 @@
+"""SQLAlchemy ORM 模型：用户/角色、模块、用例、执行任务与 XMind 任务。"""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -12,10 +14,13 @@ from .domain_defaults import DEFAULT_PROJECT_NAME
 
 
 def utc_now() -> datetime:
+    """返回当前 UTC 时间，作为时间戳字段的默认值。"""
     return datetime.now(timezone.utc)
 
 
 class TimestampMixin:
+    """为模型补充 created_at / updated_at 时间戳字段。"""
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
@@ -23,6 +28,8 @@ class TimestampMixin:
 
 
 class Role(Base, TimestampMixin):
+    """角色及其权限位配置。"""
+
     __tablename__ = "roles"
     __table_args__ = {"comment": "角色与权限配置"}
 
@@ -36,6 +43,8 @@ class Role(Base, TimestampMixin):
 
 
 class User(Base, TimestampMixin):
+    """用户账号：个人资料、角色归属与启停状态。"""
+
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("status IN ('enabled', 'disabled')", name="ck_users_status"),
@@ -62,6 +71,8 @@ class User(Base, TimestampMixin):
 
 
 class AuthSession(Base):
+    """登录会话：仅存令牌哈希，不落盘明文令牌。"""
+
     __tablename__ = "auth_sessions"
     __table_args__ = {"comment": "用户登录会话与访问令牌摘要"}
 
@@ -77,6 +88,8 @@ class AuthSession(Base):
 
 
 class Module(Base, TimestampMixin):
+    """测试模块：支持父子层级，挂在项目下。"""
+
     __tablename__ = "modules"
     __table_args__ = {"comment": "项目测试模块及父子层级"}
 
@@ -93,6 +106,8 @@ class Module(Base, TimestampMixin):
 
 
 class TestCase(Base, TimestampMixin):
+    """测试用例公共信息：类型、模块、优先级与状态等。"""
+
     __tablename__ = "test_cases"
     __table_args__ = (
         CheckConstraint(
@@ -138,6 +153,8 @@ class TestCase(Base, TimestampMixin):
 
 
 class ApiCaseDetails(Base):
+    """API 自动化用例扩展：请求定义、断言与提取变量。"""
+
     __tablename__ = "api_case_details"
     __table_args__ = (
         CheckConstraint(
@@ -184,6 +201,8 @@ class ApiCaseDetails(Base):
 
 
 class UiCaseDetails(Base):
+    """UI 自动化用例扩展：浏览器、环境、超时与步骤列表。"""
+
     __tablename__ = "ui_case_details"
     __table_args__ = (
         CheckConstraint(
@@ -220,6 +239,8 @@ class UiCaseDetails(Base):
 
 
 class TestExecution(Base, TimestampMixin):
+    """自动化测试执行主记录：类型、状态与统计汇总。"""
+
     __tablename__ = "test_execution"
     __table_args__ = (
         CheckConstraint("type IN ('UI', 'API')", name="ck_test_execution_type"),
@@ -257,6 +278,8 @@ class TestExecution(Base, TimestampMixin):
 
 
 class TestExecutionDetail(Base):
+    """单条用例的执行明细：请求/响应快照与断言结果。"""
+
     __tablename__ = "test_execution_detail"
     __table_args__ = (
         CheckConstraint(
@@ -286,6 +309,8 @@ class TestExecutionDetail(Base):
 
 
 class ExecutionTask(Base, TimestampMixin):
+    """执行异步任务队列：支持重试与原子领取。"""
+
     __tablename__ = "execution_tasks"
     __table_args__ = (
         CheckConstraint(
@@ -312,6 +337,8 @@ class ExecutionTask(Base, TimestampMixin):
 
 
 class XMindRecord(Base):
+    """XMind 生成任务：文件信息、解析结果与任务状态机。"""
+
     __tablename__ = "xmind_records"
     __table_args__ = (
         CheckConstraint(
@@ -344,6 +371,8 @@ class XMindRecord(Base):
 
 
 class SystemConfig(Base):
+    """系统全局配置：键值对存储，值可为任意 JSON。"""
+
     __tablename__ = "system_configs"
     __table_args__ = {"comment": "系统全局配置"}
 

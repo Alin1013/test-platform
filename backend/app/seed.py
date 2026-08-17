@@ -1,3 +1,5 @@
+"""演示数据初始化：幂等写入角色、用户、模块、用例与平台配置。"""
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,7 @@ from .services.auth import hash_password
 
 
 DEFAULT_PERMISSIONS = {
+    # 三种内置角色的权限基线，供初始化与重置使用。
     "测试负责人": {
         "caseView": True,
         "caseEdit": True,
@@ -32,6 +35,7 @@ DEFAULT_PERMISSIONS = {
 
 
 DEFAULT_SETTINGS = {
+    # 平台首次启动时的默认配置：通用、用例管理、执行、通知与 AI。
     "general": {
         "platformName": "测试平台",
         "announcement": "",
@@ -59,6 +63,7 @@ DEFAULT_SETTINGS = {
 
 
 def seed_database(session: Session) -> None:
+    """幂等填充演示数据；已存在角色时仅修复旧版演示账号缺失的密码。"""
     # 角色是种子数据哨兵；已存在时只修复旧版演示账号的缺失凭据。
     if session.scalar(select(Role.id).limit(1)) is not None:
         # 旧版演示库没有登录凭据，仅为预置邮箱补齐默认密码。

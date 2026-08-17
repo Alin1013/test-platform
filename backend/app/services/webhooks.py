@@ -11,6 +11,7 @@ from ..settings_schemas import WebhookTestRequest
 
 
 def _validate_public_https_url(url: str) -> None:
+    """校验 Webhook 必须是公网 HTTPS 地址，防止 SSRF 攻击。"""
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise HTTPException(status_code=422, detail="Webhook must use a public HTTPS URL")
@@ -26,6 +27,7 @@ def _validate_public_https_url(url: str) -> None:
 
 
 def test_connection(payload: WebhookTestRequest) -> dict:
+    """向 Webhook 发送一条测试消息，验证通道可用性。"""
     _validate_public_https_url(payload.webhookUrl)
     message = "测试平台 Webhook 连接测试"
     # 飞书与企微/钉钉的文本消息结构不同，在边界处统一适配。

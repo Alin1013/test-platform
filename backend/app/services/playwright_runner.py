@@ -1,3 +1,5 @@
+"""Playwright UI 执行器：在真实浏览器中按步骤运行用例并收集截图/视频/Trace。"""
+
 from __future__ import annotations
 
 import logging
@@ -12,12 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class PlaywrightUiRunner:
+    """封装 Playwright 同步 API：步骤执行、失败截图、视频与 Trace 归档。"""
+
     def __init__(self, upload_dir: Path) -> None:
+        """初始化执行产物目录（截图/视频/Trace 统一存放）。"""
         self.artifact_dir = upload_dir / "executions"
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _locator(page: Any, step: dict[str, Any]) -> Any:
+        """按定位器类型把目标字符串转换为 Playwright Locator。"""
         target = step.get("target", "")
         locator_type = step.get("locatorType", "css")
         if locator_type == "xpath":
@@ -29,6 +35,7 @@ class PlaywrightUiRunner:
         return page.locator(target)
 
     def _run_step(self, page: Any, step: dict[str, Any]) -> None:
+        """执行单个步骤：导航/等待/点击/输入/悬停/断言。"""
         action = step["action"]
         value = step.get("value", "")
         if action == "navigate":
@@ -64,6 +71,7 @@ class PlaywrightUiRunner:
     def run(
         self, *, steps: list[dict[str, Any]], config: dict[str, Any]
     ) -> dict[str, Any]:
+        """运行整组步骤，返回状态、耗时、步骤结果与产物 URL；可被 shouldCancel 中断。"""
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as error:
@@ -94,6 +102,7 @@ class PlaywrightUiRunner:
             browser = browser_type.launch(headless=config.get("headless", True))
             context = browser.new_context(record_video_dir=str(self.artifact_dir))
             try:
+                # Trace 失败不阻断执行，只记录异常后继续。
                 context.tracing.start(screenshots=True, snapshots=True, sources=True)
                 trace_started = True
             except Exception:
@@ -144,6 +153,7 @@ class PlaywrightUiRunner:
                         logger.exception("Failed to stop Playwright tracing")
                 context.close()
             if video is not None:
+                # Playwright 的视频按内部路径生成，执行后复制到统一命名。
                 recorded_path = Path(video.path())
                 if recorded_path.exists():
                     copyfile(recorded_path, video_path)

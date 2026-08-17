@@ -33,6 +33,7 @@ ACCOUNT_DISABLED_DETAIL = {
 
 
 def hash_password(password: str) -> str:
+    """使用 PBKDF2-SHA256 生成带随机盐的密码哈希（格式：算法$迭代$盐$摘要）。"""
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode(), salt, PASSWORD_ITERATIONS
@@ -45,6 +46,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded_password: str | None) -> bool:
+    """校验明文密码与存储哈希；格式非法或摘要不匹配均返回 False。"""
     if not encoded_password:
         return False
     try:
@@ -62,6 +64,7 @@ def verify_password(password: str, encoded_password: str | None) -> bool:
 
 
 def serialize_user(user: User) -> dict:
+    """把用户对象转换为前端响应结构（含角色名与权限）。"""
     return {
         "id": user.id,
         "account": user.account,
@@ -84,6 +87,7 @@ def _unauthorized(detail: str = "Invalid account or password") -> HTTPException:
 
 
 def login(session: Session, payload: LoginRequest) -> dict:
+    """登录：校验凭据与账号状态，成功后签发 8 小时有效的会话令牌。"""
     account = payload.account.strip().casefold()
     user = session.scalar(
         select(User)
@@ -117,6 +121,7 @@ def login(session: Session, payload: LoginRequest) -> dict:
 
 
 def register(session: Session, payload: RegisterRequest) -> dict:
+    """注册：默认以测试工程师角色创建账号，冲突返回 409。"""
     try:
         user = create_account(
             session,
@@ -137,6 +142,7 @@ def register(session: Session, payload: RegisterRequest) -> dict:
 
 
 def _authenticated_session(session: Session, token: str) -> AuthSession:
+    """按令牌哈希定位会话，校验有效期与用户状态，失效则删除会话。"""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     auth_session = session.scalar(
         select(AuthSession)
@@ -158,27 +164,32 @@ def _authenticated_session(session: Session, token: str) -> AuthSession:
 
 
 def authenticated_user(session: Session, token: str) -> User:
+    """返回令牌对应的当前用户，无效或过期时抛 401。"""
     return _authenticated_session(session, token).user
 
 
 def logout(session: Session, token: str) -> None:
+    """登出：删除当前会话记录，使令牌立即失效。"""
     auth_session = _authenticated_session(session, token)
     session.delete(auth_session)
     session.commit()
 
 
 def _apply_profile_changes(user: User, payload: ProfileUpdate) -> None:
+    """把资料更新字段写入用户对象（密码单独处理）。"""
     changes = payload.model_dump(exclude_unset=True, exclude={"password"})
     for field, value in changes.items():
         setattr(user, field, value)
 
 
 def _replace_password(session: Session, user: User, password: str) -> None:
+    """修改密码并吊销该用户全部旧会话，保证旧令牌失效。"""
     user.password_hash = hash_password(password)
     session.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
 
 
 def update_profile(session: Session, user: User, payload: ProfileUpdate) -> dict:
+    """更新资料（可选修改密码），返回更新后的用户信息。"""
     _apply_profile_changes(user, payload)
     password_changed = payload.password is not None
     if password_changed:

@@ -1,3 +1,5 @@
+"""FastAPI 应用工厂：装配中间件、路由、静态目录与后台工作线程。"""
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Event, Thread
@@ -30,6 +32,7 @@ def create_app(
     log_dir: Path | None = None,
     start_background_workers: bool = False,
 ) -> FastAPI:
+    """创建应用实例；start_background_workers=True 时在 lifespan 中启动后台线程。"""
     session_factory = create_session_factory(database_url)
     resolved_upload_dir = upload_dir or Path(__file__).resolve().parents[1] / "uploads"
     resolved_log_dir = log_dir or DEFAULT_LOG_DIR
@@ -90,6 +93,7 @@ def create_app(
 
     @app.get("/health", tags=["system"])
     def health() -> dict[str, str]:
+        """GET /health：健康检查端点。"""
         return {"status": "ok"}
 
     app.include_router(dashboard_router)

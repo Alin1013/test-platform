@@ -126,10 +126,12 @@ class ExportedFile:
 
 
 def _json_cell(value: Any) -> str:
+    """把 JSON 字段序列化为单元格文本，空值输出为空串。"""
     return "" if value is None else json.dumps(value, ensure_ascii=False)
 
 
 def _export_row(test_case: dict) -> list[Any]:
+    """把单个用例序列化为导出行（API/UI 详情合并为 JSON 列）。"""
     api = test_case["api_details"] or {}
     ui = test_case["ui_details"] or {}
     return [
@@ -160,6 +162,7 @@ def _export_row(test_case: dict) -> list[Any]:
 def export_cases(
     session: Session, payload: TestCaseExportRequest
 ) -> ExportedFile:
+    """按筛选条件导出用例为 CSV 或 XLSX 文件。"""
     query = test_cases.filtered_case_query(
         case_type=payload.type,
         module_id=payload.module_id,
@@ -216,6 +219,7 @@ def export_generated_cases(cases: list[dict[str, Any]]) -> ExportedFile:
 
 
 def _csv_rows(content: bytes) -> list[dict[str, Any]]:
+    """解析 CSV 字节流为字典行；要求 UTF-8 编码。"""
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as error:
@@ -224,6 +228,7 @@ def _csv_rows(content: bytes) -> list[dict[str, Any]]:
 
 
 def _xlsx_rows(content: bytes) -> list[dict[str, Any]]:
+    """解析 XLSX 工作簿：首行为表头，其余为数据行。"""
     try:
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
     except Exception as error:
@@ -237,6 +242,7 @@ def _xlsx_rows(content: bytes) -> list[dict[str, Any]]:
 
 
 def _xls_rows(content: bytes) -> list[dict[str, Any]]:
+    """解析旧版 XLS 工作簿（依赖 xlrd），首行为表头。"""
     try:
         import xlrd
         workbook = xlrd.open_workbook(file_contents=content)
@@ -250,6 +256,7 @@ def _xls_rows(content: bytes) -> list[dict[str, Any]]:
 
 
 def _parse_json(value: Any, field: str) -> Any:
+    """把单元格中的 JSON 字符串解析为对象，非法时报字段错误。"""
     if value is None or value == "":
         return None
     if not isinstance(value, str):
@@ -261,6 +268,7 @@ def _parse_json(value: Any, field: str) -> Any:
 
 
 def _normalize_alias(value: Any, aliases: dict[str, str], default: str | None = None) -> str:
+    """把导入表中的别名（如“高”）归一化为内部枚举值。"""
     text = str(value or "").strip()
     if not text:
         return default or ""
@@ -268,6 +276,7 @@ def _normalize_alias(value: Any, aliases: dict[str, str], default: str | None = 
 
 
 def _canonical_row(raw_row: dict[str, Any]) -> dict[str, Any]:
+    """把中文表头映射为内部字段名。"""
     return {
         HEADER_ALIASES.get(str(key).strip(), str(key).strip()): value
         for key, value in raw_row.items()
@@ -275,6 +284,7 @@ def _canonical_row(raw_row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
+    """从导入行构造用例创建载荷；API/UI 类型按列拼接详情。"""
     row = _canonical_row(raw_row)
     case_type = _normalize_alias(row.get("type"), TYPE_ALIASES)
     common = {
@@ -310,6 +320,7 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
 
 
 def import_cases(session: Session, filename: str, content: bytes, module_id: str | None = None) -> dict:
+    """批量导入用例：整批单事务，任一行失败即整体回滚并定位行号。"""
     if len(content) > MAX_IMPORT_BYTES:
         raise HTTPException(status_code=413, detail="Import file exceeds the 10 MB limit")
     lower_name = filename.lower()

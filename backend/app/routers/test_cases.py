@@ -1,3 +1,5 @@
+"""用例管理路由：模块树、用例增删改查、导入导出与自动化用例调试。"""
+
 from typing import Annotated
 
 from fastapi import (
@@ -34,6 +36,7 @@ router = APIRouter(prefix="/api/v1", tags=["test cases"])
 def modules(
     session: Annotated[Session, Depends(get_session)], project_id: int = 1
 ) -> list[dict]:
+    """GET /modules：按项目返回模块树。"""
     return test_cases.module_tree(session, project_id)
 
 
@@ -41,6 +44,7 @@ def modules(
 def create_module(
     payload: TestModuleCreate, session: Annotated[Session, Depends(get_session)]
 ) -> JSONResponse:
+    """POST /modules：创建模块；已存在同名模块时返回 200 而非冲突。"""
     module, created = test_cases.create_module(session, payload)
     return JSONResponse(status_code=201 if created else 200, content=module)
 
@@ -51,6 +55,7 @@ def update_module(
     payload: TestModuleUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PATCH /modules/{id}：重命名或移动模块。"""
     return test_cases.update_module(session, module_id, payload)
 
 
@@ -59,6 +64,7 @@ def delete_module(
     module_id: str,
     session: Annotated[Session, Depends(get_session)],
 ) -> Response:
+    """DELETE /modules/{id}：删除空模块。"""
     test_cases.delete_module(session, module_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -68,6 +74,7 @@ def get_test_case_filter_options(
     session: Annotated[Session, Depends(get_session)],
     type: CaseType | None = None,
 ) -> dict:
+    """GET /test-cases/filter-options：返回筛选下拉所需的选项。"""
     return test_cases.get_filter_options(session, case_type=type)
 
 
@@ -85,6 +92,7 @@ def list_test_cases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
+    """GET /test-cases：按多条件组合筛选并分页查询用例。"""
     return test_cases.list_cases(
         session,
         case_type=type,
@@ -104,6 +112,7 @@ def list_test_cases(
 def create_test_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
+    """POST /test-cases：创建功能用例。"""
     return test_cases.create_case(session, payload)
 
 
@@ -111,6 +120,7 @@ def create_test_case(
 def create_api_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
+    """POST /api-cases：创建 API 自动化用例。"""
     return test_cases.create_automation_case(session, payload, "api")
 
 
@@ -120,6 +130,7 @@ def debug_api_case(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """POST /api-cases/debug：API 用例即时调试。"""
     return {
         "code": 200,
         "message": "Debug request completed",
@@ -135,6 +146,7 @@ def debug_api_case(
 def create_ui_case(
     payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
 ) -> dict:
+    """POST /ui-cases：创建 UI 自动化用例。"""
     return test_cases.create_automation_case(session, payload, "ui")
 
 
@@ -144,6 +156,7 @@ def update_api_case(
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PUT /api-cases/{id}：更新 API 自动化用例。"""
     return test_cases.update_automation_case(session, case_id, payload, "api")
 
 
@@ -153,6 +166,7 @@ def update_ui_case(
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PUT /ui-cases/{id}：更新 UI 自动化用例。"""
     return test_cases.update_automation_case(session, case_id, payload, "ui")
 
 
@@ -161,6 +175,7 @@ def export_test_cases(
     payload: TestCaseExportRequest,
     session: Annotated[Session, Depends(get_session)],
 ) -> StreamingResponse:
+    """POST /test-cases/export：按筛选条件导出 CSV/XLSX 文件。"""
     exported = case_files.export_cases(session, payload)
     return StreamingResponse(
         iter([exported.content]),
@@ -175,6 +190,7 @@ async def import_test_cases(
     session: Annotated[Session, Depends(get_session)],
     module_id: str | None = Query(default=None),
 ) -> dict:
+    """POST /test-cases/import：从 CSV/XLSX 文件导入用例。"""
     content = await file.read(case_files.MAX_IMPORT_BYTES + 1)
     return case_files.import_cases(session, file.filename or "upload", content, module_id=module_id)
 
@@ -185,6 +201,7 @@ def update_test_case(
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
+    """PUT /test-cases/{id}：更新功能用例。"""
     return test_cases.update_case(session, case_id, payload)
 
 
@@ -192,5 +209,6 @@ def update_test_case(
 def delete_test_case(
     case_id: int, session: Annotated[Session, Depends(get_session)]
 ) -> Response:
+    """DELETE /test-cases/{id}：删除用例。"""
     test_cases.delete_case(session, case_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
