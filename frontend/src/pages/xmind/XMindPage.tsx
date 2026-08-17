@@ -1,3 +1,6 @@
+/**
+ * 用例生成器页：上传 XMind 创建生成任务、查看进度、映射模块并确认入库。
+ */
 import {
   ApartmentOutlined,
   CheckCircleFilled,
@@ -25,6 +28,7 @@ import type {
 import './xmind.css';
 
 type UploadState =
+  // 上传阶段状态机：idle 可上传，uploading 展示模拟进度。
   | { status: 'idle'; error?: string }
   | { status: 'uploading'; fileName: string; progress: number };
 
@@ -51,6 +55,7 @@ interface FlatModule {
 }
 
 function flattenModules(modules: TestModule[], parentPath = ''): FlatModule[] {
+  // 递归展开模块树，label 为完整路径，便于与 XMind 目录名匹配。
   return modules.flatMap((module) => {
     const path = parentPath ? `${parentPath} / ${module.name}` : module.name;
     return [
@@ -61,10 +66,12 @@ function flattenModules(modules: TestModule[], parentPath = ''): FlatModule[] {
 }
 
 function countNodes(nodes: XMindTreeNode[]): number {
+  // 递归统计节点数（含自身）。
   return nodes.reduce((count, node) => count + 1 + countNodes(node.children), 0);
 }
 
 function renderTreeNode(node: XMindTreeNode, level: number, key: string): JSX.Element {
+  // 递归渲染节点树，叶子节点用不同样式区分。
   const hasChildren = node.children.length > 0;
   return (
     <div key={key} className="xmind-tree__branch">
@@ -82,10 +89,12 @@ function renderTreeNode(node: XMindTreeNode, level: number, key: string): JSX.El
 }
 
 function previewDirectories(cases: XMindGeneratedCase[]): string[] {
+  // 提取预览用例中出现的目录集合（去重保序）。
   return [...new Set(cases.map((item) => item.用例目录).filter(Boolean))];
 }
 
 function normalizeModulePath(path: string): string {
+  // 归一化目录路径：去空格、合并连续斜杠。
   return path
     .split('/')
     .map((part) => part.trim())
@@ -94,6 +103,7 @@ function normalizeModulePath(path: string): string {
 }
 
 function findMappedModule(directory: string, modules: FlatModule[]): FlatModule | undefined {
+  // 先按完整路径精确匹配，再按叶子名称唯一匹配，避免误映射。
   const normalizedDirectory = normalizeModulePath(directory);
   const exactMatch = modules.find((module) => normalizeModulePath(module.label) === normalizedDirectory);
   if (exactMatch) return exactMatch;
@@ -108,6 +118,7 @@ function taskStatus(status: XMindTaskStatus) {
 }
 
 export function XMindPage() {
+  // uploadTimer 用于上传中的模拟进度；任务详情按状态轮询刷新。
   const navigate = useNavigate();
   const service = usePlatformService();
   const { message } = App.useApp();
@@ -158,6 +169,7 @@ export function XMindPage() {
   }, [reloadToken, service]);
 
   useEffect(() => {
+    // 选中任务变化时加载详情；PENDING/RUNNING 期间每 1.2 秒轮询。
     if (selectedTaskId === null) {
       setDetail(null);
       return;
@@ -193,6 +205,7 @@ export function XMindPage() {
   const directories = useMemo(() => previewDirectories(detail?.cases ?? []), [detail?.cases]);
 
   const startUpload = (file: File) => {
+    // 校验扩展名后创建生成任务，成功后自动选中新任务并刷新列表。
     clearUploadTimer();
     setError(undefined);
     if (!file.name.toLowerCase().endsWith('.xmind')) {
@@ -224,6 +237,7 @@ export function XMindPage() {
   };
 
   const confirmTask = async () => {
+    // 确认入库：先校验所有目录都已映射模块，再提交后端。
     if (!detail || detail.status !== 'WAITING_REVIEW') return;
     if (directories.some((directory) => !moduleMapping[directory])) {
       setError('请为每个用例目录选择目标模块');
@@ -344,64 +358,6 @@ export function XMindPage() {
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>
 
-      {detail ? (
-        <div className="xmind-preview">
-          <div className="xmind-preview__header">
-            <div><span className="xmind-eyebrow">文件：{detail.fileName}</span><h2>任务详情 {taskStatus(detail.status)}</h2><p>{detail.status === 'WAITING_REVIEW' ? '请审核生成预览并确认模块映射。' : '生成任务状态会自动刷新。'}</p></div>
-            <div className="xmind-preview__actions">
-              {detail.cases.length ? <Button icon={<DownloadOutlined />} onClick={() => void exportPreview()}>导出 XLSX</Button> : null}
-              {detail.status === 'FAILED' ? <Button type="primary" icon={<ReloadOutlined />} onClick={() => void retryTask()}>重新执行</Button> : null}
-              {detail.status === 'WAITING_REVIEW' ? <Button type="primary" icon={<SaveOutlined />} loading={confirming} onClick={() => void confirmTask()}>审核并合并</Button> : null}
-              {detail.status === 'COMPLETED' ? <Button type="primary" onClick={() => navigate('/test-cases/functional')}>查看功能用例</Button> : null}
-            </div>
-          </div>
-          {detail.status === 'FAILED' && detail.lastError ? <Alert type="error" showIcon message={detail.lastError} /> : null}
-          {detail.cases.length ? (
-            <div className="xmind-preview__grid">
-              <section className="xmind-preview-panel" aria-labelledby="xmind-tree-title">
-                <header><h3 id="xmind-tree-title">XMind 树</h3><span>{countNodes(detail.tree)} 个节点</span></header>
-                <div className="xmind-tree" role="tree" aria-label="XMind 树">
-                  {detail.tree.map((node, index) => renderTreeNode(node, 1, String(index)))}
-                </div>
-              </section>
-              <section className="xmind-preview-panel" aria-labelledby="xmind-mapping-title">
-                <header><h3 id="xmind-mapping-title">模块映射</h3><span>{detail.cases.length} 条用例</span></header>
-                <div className="xmind-mapping-list">
-                  {directories.map((directory) => {
-                    const match = findMappedModule(directory, flatModules);
-                    return (
-                      <div className="xmind-mapping" key={directory}>
-                        <span className="xmind-mapping__label">用例目录</span>
-                        <strong>目录路径：{directory.replaceAll('/', ' / ')}</strong>
-                        <Select
-                          aria-label={`选择 ${directory} 目标模块`}
-                          value={moduleMapping[directory] || match?.id || undefined}
-                          placeholder="选择目标模块"
-                          options={flatModules.map((module) => ({ value: module.id, label: module.label }))}
-                          onChange={(value) => setModuleMapping((current) => ({ ...current, [directory]: value }))}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
-          ) : detail.status === 'PENDING' || detail.status === 'RUNNING' ? (
-            <div className="xmind-uploading" aria-live="polite"><ApartmentOutlined /><p>后台正在生成，离开页面不会中断任务。</p></div>
-          ) : null}
-          {detail.cases.length ? (
-            <section className="xmind-case-preview" aria-labelledby="xmind-case-title">
-              <header><h3 id="xmind-case-title">功能用例预览</h3><span>{detail.cases.length} 条</span></header>
-              <div className="xmind-case-preview__table-wrap">
-                <table><thead><tr><th>用例目录</th><th>用例名称</th><th>用例等级</th><th>用例步骤</th><th>预期结果</th></tr></thead>
-                  <tbody>{detail.cases.map((item, index) => <tr key={`${item.用例名称}-${index}`}><td>{item.用例目录}</td><td>{item.用例名称}</td><td>{item.用例等级}</td><td>{item.用例步骤}</td><td>{item.预期结果}</td></tr>)}</tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
-          {detail.status === 'COMPLETED' ? <div className="xmind-complete" aria-live="polite"><CheckCircleFilled className="xmind-complete__icon" aria-hidden="true" /><h2>已合并到功能用例</h2><p>{detail.fileName} 已按模块映射写入用例库。</p></div> : null}
-        </div>
-      ) : null}
     </section>
   );
 }

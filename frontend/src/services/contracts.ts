@@ -359,6 +359,7 @@ export interface UiExecutionResult {
 export interface ApiExecutionInput {
   projectId: number;
   suiteIds: number[];
+  environment: string;
   envId: number;
   globalHeaders: Record<string, string>;
   iterations: number;

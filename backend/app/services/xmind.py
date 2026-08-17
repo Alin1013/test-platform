@@ -29,10 +29,13 @@ MAX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
 
 
 class XMindParseError(ValueError):
+    """XMind 文件无法解析时抛出。"""
+
     pass
 
 
 def _json_node(topic: dict[str, Any]) -> dict:
+    """递归转换 JSON 版 XMind 节点（新版格式）。"""
     children_value = topic.get("children", {})
     if isinstance(children_value, dict):
         children = children_value.get("attached", [])
@@ -47,6 +50,7 @@ def _json_node(topic: dict[str, Any]) -> dict:
 
 
 def _xml_node(topic: ET.Element) -> dict:
+    """递归转换 XML 版 XMind 节点（XMind 8 格式）。"""
     title_element = topic.find("{*}title")
     title = title_element.text if title_element is not None and title_element.text else "未命名节点"
     child_topics = topic.findall("{*}children/{*}topics/{*}topic")
@@ -54,6 +58,7 @@ def _xml_node(topic: ET.Element) -> dict:
 
 
 def _parse_json(content: bytes) -> list[dict]:
+    """解析 content.json 并返回根节点列表。"""
     try:
         decoded = json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -72,6 +77,7 @@ def _parse_json(content: bytes) -> list[dict]:
 
 
 def _parse_xml(content: bytes) -> list[dict]:
+    """解析 content.xml 并返回每个 sheet 的根节点。"""
     try:
         document = ET.fromstring(content)
     except ET.ParseError as error:
@@ -87,6 +93,7 @@ def _parse_xml(content: bytes) -> list[dict]:
 
 
 def parse_xmind(content: bytes) -> list[dict]:
+    """解包 XMind 文件，按内容格式选择 JSON/XML 解析入口。"""
     if len(content) > MAX_UPLOAD_BYTES:
         raise XMindParseError("XMind file exceeds the 10 MB limit")
     try:
@@ -106,6 +113,7 @@ def parse_xmind(content: bytes) -> list[dict]:
 
 
 def case_preview(tree: list[dict]) -> list[dict]:
+    """把节点树转换为功能用例预览：第一层为模块，叶子节点为用例。"""
     cases = []
 
     def add_leaves(node: dict, module_name: str, path: list[str]) -> None:
@@ -144,6 +152,7 @@ def save_upload(
     upload_dir: Path,
     module_mapping: dict[str, str] | None = None,
 ) -> dict:
+    """保存上传：解析、落盘并（可选）按模块映射写入正式用例。"""
     if session.get(User, uploader_id) is None:
         raise HTTPException(status_code=404, detail="Uploader not found")
     tree = parse_xmind(content)
@@ -404,6 +413,7 @@ def create_generation_task(
     uploader_id: int,
     upload_dir: Path,
 ) -> dict:
+    """创建异步生成任务：解析并落盘文件，任务进入 PENDING 队列。"""
     uploader = session.get(User, uploader_id)
     if uploader is None:
         raise HTTPException(status_code=404, detail="Uploader not found")
@@ -442,6 +452,7 @@ def list_generation_tasks(
     page_size: int,
     status: str | None = None,
 ) -> dict:
+    """分页查询生成任务列表，可按状态筛选。"""
     query = select(XMindRecord).options(selectinload(XMindRecord.uploader))
     if status:
         query = query.where(XMindRecord.status == status)
@@ -461,6 +472,7 @@ def list_generation_tasks(
 
 
 def get_generation_task(session: Session, task_id: int) -> dict:
+    """查询单个任务的完整详情（含树、预览用例与模块映射）。"""
     record = session.scalar(
         select(XMindRecord)
         .options(selectinload(XMindRecord.uploader))
@@ -472,6 +484,7 @@ def get_generation_task(session: Session, task_id: int) -> dict:
 
 
 def retry_generation_task(session: Session, task_id: int) -> dict:
+    """重置失败任务为 PENDING 以便重新入队执行。"""
     record = session.scalar(
         select(XMindRecord)
         .options(selectinload(XMindRecord.uploader))
@@ -493,11 +506,34 @@ def retry_generation_task(session: Session, task_id: int) -> dict:
     return _serialize_task_detail(record)
 
 
+def delete_generation_task(session: Session, task_id: int, upload_dir: Path) -> None:
+    """删除任务记录与对应上传文件；运行中的任务拒绝删除。"""
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    if record.status == "RUNNING":
+        raise HTTPException(status_code=409, detail="XMind task is running and cannot be deleted")
+
+    task_path = _task_upload_path(upload_dir, record)
+    try:
+        session.delete(record)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    task_path.unlink(missing_ok=True)
+
+
 def confirm_generated_task(
     session: Session,
     task_id: int,
     payload: XMindTaskConfirmRequest,
 ) -> dict:
+    """确认异步任务生成的预览：校验映射后批量写入正式用例。"""
     record = session.scalar(
         select(XMindRecord)
         .options(selectinload(XMindRecord.uploader))

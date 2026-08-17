@@ -1,3 +1,5 @@
+"""XMind AI 生成技能测试：LLM 契约、对齐规整与并发生成。"""
+
 import asyncio
 import io
 import json

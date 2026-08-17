@@ -1,3 +1,6 @@
+/**
+ * 接口自动化执行页：选择接口用例、配置全局头/循环/间隔，执行后展示请求明细分析。
+ */
 import {
   CloseCircleOutlined,
   DeleteOutlined,
@@ -25,12 +28,16 @@ import { usePlatformService } from '../../../services/PlatformServiceContext';
 import type {
   ApiExecutionReport,
   ApiExecutionResult,
+  ApiExecutionInput,
   ExecutionDetailStatus,
+  TestModule,
+  TestEnvironment,
   TestCaseRecord,
 } from '../../../services/contracts';
 import '../execution.css';
 
 interface HeaderOverride {
+  // 请求头覆盖项：id 用于列表编辑定位。
   id: number;
   key: string;
   value: string;
@@ -52,11 +59,14 @@ const resultStatusLabels: Record<ExecutionDetailStatus, string> = {
 };
 
 export function ApiTestExecutionPage() {
+  // 初次加载拉取接口用例与环境；执行中每 2 秒轮询报告。
   const service = usePlatformService();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [envId, setEnvId] = useState(3);
+  const [environments, setEnvironments] = useState<TestEnvironment[]>([]);
+  const [modules, setModules] = useState<TestModule[]>([]);
+  const [environment, setEnvironment] = useState<ApiExecutionInput['environment']>('');
   const [iterations, setIterations] = useState(1);
   const [rampUpTime, setRampUpTime] = useState(0);
   const [headers, setHeaders] = useState<HeaderOverride[]>([]);
@@ -65,11 +75,23 @@ export function ApiTestExecutionPage() {
   const [report, setReport] = useState<ApiExecutionReport | null>(null);
   const [selectedResult, setSelectedResult] = useState<ApiExecutionResult>();
   const [submitting, setSubmitting] = useState(false);
+  const [projectId] = useState(1);
 
   useEffect(() => {
     let active = true;
-    void service.listTestCases({ type: 'api' }).then((rows) => {
-      if (active) setCases(rows);
+    void Promise.all([
+      service.listTestCases({ type: 'api' }),
+      service.getSystemSettings(),
+      service.listTestModules(),
+    ]).then(([rows, settings, testModules]) => {
+      if (!active) return;
+      setCases(rows);
+      setEnvironments(settings.execution.environments);
+      setModules(testModules);
+      const defaultEnvironment = settings.execution.environments.find(
+        (item) => item.id === settings.execution.defaultEnvironmentId,
+      );
+      setEnvironment(defaultEnvironment?.id ?? settings.execution.environments[0]?.id ?? '');
     });
     return () => {
       active = false;
@@ -77,6 +99,7 @@ export function ApiTestExecutionPage() {
   }, [service]);
 
   useEffect(() => {
+    // 仅 RUNNING 状态轮询报告，终态后停止请求。
     if (!executionId || report?.status !== 'RUNNING') return;
     const timer = window.setInterval(() => {
       void service.getApiExecutionReport(executionId).then(setReport).catch(() => undefined);
@@ -85,24 +108,32 @@ export function ApiTestExecutionPage() {
   }, [executionId, report?.status, service]);
 
   const globalHeaders = useMemo(
+    // 过滤空 key 的覆盖头，转为对象传给后端。
     () => Object.fromEntries(headers.filter((item) => item.key.trim()).map((item) => [item.key.trim(), item.value])),
     [headers],
   );
 
   const run = async () => {
+    // 校验选中项与项目后启动执行，并立即拉取一次初始结果。
     if (!selectedIds.length) {
-      message.warning('请至少选择一个接口自动化用例');
+      message.warning('请至少选择一个 接口自动化用例');
+      return;
+    }
+    const projectId = modules[0]?.projectId;
+    if (!projectId) {
+      message.error('未找到当前项目');
       return;
     }
     setSubmitting(true);
     try {
       const started = await service.startApiExecution({
-        projectId: 1,
+        projectId,
         suiteIds: selectedIds,
-        envId,
+        environment,
         globalHeaders,
         iterations,
         rampUpTime,
+        envId: 0
       });
       setExecutionId(started.executionId);
       const nextReport = await service.getApiExecutionReport(started.executionId);
@@ -122,6 +153,7 @@ export function ApiTestExecutionPage() {
   };
 
   const exportReport = () => {
+    // 报告以 JSON 文件下载。
     if (!report) return;
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -179,17 +211,12 @@ export function ApiTestExecutionPage() {
         </div>
         <div className="execution-config-grid execution-config-grid--api">
           <label>
-            <span>环境配置</span>
+            <span>运行环境</span>
             <Select
-              aria-label="环境配置"
-              value={envId}
-              options={[
-                { value: 1, label: 'Dev' },
-                { value: 2, label: 'Test' },
-                { value: 3, label: 'Staging' },
-                { value: 4, label: 'Prod' },
-              ]}
-              onChange={setEnvId}
+              aria-label="运行环境"
+              value={environment}
+              options={environments.map((item) => ({ value: item.id, label: item.name }))}
+              onChange={setEnvironment}
             />
           </label>
           <label>

@@ -205,6 +205,7 @@ class LLMConfig:
 
 
 def generation_groups(tree: list[dict[str, Any]]) -> list[GenerationGroup]:
+    """把根节点/一级子节点拆分为独立生成分组，目录名含完整路径。"""
     groups: list[GenerationGroup] = []
     for root in tree:
         root_title = str(root.get("title") or "未命名节点")
@@ -224,10 +225,12 @@ def generation_groups(tree: list[dict[str, Any]]) -> list[GenerationGroup]:
 
 
 def _as_non_empty(value: str, fallback: str) -> str:
+    """空白值回退为默认文案，保证用例字段非空。"""
     return value.strip() or fallback
 
 
 def _priority(value: str) -> str:
+    """把中文/英文优先级别名归一化为 P0–P3，未知值默认 P2。"""
     aliases = {
         "最高": "P0",
         "高": "P0",
@@ -247,6 +250,7 @@ def align_generated_cases(
     directory: str,
     creator: str,
 ) -> list[dict[str, str]]:
+    """校验模型输出并规整为标准用例结构（目录/类型/状态由平台决定）。"""
     if isinstance(raw_cases, dict):
         raw_cases = raw_cases.get("cases")
     if not isinstance(raw_cases, list) or not raw_cases:
@@ -274,6 +278,7 @@ def align_generated_cases(
 
 
 def _prompt_for_group(group: GenerationGroup) -> str:
+    """构造单个分组的用户提示：目录路径 + XMind 子树 JSON。"""
     return json.dumps(
         {
             "用例目录": group.directory,
@@ -306,6 +311,7 @@ class XMindToTestCaseSkill:
         config: LLMConfig,
         creator: str,
     ) -> list[dict[str, str]]:
+        """并行生成所有分组；任一分组失败则整体失败，超过条数上限报错。"""
         if not config.api_key.strip():
             raise XMindLLMUnavailable("请先在系统设置中配置 LLM API Key")
         groups = generation_groups(tree)
@@ -341,6 +347,7 @@ class XMindToTestCaseSkill:
         config: LLMConfig,
         creator: str,
     ) -> list[dict[str, str]]:
+        """生成单个分组：带重试的模型调用与结果规整。"""
         last_error: Exception | None = None
         for attempt in range(self.max_attempts):
             try:
