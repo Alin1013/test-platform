@@ -27,6 +27,7 @@ htmlcov/
 /frontend/test-results
 /frontend/output
 /output/
+/node_modules/
 *.tsbuildinfo
 .eslintcache
 
