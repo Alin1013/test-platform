@@ -1,4 +1,6 @@
 /.superpowers
+# AI 助手本地工作目录：不同步远端仓库
+/.workbuddy-ai/
 # 文档目录：本地文档不入库
 /docs/
 /.playwright-cli
