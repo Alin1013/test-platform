@@ -133,7 +133,6 @@ class PlaywrightUiRunner:
                         on_step(step_results[-1], log)
             except Exception as error:
                 error_message = str(error)
-                page.screenshot(path=str(screenshot_path), full_page=True)
                 step_results.append(
                     {
                         "stepIndex": len(step_results) + 1,
@@ -146,6 +145,12 @@ class PlaywrightUiRunner:
                 if callable(on_step):
                     on_step(step_results[-1], error_message)
             finally:
+                # 成功与失败都保留一张整页截图：截图是 UI 自动化产物的一部分，
+                # 仅失败截图会导致通过用例缺少可回看的画面，不符合“保留截图”的要求。
+                try:
+                    page.screenshot(path=str(screenshot_path), full_page=True)
+                except Exception:
+                    logger.exception("Failed to capture final screenshot")
                 if trace_started:
                     try:
                         context.tracing.stop(path=str(trace_path))
