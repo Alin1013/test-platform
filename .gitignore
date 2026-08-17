@@ -1,5 +1,6 @@
 /.superpowers
-/docs
+# 文档目录：本地文档不入库
+/docs/
 /.playwright-cli
 /.worktrees/
 /.venv/
