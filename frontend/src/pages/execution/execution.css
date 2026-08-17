@@ -57,6 +57,39 @@
   width: 100%;
 }
 
+/* 用例执行详情 Drawer 顶部的基本信息区：模块 / 浏览器 / 耗时 / 错误，呈一行紧凑展示。 */
+.execution-case-info {
+  display: grid;
+  gap: 6px;
+  padding: 4px 4px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.execution-case-info__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  color: var(--text);
+}
+
+.execution-case-info__row > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.execution-case-info__label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.execution-case-info__error {
+  color: #c0392b;
+  width: 100%;
+}
+
 .execution-config-grid {
   display: grid;
   align-items: end;

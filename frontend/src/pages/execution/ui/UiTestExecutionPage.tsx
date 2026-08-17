@@ -321,7 +321,8 @@ export function UiTestExecutionPage() {
           icon={<EyeOutlined />}
           aria-label={`查看 ${record.caseName} 详情`}
           title="查看详情"
-          disabled={!execution}
+          // 按截图反馈：未执行用例也要能点击预览（之前 disabled 把这条路径堵住了），
+          // Drawer 内的 Tabs 已经能正确处理 PENDING 状态（空步骤 / 空媒体 / 等待日志）。
           onClick={() => setDetail(record)}
         />
       ),
@@ -466,52 +467,103 @@ export function UiTestExecutionPage() {
       </section>
 
       <Drawer
-        title={<span id="ui-execution-detail-title">用例执行详情</span>}
+        title={
+          // 标题直接带上用例名 + 编号，避免在右侧 Drawer 中还要再扫一眼列表才知道打开的是哪条。
+          <span id="ui-execution-detail-title">
+            {detail ? `用例执行详情 · ${detail.caseName}（${detail.code}）` : '用例执行详情'}
+          </span>
+        }
         aria-labelledby="ui-execution-detail-title"
         size={620}
         open={Boolean(detail)}
         onClose={() => setDetail(undefined)}
       >
         {detail ? (
-          <Tabs
-            items={[
-              {
-                key: 'steps',
-                label: '步骤明细',
-                children: detail.steps?.length ? (
-                  <ol className="execution-step-list">
-                    {detail.steps.map((step, index) => <li key={index}>{typeof step === 'string' ? step : JSON.stringify(step)}</li>)}
-                  </ol>
-                ) : <Empty description="暂无步骤数据" />,
-              },
-              {
-                key: 'media',
-                label: '失败媒体',
-                children: detail.screenshotUrl || detail.videoUrl ? (
-                  <div className="execution-media">
-                    {detail.screenshotUrl ? <img src={detail.screenshotUrl} alt={`${detail.caseName} 失败截图`} /> : null}
-                    {detail.videoUrl ? <video src={detail.videoUrl} controls aria-label={`${detail.caseName} 执行录屏`} /> : null}
-                    {traceViewerUrl ? (
+          <>
+            {/* 基本信息区：未执行 / 已执行都能看到，状态 Tag 让用户一眼区分。 */}
+            <div className="execution-case-info">
+              <div className="execution-case-info__row">
+                <span>
+                  <span className="execution-case-info__label">模块</span>
+                  <span>{modulesById.get(detail.moduleId)?.name ?? detail.moduleId}</span>
+                </span>
+                <span>
+                  <span className="execution-case-info__label">浏览器</span>
+                  <span>{detail.browser[0].toUpperCase() + detail.browser.slice(1)}</span>
+                </span>
+                <span>
+                  <span className="execution-case-info__label">耗时</span>
+                  <span>{detail.durationMs ? `${(detail.durationMs / 1000).toFixed(1)}s` : '-'}</span>
+                </span>
+                {detail.errorMessage ? (
+                  <span className="execution-case-info__error">
+                    <span className="execution-case-info__label">错误</span>
+                    <span>{detail.errorMessage}</span>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <Tabs
+              items={[
+                {
+                  key: 'steps',
+                  label: '步骤明细',
+                  children: detail.steps?.length ? (
+                    <ol className="execution-step-list">
+                      {detail.steps.map((step, index) => <li key={index}>{typeof step === 'string' ? step : JSON.stringify(step)}</li>)}
+                    </ol>
+                  ) : (
+                    <Empty
+                      description={
+                        detail.status === 'PENDING'
+                          ? '用例尚未执行，请先勾选并点击『立即执行』'
+                          : '暂无步骤数据'
+                      }
+                    />
+                  ),
+                },
+                {
+                  key: 'media',
+                  label: '失败媒体',
+                  children: detail.screenshotUrl || detail.videoUrl ? (
+                    <div className="execution-media">
+                      {detail.screenshotUrl ? <img src={detail.screenshotUrl} alt={`${detail.caseName} 失败截图`} /> : null}
+                      {detail.videoUrl ? <video src={detail.videoUrl} controls aria-label={`${detail.caseName} 执行录屏`} /> : null}
+                      {traceViewerUrl ? (
+                        <a href={traceViewerUrl} target="_blank" rel="noreferrer">
+                          查看 Trace Viewer
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : traceViewerUrl ? (
+                    <div className="execution-media">
                       <a href={traceViewerUrl} target="_blank" rel="noreferrer">
                         查看 Trace Viewer
                       </a>
-                    ) : null}
-                  </div>
-                ) : traceViewerUrl ? (
-                  <div className="execution-media">
-                    <a href={traceViewerUrl} target="_blank" rel="noreferrer">
-                      查看 Trace Viewer
-                    </a>
-                  </div>
-                ) : <Empty description="暂无失败截图、录屏或追踪文件" />,
-              },
-              {
-                key: 'logs',
-                label: '终端日志',
-                children: <pre className="execution-log">{detail.logs?.join('\n') || '等待执行日志'}</pre>,
-              },
-            ]}
-          />
+                    </div>
+                  ) : (
+                    <Empty
+                      description={
+                        detail.status === 'PENDING'
+                          ? '用例尚未执行，暂无失败截图 / 录屏 / 追踪文件'
+                          : '暂无失败截图、录屏或追踪文件'
+                      }
+                    />
+                  ),
+                },
+                {
+                  key: 'logs',
+                  label: '终端日志',
+                  children: (
+                    <pre className="execution-log">
+                      {detail.logs?.join('\n')
+                        || (detail.status === 'PENDING' ? '用例尚未执行，请先勾选并点击『立即执行』' : '等待执行日志')}
+                    </pre>
+                  ),
+                },
+              ]}
+            />
+          </>
         ) : null}
       </Drawer>
     </section>
