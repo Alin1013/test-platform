@@ -360,6 +360,16 @@ def _task_upload_path(upload_dir: Path, record: XMindRecord) -> Path:
     return upload_dir / Path(record.file_url).name
 
 
+def _root_cause_text(error: Exception) -> str:
+    """拼接最底层失败原因，避免任务详情只剩通用提示。"""
+    cause = error.__cause__
+    if cause is None:
+        return str(error)
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    return f"{error}：{cause}"
+
+
 def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
     return {
         "id": record.id,
@@ -630,6 +640,6 @@ async def generate_task_preview(
             if record is not None and record.status == "RUNNING":
                 record.status = "FAILED"
                 record.locked_at = None
-                record.last_error = str(error)
+                record.last_error = _root_cause_text(error)
                 session.commit()
         raise

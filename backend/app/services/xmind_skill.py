@@ -322,8 +322,9 @@ class XMindToTestCaseSkill:
             *(generate_group(group) for group in groups),
             return_exceptions=True,
         )
-        if any(isinstance(result, Exception) for result in results):
-            raise XMindGenerationError("XMind 用例生成失败，请稍后重试")
+        failed_results = [result for result in results if isinstance(result, Exception)]
+        if failed_results:
+            raise XMindGenerationError("XMind 用例生成失败，请稍后重试") from failed_results[0]
         cases: list[dict[str, str]] = []
         for result in results:
             cases.extend(result)  # type: ignore[arg-type]

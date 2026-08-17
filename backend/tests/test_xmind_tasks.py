@@ -213,7 +213,7 @@ def test_failed_xmind_task_can_be_retried(client: TestClient) -> None:
 
     failed = client.get(f"/api/v1/xmind/tasks/{task_id}")
     assert failed.json()["status"] == "FAILED"
-    assert failed.json()["last_error"] == "XMind 用例生成失败，请稍后重试"
+    assert failed.json()["last_error"] == "XMind 用例生成失败，请稍后重试：LLM 服务返回错误"
 
     retried = client.post(f"/api/v1/xmind/tasks/{task_id}/retry")
     assert retried.status_code == 200

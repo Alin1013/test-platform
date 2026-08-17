@@ -13,6 +13,7 @@ from backend.app.services.xmind_skill import (
     LLMConfig,
     MAX_GENERATED_CASES,
     XMindGenerationError,
+    XMindSkillError,
     XMindToTestCaseSkill,
 )
 
@@ -142,6 +143,28 @@ def test_xmind_skill_retries_unexpected_client_errors_and_caps_attempts() -> Non
         )
 
     assert calls == 3
+
+
+def test_xmind_skill_preserves_root_cause_on_generation_failure() -> None:
+    class FailingClient:
+        async def complete(self, **_: str) -> str:
+            raise XMindSkillError("LLM 服务返回错误")
+
+    skill = XMindToTestCaseSkill(FailingClient(), retry_delay_seconds=0)
+
+    with pytest.raises(XMindGenerationError) as excinfo:
+        asyncio.run(
+            skill.generate(
+                [{"title": "登录", "children": []}],
+                config=LLMConfig(api_key="key", base_url="https://llm.example", model="model"),
+                creator="测试员",
+            )
+        )
+
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, XMindGenerationError)
+    assert isinstance(cause.__cause__, XMindSkillError)
+    assert str(cause.__cause__) == "LLM 服务返回错误"
 
 
 def test_xmind_skill_bounds_group_concurrency() -> None:
