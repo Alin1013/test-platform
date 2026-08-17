@@ -429,6 +429,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async deleteUser(id: string) {
       const existing = users.find((user) => user.id === id);
       if (!existing) throw new Error('用户不存在');
+      if (existing.enabled) throw new Error('请先停用账号');
       users = users.filter((user) => user.id !== id);
       await respond(undefined);
     },

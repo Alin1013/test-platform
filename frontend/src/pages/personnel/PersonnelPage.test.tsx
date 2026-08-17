@@ -66,13 +66,35 @@ it('按关键字筛选用户列表', async () => {
   });
 });
 
-it('点击删除后需二次确认，确认后用户从列表中移除', async () => {
+it('已启用用户点击删除时提示先停用，不弹出确认框', async () => {
   const user = userEvent.setup();
   renderApp('/personnel');
 
   const userList = await screen.findByRole('region', { name: '用户列表' });
   const jiangshanRow = (await within(userList).findByText('江珊')).closest('tr');
   expect(jiangshanRow).not.toBeNull();
+
+  await user.click(
+    within(jiangshanRow as HTMLElement).getByRole('button', { name: '删除用户江珊' }),
+  );
+
+  expect(await screen.findByText('请先停用账号')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(within(userList).getByText('江珊')).toBeInTheDocument();
+});
+
+it('停用用户后点击删除需二次确认，确认后用户从列表中移除', async () => {
+  const user = userEvent.setup();
+  renderApp('/personnel');
+
+  const userList = await screen.findByRole('region', { name: '用户列表' });
+  const jiangshanRow = (await within(userList).findByText('江珊')).closest('tr');
+  expect(jiangshanRow).not.toBeNull();
+
+  await user.click(
+    within(jiangshanRow as HTMLElement).getByRole('switch', { name: '江珊的启用状态' }),
+  );
+  expect(await screen.findByText('用户已停用')).toBeInTheDocument();
 
   await user.click(
     within(jiangshanRow as HTMLElement).getByRole('button', { name: '删除用户江珊' }),

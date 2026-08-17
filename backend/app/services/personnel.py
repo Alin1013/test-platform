@@ -97,6 +97,8 @@ def delete_user(session: Session, user_id: int) -> None:
     user = session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.status == "enabled":
+        raise HTTPException(status_code=409, detail="请先停用账号")
     try:
         session.delete(user)
         session.commit()

@@ -184,6 +184,10 @@ export function PersonnelPage() {
 
   const confirmDeleteUser = useCallback(
     (user: UserRecord) => {
+      if (user.enabled) {
+        void message.warning('请先停用账号');
+        return;
+      }
       modal.confirm({
         title: `确认删除用户「${user.name}」？`,
         content: '删除后该用户账号将无法恢复。',
@@ -193,7 +197,7 @@ export function PersonnelPage() {
         onOk: () => deleteUser(user),
       });
     },
-    [deleteUser, modal],
+    [deleteUser, message, modal],
   );
 
   const columns = useMemo<ColumnsType<UserRecord>>(

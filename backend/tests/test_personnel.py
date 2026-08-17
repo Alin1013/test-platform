@@ -65,7 +65,7 @@ def test_role_permissions_can_be_updated(client: TestClient) -> None:
     assert next(role for role in refreshed if role["id"] == engineer["id"])["permissions"] == updated_permissions
 
 
-def test_user_can_be_deleted(client: TestClient) -> None:
+def test_enabled_user_cannot_be_deleted(client: TestClient) -> None:
     created = client.post(
         "/api/v1/users",
         json={
@@ -78,6 +78,31 @@ def test_user_can_be_deleted(client: TestClient) -> None:
     )
     assert created.status_code == 201
     user_id = created.json()["id"]
+
+    deleted = client.delete(f"/api/v1/users/{user_id}")
+
+    assert deleted.status_code == 409
+    assert deleted.json()["detail"] == "请先停用账号"
+    users = client.get("/api/v1/users", params={"page_size": 100}).json()["items"]
+    assert any(user["id"] == user_id for user in users)
+
+
+def test_disabled_user_can_be_deleted(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/users",
+        json={
+            "name": "待删除用户",
+            "email": "delete-me@example.com",
+            "department": "质量保障部",
+            "role": "测试工程师",
+            "password": "correct-horse-battery-staple",
+        },
+    ).json()
+    user_id = created["id"]
+    disabled = client.patch(
+        f"/api/v1/users/{user_id}/status", json={"status": "disabled"}
+    )
+    assert disabled.status_code == 200
 
     deleted = client.delete(f"/api/v1/users/{user_id}")
 
@@ -110,6 +135,10 @@ def test_user_with_related_records_cannot_be_deleted(client: TestClient) -> None
         },
     )
     assert case.status_code == 201
+    disabled = client.patch(
+        f"/api/v1/users/{user['id']}/status", json={"status": "disabled"}
+    )
+    assert disabled.status_code == 200
 
     deleted = client.delete(f"/api/v1/users/{user['id']}")
 
