@@ -474,6 +474,7 @@ export interface PlatformService {
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
+  deleteUser(id: string): Promise<void>;
   listRoles(): Promise<PermissionRole[]>;
   updateRolePermissions(
     id: string,

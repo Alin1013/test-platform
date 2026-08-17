@@ -584,6 +584,10 @@ export function createApiPlatformService({
       });
     },
 
+    async deleteUser(id: string) {
+      await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+
     async listRoles() {
       const roles = await request<ApiRole[]>('/roles');
       return roles.map(mapRole);

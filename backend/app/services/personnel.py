@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Role, User
@@ -90,6 +91,20 @@ def set_user_status(session: Session, user_id: int, status: str) -> dict:
     user.status = status
     session.commit()
     return _serialize_user(user)
+
+
+def delete_user(session: Session, user_id: int) -> None:
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        session.delete(user)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409, detail="该用户存在关联数据（用例、执行记录或 XMind 记录），无法删除"
+        )
 
 
 def list_roles(session: Session) -> list[dict]:

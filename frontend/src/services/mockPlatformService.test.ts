@@ -254,6 +254,15 @@ it('新增用户并切换启用状态', async () => {
   expect((await service.listUsers()).find((item) => item.id === user.id)?.enabled).toBe(false);
 });
 
+it('删除用户后列表不再包含该用户，重复删除报错', async () => {
+  const service = createMockPlatformService({ delay: 0 });
+
+  await service.deleteUser('USR-1001');
+
+  expect((await service.listUsers()).find((item) => item.id === 'USR-1001')).toBeUndefined();
+  await expect(service.deleteUser('USR-1001')).rejects.toThrow('用户不存在');
+});
+
 it('返回角色与权限列表', async () => {
   const service = createMockPlatformService({ delay: 0 });
 

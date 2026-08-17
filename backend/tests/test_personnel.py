@@ -63,3 +63,54 @@ def test_role_permissions_can_be_updated(client: TestClient) -> None:
     assert updated.json()["permissions"]["personnelManage"] is True
     refreshed = client.get("/api/v1/roles").json()
     assert next(role for role in refreshed if role["id"] == engineer["id"])["permissions"] == updated_permissions
+
+
+def test_user_can_be_deleted(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/users",
+        json={
+            "name": "待删除用户",
+            "email": "delete-me@example.com",
+            "department": "质量保障部",
+            "role": "测试工程师",
+            "password": "correct-horse-battery-staple",
+        },
+    )
+    assert created.status_code == 201
+    user_id = created.json()["id"]
+
+    deleted = client.delete(f"/api/v1/users/{user_id}")
+
+    assert deleted.status_code == 204
+    users = client.get("/api/v1/users", params={"page_size": 100}).json()["items"]
+    assert all(user["id"] != user_id for user in users)
+    assert client.delete(f"/api/v1/users/{user_id}").status_code == 404
+
+
+def test_user_with_related_records_cannot_be_deleted(client: TestClient) -> None:
+    user = client.post(
+        "/api/v1/users",
+        json={
+            "name": "有关联记录的用户",
+            "email": "linked-records@example.com",
+            "department": "研发部",
+            "role": "开发人员",
+            "password": "correct-horse-battery-staple",
+        },
+    ).json()
+    module = client.post("/api/v1/modules", json={"name": "临时模块", "project_id": 1}).json()
+    case = client.post(
+        "/api/v1/test-cases",
+        json={
+            "title": "关联用例",
+            "type": "functional",
+            "module_id": module["id"],
+            "priority": "P1",
+            "author_id": user["id"],
+        },
+    )
+    assert case.status_code == 201
+
+    deleted = client.delete(f"/api/v1/users/{user['id']}")
+
+    assert deleted.status_code == 409

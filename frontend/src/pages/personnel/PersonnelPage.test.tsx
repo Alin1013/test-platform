@@ -66,6 +66,27 @@ it('按关键字筛选用户列表', async () => {
   });
 });
 
+it('点击删除后需二次确认，确认后用户从列表中移除', async () => {
+  const user = userEvent.setup();
+  renderApp('/personnel');
+
+  const userList = await screen.findByRole('region', { name: '用户列表' });
+  const jiangshanRow = (await within(userList).findByText('江珊')).closest('tr');
+  expect(jiangshanRow).not.toBeNull();
+
+  await user.click(
+    within(jiangshanRow as HTMLElement).getByRole('button', { name: '删除用户江珊' }),
+  );
+
+  const confirmDialog = await screen.findByRole('dialog', { name: /确认删除用户/ });
+  await user.click(within(confirmDialog).getByRole('button', { name: /删\s*除/ }));
+
+  expect(await screen.findByText('用户已删除')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(within(userList).queryByText('江珊')).not.toBeInTheDocument();
+  });
+});
+
 it('添加用户时校验邮箱格式和初始密码长度', async () => {
   const user = userEvent.setup();
   renderApp('/personnel');

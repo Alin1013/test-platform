@@ -1,5 +1,5 @@
-import { PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Input, Select, Skeleton, Switch, Table, Tabs, Tag } from 'antd';
+import { DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons';
+import { App, Button, Empty, Input, Select, Skeleton, Space, Switch, Table, Tabs, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
@@ -28,7 +28,7 @@ const roleColors: Record<UserRole, string> = {
 
 export function PersonnelPage() {
   const service = usePlatformService();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState<UserRecord[] | null>(null);
   const [keyword, setKeyword] = useState('');
@@ -169,6 +169,33 @@ export function PersonnelPage() {
     [message, service],
   );
 
+  const deleteUser = useCallback(
+    async (user: UserRecord) => {
+      try {
+        await service.deleteUser(user.id);
+        setUsers((current) => current?.filter((item) => item.id !== user.id) ?? null);
+        void message.success('用户已删除');
+      } catch (error) {
+        void message.error(error instanceof Error ? error.message : '删除用户失败');
+      }
+    },
+    [message, service],
+  );
+
+  const confirmDeleteUser = useCallback(
+    (user: UserRecord) => {
+      modal.confirm({
+        title: `确认删除用户「${user.name}」？`,
+        content: '删除后该用户账号将无法恢复。',
+        okText: '删除',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: () => deleteUser(user),
+      });
+    },
+    [deleteUser, modal],
+  );
+
   const columns = useMemo<ColumnsType<UserRecord>>(
     () => [
       {
@@ -204,20 +231,32 @@ export function PersonnelPage() {
       {
         title: '操作',
         key: 'actions',
-        width: 104,
+        width: 150,
         render: (_, user) => (
-          <Switch
-            size="small"
-            aria-label={`${user.name}的启用状态`}
-            checked={user.enabled}
-            loading={updatingUserId === user.id}
-            disabled={updatingUserId !== null}
-            onChange={(enabled) => void setUserEnabled(user, enabled)}
-          />
+          <Space size={8}>
+            <Switch
+              size="small"
+              aria-label={`${user.name}的启用状态`}
+              checked={user.enabled}
+              loading={updatingUserId === user.id}
+              disabled={updatingUserId !== null}
+              onChange={(enabled) => void setUserEnabled(user, enabled)}
+            />
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              aria-label={`删除用户${user.name}`}
+              onClick={() => confirmDeleteUser(user)}
+            >
+              删除
+            </Button>
+          </Space>
         ),
       },
     ],
-    [setUserEnabled, updatingUserId],
+    [confirmDeleteUser, setUserEnabled, updatingUserId],
   );
 
   const addUser = async (input: CreateUserInput) => {
@@ -308,7 +347,7 @@ export function PersonnelPage() {
                   dataSource={filteredUsers}
                   size="small"
                   pagination={false}
-                  scroll={{ x: 824 }}
+                  scroll={{ x: 880 }}
                 />
               ) : (
                 <Empty description="没有符合条件的用户" />

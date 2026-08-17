@@ -437,6 +437,17 @@ test('deletes a test case through the backend endpoint', async () => {
   await expect(service.deleteTestCase(8)).resolves.toBeUndefined();
 });
 
+test('deletes a user through the backend endpoint', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe('/api/v1/users/USR-1001');
+    expect(init?.method).toBe('DELETE');
+    return new Response(null, { status: 204 });
+  });
+  const service = createApiPlatformService({ baseUrl: '/api/v1', fetcher });
+
+  await expect(service.deleteUser('USR-1001')).resolves.toBeUndefined();
+});
+
 test('uses the dedicated UI execution endpoints and request shape', async () => {
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);

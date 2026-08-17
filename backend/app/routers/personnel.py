@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
@@ -43,6 +43,14 @@ def set_user_status(
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
     return personnel.set_user_status(session, user_id, payload.status)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int, session: Annotated[Session, Depends(get_session)]
+) -> Response:
+    personnel.delete_user(session, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/roles")

@@ -426,6 +426,13 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       await respond(undefined);
     },
 
+    async deleteUser(id: string) {
+      const existing = users.find((user) => user.id === id);
+      if (!existing) throw new Error('用户不存在');
+      users = users.filter((user) => user.id !== id);
+      await respond(undefined);
+    },
+
     async listRoles() {
       return respond(roles);
     },
