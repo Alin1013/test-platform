@@ -1,3 +1,5 @@
+"""执行模块测试：UI/API 执行启动、进度查询、取消与并发 worker。"""
+
 from threading import Barrier, Event, Lock, Thread
 from time import sleep
 

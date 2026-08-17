@@ -1,3 +1,5 @@
+"""仪表盘接口测试：用例统计与最近用例列表。"""
+
 from fastapi.testclient import TestClient
 
 

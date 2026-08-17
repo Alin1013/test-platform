@@ -1,3 +1,5 @@
+"""XMind 解析测试：JSON/XML 格式解析、预览生成与上传保存。"""
+
 import io
 import json
 import zipfile

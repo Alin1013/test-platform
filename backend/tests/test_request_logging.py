@@ -1,3 +1,5 @@
+"""请求日志测试：结构记录、脱敏与二进制摘要。"""
+
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager

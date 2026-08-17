@@ -1,3 +1,5 @@
+"""认证接口测试：登录、注册、当前用户、资料更新与登出。"""
+
 from fastapi.testclient import TestClient
 
 

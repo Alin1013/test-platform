@@ -1,3 +1,5 @@
+"""数据库层测试：迁移可执行、表注释与约束正确。"""
+
 from io import StringIO
 from pathlib import Path
 

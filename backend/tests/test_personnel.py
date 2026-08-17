@@ -1,3 +1,5 @@
+"""人员管理接口测试：用户筛选、创建、启停、删除与角色权限。"""
+
 from fastapi.testclient import TestClient
 
 
