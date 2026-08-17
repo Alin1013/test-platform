@@ -35,8 +35,10 @@ export default defineConfig({
     browserName: 'chromium',
     locale: 'zh-CN',
     launchOptions: chromiumExecutable ? { executablePath: chromiumExecutable } : undefined,
-    screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
+    // 始终保留截图与 Trace：UI 自动化产物需在成功与失败两种情况下都可回看，
+    // 仅失败时保留会导致通过用例丢失截图与 Trace，不符合“保留 trace 与截图”的要求。
+    screenshot: 'on',
+    trace: 'on',
   },
   projects: [
     {
