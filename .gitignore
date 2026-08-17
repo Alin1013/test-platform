@@ -3,6 +3,7 @@
 /.playwright-cli
 /.worktrees/
 /.venv/
+# 临时目录：本地工作产物不入库，避免打包资源过载
 /.tmp/
 
 # Python 缓存与本地运行数据
