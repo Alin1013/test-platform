@@ -553,6 +553,7 @@ export function TestCasesPage() {
           selectedModule={selectedModule}
           width={modulePanelWidth}
           hidden={isModulePanelCollapsed}
+          caseType={type}
           refreshToken={moduleRefreshToken}
           onSelect={setSelectedModule}
           onWidthChange={setModulePanelWidth}

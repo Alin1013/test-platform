@@ -12,7 +12,7 @@ import { App, Button, Dropdown, Input, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
-import type { TestModule } from '../../../services/contracts';
+import type { TestCaseType, TestModule } from '../../../services/contracts';
 import { visibleModuleTree } from '../moduleOptions';
 
 interface ModuleNode {
@@ -25,6 +25,7 @@ interface ModuleTreePanelProps {
   selectedModule: string;
   width: number;
   hidden: boolean;
+  caseType: TestCaseType;
   refreshToken?: number;
   onSelect: (moduleId: string) => void;
   onWidthChange: (width: number) => void;
@@ -99,6 +100,7 @@ export function ModuleTreePanel({
   selectedModule,
   width,
   hidden,
+  caseType,
   refreshToken = 0,
   onSelect,
   onWidthChange,
@@ -115,20 +117,20 @@ export function ModuleTreePanel({
   const resizeOrigin = useRef<{ pointerX: number; width: number } | null>(null);
 
   const reloadModules = async () => {
-    // 从服务端重新拉取模块树（增删改成功后调用）。
-    const modules = await service.listTestModules(1);
+    // 从服务端重新拉取当前用例类型的模块树（增删改成功后调用）。
+    const modules = await service.listTestModules(1, caseType);
     setModuleTree(toModuleNodes(modules));
   };
 
   useEffect(() => {
     let active = true;
-    void service.listTestModules(1).then((modules) => {
+    void service.listTestModules(1, caseType).then((modules) => {
       if (active) setModuleTree(toModuleNodes(modules));
     });
     return () => {
       active = false;
     };
-  }, [refreshToken, service]);
+  }, [caseType, refreshToken, service]);
 
   useEffect(() => {
     // 监听全局指针事件实现拖拽调宽；卸载时清理监听。
@@ -199,7 +201,7 @@ export function ModuleTreePanel({
     }
     try {
       if (currentDialog.type === 'addRoot') {
-        await service.createTestModule({ name: label, projectId: 1 });
+        await service.createTestModule({ name: label, projectId: 1, moduleType: caseType });
       } else if (currentDialog.type === 'rename') {
         await service.updateTestModule(currentDialog.node.id, { name: label });
       } else {
@@ -207,6 +209,7 @@ export function ModuleTreePanel({
           name: label,
           parentId: currentDialog.node.id,
           projectId: 1,
+          moduleType: caseType,
         });
       }
       await reloadModules();
