@@ -431,24 +431,6 @@ export function XMindPage() {
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>
 
-      {detail && detail.status === 'WAITING_REVIEW' ? (
-        // 待审核任务：跳转独立的审核测试点页面进行逐条确认与合并入库。
-        <Alert
-          type="warning"
-          showIcon
-          className="xmind-goto-review"
-          message="任务已生成，等待审核"
-          description={
-            <span>
-              该任务的用例需在「审核测试点」页面中逐条确认并合并入库。
-              <Button type="link" style={{ paddingLeft: 8 }} onClick={() => navigate(`/xmind-cases?taskId=${detail.id}`)}>
-                前往审核
-              </Button>
-            </span>
-          }
-        />
-      ) : null}
-
     </section>
   );
 }
