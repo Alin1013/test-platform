@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
+import { XMindReviewView } from './XMindReviewView';
 import type {
   TestModule,
   XMindGeneratedCase,
@@ -53,13 +54,13 @@ const statusColors: Record<XMindTaskStatus, string> = {
   CANCELLED: 'default',
 };
 
-interface FlatModule {
+export interface FlatModule {
   id: string;
   label: string;
   name: string;
 }
 
-function flattenModules(modules: TestModule[], parentPath = ''): FlatModule[] {
+export function flattenModules(modules: TestModule[], parentPath = ''): FlatModule[] {
   // 递归展开模块树，label 为完整路径，便于与 XMind 目录名匹配。
   return modules.flatMap((module) => {
     const path = parentPath ? `${parentPath} / ${module.name}` : module.name;
@@ -107,7 +108,7 @@ function normalizeModulePath(path: string): string {
     .join('/');
 }
 
-function findMappedModule(directory: string, modules: FlatModule[]): FlatModule | undefined {
+export function findMappedModule(directory: string, modules: FlatModule[]): FlatModule | undefined {
   // 先按完整路径精确匹配，再按叶子名称唯一匹配，避免误映射。
   const normalizedDirectory = normalizeModulePath(directory);
   const exactMatch = modules.find((module) => normalizeModulePath(module.label) === normalizedDirectory);
@@ -474,6 +475,11 @@ export function XMindPage() {
           ) : <Empty description="暂无生成任务" />
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>
+
+      {detail && detail.status === 'WAITING_REVIEW' ? (
+        // 待审核任务：渲染用例审核视图，逐条/批量确认与合并入库。
+        <XMindReviewView task={detail} modules={modules} onTaskChange={setDetail} />
+      ) : null}
 
     </section>
   );

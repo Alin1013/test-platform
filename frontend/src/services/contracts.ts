@@ -177,6 +177,9 @@ export interface XMindTreeNode {
 
 export type XMindTaskStatus = 'PENDING' | 'RUNNING' | 'WAITING_REVIEW' | 'FAILED' | 'COMPLETED' | 'CANCELLED';
 
+/** 用例审核状态：待审核 / 通过 / 待修改。合并时仅取 passed 写入正式用例库。 */
+export type XMindCaseReviewStatus = 'pending' | 'passed' | 'needs_modification';
+
 export interface XMindGeneratedCase {
   用例目录: string;
   用例名称: string;
@@ -189,6 +192,26 @@ export interface XMindGeneratedCase {
   归属迭代: string;
   用例步骤: string;
   预期结果: string;
+  /** 前端/后端生成的稳定标识，用于定位单条用例（增删改与勾选用）。 */
+  tempId?: string;
+  /** 审核状态，由审核界面驱动。 */
+  reviewStatus?: XMindCaseReviewStatus;
+  /** 审核评价（待修改或退回时填写）。 */
+  reviewNote?: string;
+}
+
+/** 单条用例更新请求：所有字段可选，仅提交需要修改的部分。 */
+export interface XMindCaseUpdateInput {
+  reviewStatus?: XMindCaseReviewStatus;
+  reviewNote?: string;
+  用例目录?: string;
+  用例名称?: string;
+  需求ID?: string;
+  前置条件?: string;
+  用例等级?: string;
+  归属迭代?: string;
+  用例步骤?: string;
+  预期结果?: string;
 }
 
 export interface XMindTaskRecord {
@@ -524,4 +547,8 @@ export interface PlatformService {
   deleteXMindTask(taskId: number): Promise<void>;
   /** 取消生成中的 XMind 任务（仅排队中/生成中可取消，终态任务拒绝）。 */
   cancelXMindTask(taskId: number): Promise<XMindTaskRecord>;
+  /** 更新单条预览用例：审核状态、评价或可编辑字段。 */
+  updateXMindTaskCase(taskId: number, caseId: string, input: XMindCaseUpdateInput): Promise<XMindTaskDetail>;
+  /** 删除单条预览用例。 */
+  deleteXMindTaskCase(taskId: number, caseId: string): Promise<XMindTaskDetail>;
 }

@@ -28,6 +28,7 @@ import type {
   UiExecutionResult,
   UiDebugInput,
   UserRecord,
+  XMindCaseUpdateInput,
   XMindConfirmInput,
   XMindConfirmResult,
   XMindGeneratedCase,
@@ -583,7 +584,11 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     },
 
     async generateXMind(file: File, uploaderId = 1): Promise<XMindGenerationResult> {
+      // 为每条用例补充稳定标识与初始审核状态，便于审核界面定位与流转（与真实后端一致）。
       const cases: XMindGeneratedCase[] = Array.from({ length: 6 }, (_, index) => ({
+        tempId: `case-${xmindTaskSequence}-${index}`,
+        reviewStatus: 'pending',
+        reviewNote: '',
         用例目录: '核心模块/鉴权',
         用例名称: index % 2 === 0 ? `登录正向场景 ${index + 1}` : `登录异常场景 ${index + 1}`,
         需求ID: '',
@@ -706,10 +711,15 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       const task = xmindTasks.find((item) => item.id === taskId);
       if (!task) throw new Error('XMind 生成任务不存在');
       if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
+      // 仅合并审核通过的用例，与真实后端语义一致。
+      const approvedCases = task.cases.filter((item) => item.reviewStatus === 'passed');
+      if (approvedCases.length === 0) {
+        throw new Error('没有已通过审核的用例，请先在审核界面确认后再合并');
+      }
       const result = await this.confirmXMind({
         uploaderId: task.uploaderId,
         moduleMapping: input.moduleMapping,
-        cases: task.cases,
+        cases: approvedCases,
       });
       task.moduleMapping = { ...input.moduleMapping };
       task.status = 'COMPLETED';
@@ -751,6 +761,29 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       target.lastError = null;
       const { tree, cases, moduleMapping, ...record } = target;
       return respond(record);
+    },
+
+    async updateXMindTaskCase(taskId: number, caseId: string, input: XMindCaseUpdateInput) {
+      // 内存实现：仅待审核任务可编辑，按 tempId 定位并更新单条用例。
+      const task = xmindTasks.find((item) => item.id === taskId);
+      if (!task) throw new Error('XMind 生成任务不存在');
+      if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
+      const target = task.cases.find((item) => item.tempId === caseId);
+      if (!target) throw new Error('XMind 用例不存在');
+      Object.assign(target, input);
+      return respond(task);
+    },
+
+    async deleteXMindTaskCase(taskId: number, caseId: string) {
+      // 内存实现：仅待审核任务可删，按 tempId 剔除单条用例。
+      const task = xmindTasks.find((item) => item.id === taskId);
+      if (!task) throw new Error('XMind 生成任务不存在');
+      if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
+      const target = task.cases.find((item) => item.tempId === caseId);
+      if (!target) throw new Error('XMind 用例不存在');
+      task.cases = task.cases.filter((item) => item.tempId !== caseId);
+      task.parsedCasesCount = task.cases.length;
+      return respond(task);
     },
 
     async debugApiCase(input: ApiDebugInput) {

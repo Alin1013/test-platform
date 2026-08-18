@@ -27,6 +27,7 @@ import type {
   UiDebugResult,
   UpdateTestCaseInput,
   UserRecord,
+  XMindCaseUpdateInput,
   XMindConfirmInput,
   XMindConfirmResult,
   XMindGeneratedCase,
@@ -810,6 +811,27 @@ export function createApiPlatformService({
         { method: 'POST' },
       );
       return mapXMindTaskRecord(response);
+    },
+
+    async updateXMindTaskCase(taskId: number, caseId: string, input: XMindCaseUpdateInput) {
+      // PATCH 单条用例：审核状态/评价/可编辑字段，后端返回刷新后的任务详情。
+      const response = await request<ApiXMindTaskDetail>(
+        `/xmind/tasks/${encodeURIComponent(taskId)}/cases/${encodeURIComponent(caseId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+        },
+      );
+      return mapXMindTaskDetail(response);
+    },
+
+    async deleteXMindTaskCase(taskId: number, caseId: string) {
+      // DELETE 单条用例，后端返回刷新后的任务详情（cases 已剔除该条）。
+      const response = await request<ApiXMindTaskDetail>(
+        `/xmind/tasks/${encodeURIComponent(taskId)}/cases/${encodeURIComponent(caseId)}`,
+        { method: 'DELETE' },
+      );
+      return mapXMindTaskDetail(response);
     },
   };
 }
