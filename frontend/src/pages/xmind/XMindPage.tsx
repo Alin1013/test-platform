@@ -5,12 +5,14 @@ import {
   ApartmentOutlined,
   CheckCircleFilled,
   CloudUploadOutlined,
+  DeleteOutlined,
   DownloadOutlined,
+  EyeOutlined,
   FileOutlined,
   ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
-import { Alert, App, Button, Empty, Progress, Select, Skeleton, Table, Tag } from 'antd';
+import { Alert, App, Button, Empty, Modal, Progress, Select, Skeleton, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -283,12 +285,78 @@ export function XMindPage() {
     }
   };
 
+  // 审核按钮：待审核 / 生成中状态可用，复用行点击的选中逻辑加载任务详情。
+  // 运行中的任务尚无可审核内容，但允许点击查看进度；点击会高亮对应行。
+  const reviewTask = (task: XMindTaskRecord) => {
+    setSelectedTaskId(task.id);
+    setModuleMapping({});
+  };
+
+  // 删除任务：Modal 二次确认后调用后端，删除后立即从列表中移除并清空选中。
+  const deleteTask = (task: XMindTaskRecord) => {
+    // 运行中任务后端会拒绝（409），前端提前禁用即可，避免无意义的确认弹窗。
+    if (task.status === 'RUNNING') return;
+    Modal.confirm({
+      title: '删除生成任务',
+      content: `确认删除任务「${task.fileName}」吗？删除后无法恢复。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await service.deleteXMindTask(task.id);
+          setTasks((current) => current?.filter((item) => item.id !== task.id) ?? current);
+          if (selectedTaskId === task.id) {
+            setSelectedTaskId(null);
+            setDetail(null);
+          }
+          void message.success('已删除生成任务');
+        } catch (reason: unknown) {
+          void message.error(reason instanceof Error ? reason.message : '删除任务失败');
+        }
+      },
+    });
+  };
+
   const taskColumns: ColumnsType<XMindTaskRecord> = [
     { title: '文件', dataIndex: 'fileName', ellipsis: true },
     { title: '状态', dataIndex: 'status', width: 100, render: taskStatus },
     { title: '用例数', dataIndex: 'parsedCasesCount', width: 82 },
     { title: '提交人', dataIndex: 'uploaderName', width: 100 },
     { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+    {
+      title: '操作',
+      width: 160,
+      // 行整体可点击选中，操作按钮上 stopPropagation 防止冒泡触发选中。
+      render: (_, record) => (
+        <Space size="small" onClick={(event) => event.stopPropagation()}>
+          {record.status === 'WAITING_REVIEW' || record.status === 'RUNNING' ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined aria-hidden="true" />}
+              aria-label={`审核 ${record.fileName}`}
+              onClick={() => reviewTask(record)}
+            >
+              审核
+            </Button>
+          ) : null}
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined aria-hidden="true" />}
+            aria-label={`删除 ${record.fileName}`}
+            // 运行中任务后端拒绝删除，直接禁用避免无效请求与无意义确认。
+            disabled={record.status === 'RUNNING'}
+            title={record.status === 'RUNNING' ? '运行中的任务无法删除' : '删除任务'}
+            onClick={() => deleteTask(record)}
+          >
+            删除
+          </Button>
+        </Space>
+      ),
+    },
   ];
 
   return (
