@@ -144,13 +144,14 @@ class ApiCaseDebugRequest(ApiDetailsCreate):
 
 
 class TestModuleCreate(BaseModel):
-    """模块创建：名称、父模块与所属项目。"""
+    """模块创建：名称、父模块、所属项目与用例类型。"""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=128)
     parent_id: str | None = Field(default=None, max_length=64)
     project_id: int = Field(default=1, gt=0)
+    module_type: str = Field(min_length=1, max_length=16)
 
 
 class TestModuleUpdate(BaseModel):

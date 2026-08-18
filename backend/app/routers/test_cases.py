@@ -34,10 +34,12 @@ router = APIRouter(prefix="/api/v1", tags=["test cases"])
 
 @router.get("/modules")
 def modules(
-    session: Annotated[Session, Depends(get_session)], project_id: int = 1
+    session: Annotated[Session, Depends(get_session)],
+    project_id: int = 1,
+    module_type: str | None = None,
 ) -> list[dict]:
-    """GET /modules：按项目返回模块树。"""
-    return test_cases.module_tree(session, project_id)
+    """GET /modules：按项目与用例类型返回模块树。"""
+    return test_cases.module_tree(session, project_id, module_type)
 
 
 @router.post("/modules")

@@ -11,17 +11,19 @@ from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate, TestModu
 from .settings import get_case_project_names
 
 
-def module_tree(session: Session, project_id: int) -> list[dict]:
-    """返回项目下的模块树（含父子层级）。"""
-    modules = session.scalars(
-        select(Module).where(Module.project_id == project_id).order_by(Module.id)
-    ).all()
+def module_tree(session: Session, project_id: int, module_type: str | None = None) -> list[dict]:
+    """返回项目下、可选按用例类型过滤的模块树（含父子层级）。"""
+    query = select(Module).where(Module.project_id == project_id)
+    if module_type is not None:
+        query = query.where(Module.module_type == module_type)
+    modules = session.scalars(query.order_by(Module.id)).all()
     # 先建立索引再挂载父子关系，避免递归查询数据库。
     nodes = {
         module.id: {
             "id": module.id,
             "name": module.name,
             "project_id": module.project_id,
+            "module_type": module.module_type,
             "children": [],
         }
         for module in modules
@@ -44,13 +46,18 @@ def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bo
 
     if payload.parent_id:
         parent = session.get(Module, payload.parent_id)
-        if parent is None or parent.project_id != payload.project_id:
+        if (
+            parent is None
+            or parent.project_id != payload.project_id
+            or parent.module_type != payload.module_type
+        ):
             raise HTTPException(status_code=404, detail="Parent module not found")
 
     existing = session.scalar(
         select(Module).where(
             Module.project_id == payload.project_id,
             Module.parent_id == payload.parent_id,
+            Module.module_type == payload.module_type,
             func.lower(Module.name) == name.lower(),
         )
     )
@@ -62,6 +69,7 @@ def create_module(session: Session, payload: TestModuleCreate) -> tuple[dict, bo
         name=name,
         parent_id=payload.parent_id,
         project_id=payload.project_id,
+        module_type=payload.module_type,
     )
     session.add(module)
     session.commit()
@@ -81,6 +89,7 @@ def update_module(session: Session, module_id: str, payload: TestModuleUpdate) -
         select(Module).where(
             Module.id != module_id,
             Module.project_id == module.project_id,
+            Module.module_type == module.module_type,
             Module.parent_id == module.parent_id,
             func.lower(Module.name) == name.lower(),
         )
@@ -135,6 +144,7 @@ def _serialize_module(module: Module) -> dict:
         "name": module.name,
         "parent_id": module.parent_id,
         "project_id": module.project_id,
+        "module_type": module.module_type,
         "children": [],
     }
 
