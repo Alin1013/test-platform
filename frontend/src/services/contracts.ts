@@ -248,7 +248,8 @@ export interface XMindConfirmInput {
 }
 
 export interface XMindTaskConfirmInput {
-  moduleMapping: Record<string, string>;
+  /** 合并目标模块：整任务共用，所有通过用例统一入库到该模块。 */
+  moduleId: string;
 }
 
 export interface XMindConfirmResult {

@@ -19,7 +19,7 @@ import type {
   XMindGeneratedCase,
   XMindTaskDetail,
 } from '../../services/contracts';
-import { findMappedModule, flattenModules, type FlatModule } from './XMindPage';
+import { flattenModules, type FlatModule } from './XMindPage';
 import { XMindCaseDetailModal } from './XMindCaseDetailModal';
 
 const reviewStatusMeta: Record<XMindCaseReviewStatus, { color: string; label: string }> = {
@@ -40,7 +40,7 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const { message } = App.useApp();
   const flatModules = useMemo<FlatModule[]>(() => flattenModules(modules), [modules]);
 
-  // 任务内出现的目录集合，作为页签与映射依据。
+  // 任务内出现的目录集合，仅作为浏览页签依据；合并时不再按目录分别映射模块。
   const directories = useMemo(
     () => [...new Set(task.cases.map((item) => item.用例目录).filter(Boolean))],
     [task.cases],
@@ -49,15 +49,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [modalCase, setModalCase] = useState<XMindGeneratedCase | null>(null);
   const [merging, setMerging] = useState(false);
-
-  // 目录 -> 模块映射：先用已保存映射，未命中再按目录名自动匹配模块。
-  const [moduleMapping, setModuleMapping] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    for (const directory of directories) {
-      initial[directory] = task.moduleMapping[directory] ?? findMappedModule(directory, flatModules)?.id ?? '';
-    }
-    return initial;
-  });
+  // 合并目标模块：整任务共用一个，所有通过的用例统一入库到该模块。
+  const [targetModuleId, setTargetModuleId] = useState<string>('');
 
   const casesByDirectory = useMemo(() => {
     const grouped: Record<string, XMindGeneratedCase[]> = {};
@@ -71,7 +64,7 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const safeActive = directories.includes(activeDirectory) ? activeDirectory : directories[0] ?? '';
   const currentCases = casesByDirectory[safeActive] ?? [];
   const passedCount = task.cases.filter((item) => item.reviewStatus === 'passed').length;
-  const allMapped = directories.length > 0 && directories.every((directory) => Boolean(moduleMapping[directory]));
+  const hasTargetModule = Boolean(targetModuleId);
 
   const refreshDetail = async () => {
     // 批量/删除后统一重新拉取详情，保证列表与勾选状态一致。
@@ -153,16 +146,16 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
       message.warning('请先确认至少一条用例后再合并');
       return;
     }
-    if (!allMapped) {
-      message.warning('请为每个用例目录选择目标模块后再合并');
+    if (!hasTargetModule) {
+      message.warning('请选择目标模块后再合并');
       return;
     }
     setMerging(true);
     try {
-      const result = await service.confirmXMindTask(task.id, { moduleMapping });
+      const result = await service.confirmXMindTask(task.id, { moduleId: targetModuleId });
       // confirmXMindTask 返回合并结果而非任务详情；任务已置为 COMPLETED，
-      // 这里用最新映射拼出刷新后的任务详情回传父页面，并在弹窗中提示合并条数。
-      onTaskChange({ ...task, status: 'COMPLETED', moduleMapping });
+      // 这里用最新模块拼出刷新后的任务详情回传父页面，并在弹窗中提示合并条数。
+      onTaskChange({ ...task, status: 'COMPLETED', moduleMapping: {} });
       message.success(`已合并 ${result.saved_cases.length} 条通过用例到用例库`);
     } catch (reason: unknown) {
       message.error(reason instanceof Error ? reason.message : '合并用例失败');
@@ -230,32 +223,24 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
             共 {task.cases.length} 条用例，已确认通过 {passedCount} 条。点击任意行查看详情并编辑。
           </p>
         </div>
-        <Button
-          type="primary"
-          icon={<MergeCellsOutlined aria-hidden="true" />}
-          loading={merging}
-          disabled={passedCount === 0 || !allMapped}
-          onClick={merge}
-        >
-          合并到用例库
-        </Button>
-      </div>
-
-      <div className="xmind-review__mapping">
-        <span className="xmind-review__mapping-label">目录映射：</span>
-        <Space wrap size={[12, 8]}>
-          {directories.map((directory) => (
-            <Space key={directory} size={4}>
-              <span>{directory}</span>
-              <Select
-                value={moduleMapping[directory] || undefined}
-                placeholder="选择模块"
-                style={{ width: 200 }}
-                options={flatModules.map((module) => ({ value: module.id, label: module.label }))}
-                onChange={(value) => setModuleMapping((current) => ({ ...current, [directory]: value }))}
-              />
-            </Space>
-          ))}
+        <Space size="middle">
+          <Select
+            aria-label="目标模块"
+            value={targetModuleId || undefined}
+            placeholder="选择目标模块"
+            style={{ width: 240 }}
+            options={flatModules.map((module) => ({ value: module.id, label: module.label }))}
+            onChange={(value) => setTargetModuleId(value)}
+          />
+          <Button
+            type="primary"
+            icon={<MergeCellsOutlined aria-hidden="true" />}
+            loading={merging}
+            disabled={passedCount === 0 || !hasTargetModule}
+            onClick={merge}
+          >
+            合并到用例库
+          </Button>
         </Space>
       </div>
 

@@ -790,7 +790,7 @@ export function createApiPlatformService({
       return request<XMindConfirmResult>(`/xmind/tasks/${taskId}/confirm`, {
         method: 'POST',
         body: JSON.stringify({
-          module_mapping: input.moduleMapping,
+          module_id: input.moduleId,
         }),
       });
     },

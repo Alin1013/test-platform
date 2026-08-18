@@ -712,7 +712,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
     },
 
-    async confirmXMindTask(taskId: number, input: { moduleMapping: Record<string, string> }) {
+    async confirmXMindTask(taskId: number, input: { moduleId: string }) {
       const task = xmindTasks.find((item) => item.id === taskId);
       if (!task) throw new Error('XMind 生成任务不存在');
       if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
@@ -721,12 +721,20 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       if (approvedCases.length === 0) {
         throw new Error('没有已通过审核的用例，请先在审核界面确认后再合并');
       }
+      // 单目标模块：把所有通过用例的目录都映射到同一模块，交给批量 confirmXMind 创建。
+      const moduleMapping: Record<string, string> = {};
+      for (const caseItem of approvedCases) {
+        const directory = caseItem.用例目录 ?? '';
+        if (directory && !(directory in moduleMapping)) {
+          moduleMapping[directory] = input.moduleId;
+        }
+      }
       const result = await this.confirmXMind({
         uploaderId: task.uploaderId,
-        moduleMapping: input.moduleMapping,
+        moduleMapping,
         cases: approvedCases,
       });
-      task.moduleMapping = { ...input.moduleMapping };
+      task.moduleMapping = {};
       task.status = 'COMPLETED';
       return result;
     },
