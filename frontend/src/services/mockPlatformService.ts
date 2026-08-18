@@ -745,10 +745,10 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       const task = xmindTasks.find((item) => item.id === taskId);
       if (!task) throw new Error('XMind 生成任务不存在');
       if (task.status !== 'WAITING_REVIEW') throw new Error('XMind 任务尚未准备好审核');
-      // 仅合并审核通过的用例，与真实后端语义一致。
+      // 合并后任务会结束，必须全部剩余用例审核通过，避免部分入库后无法继续审核。
       const approvedCases = task.cases.filter((item) => item.reviewStatus === 'passed');
-      if (approvedCases.length === 0) {
-        throw new Error('没有已通过审核的用例，请先在审核界面确认后再合并');
+      if (approvedCases.length !== task.cases.length || approvedCases.length === 0) {
+        throw new Error('请完成全部用例审核后再合并');
       }
       // 单目标模块：把所有通过用例的目录都映射到同一模块，交给批量 confirmXMind 创建。
       const moduleMapping: Record<string, string> = {};

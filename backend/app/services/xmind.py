@@ -649,7 +649,7 @@ def confirm_generated_task(
     task_id: int,
     payload: XMindTaskConfirmRequest,
 ) -> dict:
-    """确认异步任务生成的预览：所有通过用例统一入库到目标模块。"""
+    """确认异步任务生成的预览：全部剩余用例通过后统一入库。"""
     record = session.scalar(
         select(XMindRecord)
         .options(selectinload(XMindRecord.uploader))
@@ -664,12 +664,12 @@ def confirm_generated_task(
     if not cases:
         raise HTTPException(status_code=422, detail="XMind task has no preview cases")
 
-    # 合并时仅取审核通过的用例（通过审核状态筛选），未通过的留在任务中以备后续处理。
+    # 合并会结束整个生成任务，因此必须先完成全部剩余用例审核，禁止部分入库后锁死任务。
     approved_cases = [case for case in cases if case.get("reviewStatus") == "passed"]
-    if not approved_cases:
+    if len(approved_cases) != len(cases):
         raise HTTPException(
             status_code=422,
-            detail="没有已通过审核的用例，请先在审核界面确认后再合并",
+            detail="请完成全部用例审核后再合并",
         )
 
     # 校验目标模块存在；不再按用例目录做映射，所有通过用例统一写入同一模块。

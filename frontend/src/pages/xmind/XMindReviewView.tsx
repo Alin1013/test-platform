@@ -57,6 +57,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const pagedCases = currentCases.slice((safePage - 1) * pageSize, safePage * pageSize);
   const currentPageKeys = pagedCases.flatMap((item) => (item.tempId ? [item.tempId] : []));
   const passedCount = task.cases.filter((item) => item.reviewStatus === 'passed').length;
+  // 删除后的用例不再参与审核；剩余用例必须全部通过，任务才具备一次性合并资格。
+  const allCasesReviewed = currentCases.length > 0 && passedCount === currentCases.length;
   const hasTargetModule = Boolean(targetModuleId);
 
   useEffect(() => {
@@ -197,8 +199,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   };
 
   const merge = async () => {
-    if (passedCount === 0) {
-      message.warning('请先确认至少一条用例后再合并');
+    if (!allCasesReviewed) {
+      message.warning('请完成全部用例审核后再合并');
       return;
     }
     if (!hasTargetModule) {
@@ -293,7 +295,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
             type="primary"
             icon={<MergeCellsOutlined aria-hidden="true" />}
             loading={merging}
-            disabled={passedCount === 0 || !hasTargetModule}
+            disabled={!allCasesReviewed || !hasTargetModule}
+            title={!allCasesReviewed ? '全部用例审核通过后才能合并' : undefined}
             onClick={merge}
           >
             合并到用例库

@@ -13,7 +13,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type { TestModule, XMindTaskDetail, XMindTaskRecord } from '../../services/contracts';
 import { XMindReviewView } from './XMindReviewView';
-import { flattenModules, statusLabels, taskStatus, type FlatModule } from './XMindPage';
+import { flattenModules, taskStatus, type FlatModule } from './XMindPage';
 import './xmind.css';
 
 export function XMindCasesPage() {
@@ -197,20 +197,9 @@ export function XMindCasesPage() {
         </div>
       ) : null}
 
+      {/* 只有待审核任务展示审核区；其它状态已由任务列表中的状态列完整表达。 */}
       {detail && detail.status === 'WAITING_REVIEW' ? (
-        // 待审核任务：渲染用例审核视图，逐条/批量确认与合并入库。
         <XMindReviewView task={detail} modules={modules} onTaskChange={handleTaskChange} />
-      ) : null}
-
-      {detail && detail.status !== 'WAITING_REVIEW' ? (
-        // 非待审核任务（如已合并/生成中/已取消）给出状态提示，引导回到待审核任务。
-        <Alert
-          type={detail.status === 'COMPLETED' ? 'success' : 'info'}
-          showIcon
-          className="xmind-goto-review"
-          message={detail.status === 'COMPLETED' ? '该任务已合并入库' : `任务当前状态：${statusLabels[detail.status]}，暂无可审核内容`}
-          description={<span>可在上方任务列表选择「待审核」任务进入审核，或返回用例生成器查看生成进度。</span>}
-        />
       ) : null}
     </section>
   );
