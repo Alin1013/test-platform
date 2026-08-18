@@ -312,7 +312,6 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
         <XMindCaseDetailModal
           taskId={task.id}
           caseItem={modalCase}
-          directories={directories}
           onUpdated={(detail) => onTaskChange(detail)}
           onClosed={() => setModalCase(null)}
         />

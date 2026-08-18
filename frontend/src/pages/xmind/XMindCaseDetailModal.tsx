@@ -1,6 +1,7 @@
 /**
  * 用例详情弹窗：展示并编辑单条用例的全部字段，并提供确认通过 / 取消确认 / 删除操作。
- * 取消确认按钮在未点击确认（reviewStatus 非 passed）时置灰，避免误操作。
+ * 底部按钮始终可点击：允许在已通过时再次确认（幂等）、在未通过时取消确认（回到待审核）。
+ * 用例目录（XMind 解析时的归属目录）不在此处展示/编辑，由解析器与任务预览固化。
  */
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
 import { App, Button, Input, Modal, Select, Tag } from 'antd';
@@ -12,7 +13,7 @@ import type {
   XMindTaskDetail,
 } from '../../services/contracts';
 
-/** 详情弹窗可编辑的字段草稿。 */
+/** 详情弹窗可编辑的字段草稿（用例目录由解析器固化，不在此处编辑）。 */
 interface CaseDraft {
   用例名称: string;
   需求ID: string;
@@ -21,7 +22,6 @@ interface CaseDraft {
   归属迭代: string;
   用例步骤: string;
   预期结果: string;
-  用例目录: string;
 }
 
 const PRIORITY_OPTIONS = ['P0', 'P1', 'P2', 'P3'];
@@ -35,15 +35,13 @@ const reviewStatusMeta: Record<XMindCaseReviewStatus, { color: string; label: st
 interface XMindCaseDetailModalProps {
   taskId: number;
   caseItem: XMindGeneratedCase;
-  /** 任务内出现的全部目录，供用例在目录间重新归类。 */
-  directories: string[];
   /** 审核字段变更后回传刷新后的任务详情。 */
   onUpdated: (detail: XMindTaskDetail) => void;
   onClosed: () => void;
 }
 
 function buildDraft(caseItem: XMindGeneratedCase): CaseDraft {
-  // 用当前用例字段初始化编辑草稿，字段缺失时给合理默认值。
+  // 用当前用例字段初始化编辑草稿，字段缺失时给合理默认值；用例目录不在草稿中。
   return {
     用例名称: caseItem.用例名称 ?? '',
     需求ID: caseItem.需求ID ?? '',
@@ -52,14 +50,12 @@ function buildDraft(caseItem: XMindGeneratedCase): CaseDraft {
     归属迭代: caseItem.归属迭代 ?? '',
     用例步骤: caseItem.用例步骤 ?? '',
     预期结果: caseItem.预期结果 ?? '',
-    用例目录: caseItem.用例目录 ?? '',
   };
 }
 
 export function XMindCaseDetailModal({
   taskId,
   caseItem,
-  directories,
   onUpdated,
   onClosed,
 }: XMindCaseDetailModalProps) {
@@ -69,7 +65,6 @@ export function XMindCaseDetailModal({
   const [saving, setSaving] = useState(false);
   // 用例状态跟随用例本身，弹窗内仅作展示。
   const status = (caseItem.reviewStatus ?? 'pending') as XMindCaseReviewStatus;
-  const isPassed = status === 'passed';
 
   // 切换用例时以最新字段重建草稿。
   useEffect(() => {
@@ -81,11 +76,12 @@ export function XMindCaseDetailModal({
   };
 
   const persistDraft = async (reviewStatus?: XMindCaseReviewStatus) => {
-    // 把编辑草稿与（可选的）审核状态一并提交到后端，返回刷新后的任务详情。
+    // 把编辑草稿与（可选的）审核状态一并提交到后端；用例目录由解析器固化，原样回传避免被清空。
     setSaving(true);
     try {
       const detail = await service.updateXMindTaskCase(taskId, caseItem.tempId ?? '', {
         ...draft,
+        用例目录: caseItem.用例目录 ?? '',
         ...(reviewStatus ? { reviewStatus } : {}),
       });
       onUpdated(detail);
@@ -157,8 +153,7 @@ export function XMindCaseDetailModal({
         <Button
           key="cancel-confirm"
           icon={<CloseCircleOutlined aria-hidden="true" />}
-          // 未确认（非 passed）时置灰，符合“先确认后可取消确认”的交互。
-          disabled={!isPassed}
+          // 始终可点击：未通过时调用为幂等（pending→pending），通过后回退为待审核。
           onClick={handleCancelConfirm}
         >
           取消确认
@@ -171,7 +166,7 @@ export function XMindCaseDetailModal({
           type="primary"
           icon={<CheckCircleOutlined aria-hidden="true" />}
           loading={saving}
-          disabled={isPassed}
+          // 始终可点击：已通过时再确认为幂等（passed→passed）。
           onClick={handleConfirm}
         >
           确认
@@ -185,15 +180,6 @@ export function XMindCaseDetailModal({
           <Tag color={reviewStatusMeta[status].color}>{reviewStatusMeta[status].label}</Tag>
         </div>
         <div className="xmind-case-detail__grid">
-          <label className="xmind-case-detail__field">
-            <span>用例目录</span>
-            <Select
-              value={draft.用例目录 || undefined}
-              placeholder="选择用例目录"
-              options={directories.map((directory) => ({ value: directory, label: directory }))}
-              onChange={(value) => updateField('用例目录', value)}
-            />
-          </label>
           <label className="xmind-case-detail__field">
             <span>用例名称</span>
             <Input value={draft.用例名称} onChange={(event) => updateField('用例名称', event.target.value)} />
