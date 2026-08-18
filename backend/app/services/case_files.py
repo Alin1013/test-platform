@@ -159,6 +159,26 @@ def _export_row(test_case: dict) -> list[Any]:
     ]
 
 
+def _functional_export_row(test_case: dict) -> list[Any]:
+    """按功能用例导入模板输出一行；缺失字段保留为空单元格。"""
+    is_smoke = test_case.get("is_smoke")
+    return [
+        test_case.get("module_name") or "",
+        test_case.get("title") or "",
+        test_case.get("requirement_id") or "",
+        test_case.get("precondition") or "",
+        test_case.get("test_steps") or "",
+        test_case.get("expected_result") or "",
+        "功能用例",
+        test_case.get("status") or "",
+        test_case.get("priority") or "",
+        test_case.get("author_name") or "",
+        test_case.get("iteration") or "",
+        "" if is_smoke is None else ("是" if is_smoke else "否"),
+        test_case.get("project_name") or "",
+    ]
+
+
 def export_cases(
     session: Session, payload: TestCaseExportRequest
 ) -> ExportedFile:
@@ -169,26 +189,38 @@ def export_cases(
         priority=payload.priority,
         status=payload.status,
         keyword=payload.keyword,
+        project_name=payload.project_name,
+        iteration=payload.iteration,
+        is_smoke=payload.is_smoke,
     )
     rows = session.scalars(query.order_by(TestCase.id)).all()
-    exported_rows = [_export_row(test_cases.serialize_case(row)) for row in rows]
+    serialized_rows = [test_cases.serialize_case(row) for row in rows]
+    if payload.type == "functional":
+        # 功能用例导出与导入共用同一套中文表头，导出的文件可直接再次导入。
+        headers = FUNCTIONAL_HEADERS
+        exported_rows = [_functional_export_row(row) for row in serialized_rows]
+        filename_prefix = "functional-test-cases"
+    else:
+        headers = EXPORT_HEADERS
+        exported_rows = [_export_row(row) for row in serialized_rows]
+        filename_prefix = "test-cases"
 
     if payload.format == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(EXPORT_HEADERS)
+        writer.writerow(headers)
         writer.writerows(exported_rows)
         return ExportedFile(
             # 添加 UTF-8 BOM，避免常见桌面版 Excel 将中文按本地编码解析。
             content=("\ufeff" + output.getvalue()).encode("utf-8"),
             media_type="text/csv; charset=utf-8",
-            filename="test-cases.csv",
+            filename=f"{filename_prefix}.csv",
         )
 
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Test Cases"
-    sheet.append(EXPORT_HEADERS)
+    sheet.append(headers)
     for row in exported_rows:
         sheet.append(row)
     output_bytes = io.BytesIO()
@@ -196,7 +228,7 @@ def export_cases(
     return ExportedFile(
         content=output_bytes.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename="test-cases.xlsx",
+        filename=f"{filename_prefix}.xlsx",
     )
 
 

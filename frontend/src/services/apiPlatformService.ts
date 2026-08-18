@@ -584,6 +584,24 @@ export function createApiPlatformService({
       return { importedCount: result.imported_count, codes: result.codes };
     },
 
+    async exportTestCases(query: TestCaseQuery = {}): Promise<Blob> {
+      // 导出接口复用列表筛选条件，后端负责生成可再次导入的标准 XLSX 文件。
+      return download('/test-cases/export', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'xlsx',
+          type: query.type,
+          module_id: query.moduleId,
+          keyword: query.keyword,
+          priority: query.priority,
+          status: query.status,
+          project_name: query.projectName,
+          iteration: query.iteration,
+          is_smoke: query.isSmoke,
+        }),
+      });
+    },
+
     async listUsers() {
       const page = await request<Page<ApiUser>>('/users?page_size=100');
       return page.items.map(mapUser);

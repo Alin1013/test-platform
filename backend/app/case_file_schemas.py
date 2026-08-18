@@ -18,3 +18,6 @@ class TestCaseExportRequest(BaseModel):
     priority: Priority | None = None
     status: CaseStatus | None = None
     keyword: str | None = None
+    project_name: str | None = None
+    iteration: str | None = None
+    is_smoke: bool | None = None

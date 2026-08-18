@@ -515,6 +515,8 @@ export interface PlatformService {
   updateTestCase(storageId: number, input: UpdateTestCaseInput): Promise<TestCaseRecord>;
   deleteTestCase(storageId: number): Promise<void>;
   importTestCases(file: File, moduleId?: string): Promise<TestCaseImportResult>;
+  /** 按当前筛选条件导出测试用例，功能用例使用标准导入模板表头。 */
+  exportTestCases(query?: TestCaseQuery): Promise<Blob>;
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;

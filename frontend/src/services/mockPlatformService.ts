@@ -424,6 +424,35 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       return respond({ importedCount: created.length, codes: created.map((item) => item.id) });
     },
 
+    async exportTestCases(query: TestCaseQuery = {}) {
+      // Mock 导出与真实后端保持一致：使用功能导入模板，缺失字段写空单元格。
+      const rows = await this.listTestCases(query);
+      const headers = [
+        '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
+        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+      ];
+      const values = rows.map((testCase) => [
+        testCase.moduleName ?? '',
+        testCase.name ?? '',
+        testCase.requirementId ?? '',
+        testCase.precondition ?? '',
+        testCase.steps ?? '',
+        testCase.expectedResult ?? '',
+        testCase.type === 'functional' ? '功能用例' : '',
+        testCase.status ?? '',
+        testCase.priority ?? '',
+        testCase.creator ?? '',
+        testCase.iteration ?? '',
+        testCase.isSmoke === undefined ? '' : testCase.isSmoke ? '是' : '否',
+        testCase.projectName ?? '',
+      ]);
+      const { utils, write } = await import('xlsx');
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, utils.aoa_to_sheet([headers, ...values]), '功能用例');
+      const output = write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+      return new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    },
+
     async listUsers() {
       return respond(users);
     },

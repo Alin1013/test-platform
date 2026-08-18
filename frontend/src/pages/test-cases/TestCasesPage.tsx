@@ -3,6 +3,7 @@
  */
 import {
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
@@ -136,6 +137,7 @@ export function TestCasesPage() {
   const [moduleRefreshToken, setModuleRefreshToken] = useState(0);
   const [isModulePanelCollapsed, setIsModulePanelCollapsed] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
@@ -416,6 +418,25 @@ export function TestCasesPage() {
     }
   };
 
+  const exportFunctionalCases = async () => {
+    // 导出当前筛选条件下的全部功能用例；后端按标准导入模板生成文件。
+    setIsExporting(true);
+    try {
+      const blob = await service.exportTestCases(query);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = '功能用例.xlsx';
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      void message.success(`已导出 ${rows?.total ?? 0} 条功能用例`);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '导出功能用例失败');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const readImportFile = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -496,6 +517,14 @@ export function TestCasesPage() {
                     if (file) void importFunctionalCases(file);
                   }}
                 />
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={isExporting}
+                  disabled={!rows?.total}
+                  onClick={() => void exportFunctionalCases()}
+                >
+                  导出
+                </Button>
               </>
             ) : null}
             {type === 'api' ? (
