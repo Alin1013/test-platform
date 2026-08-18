@@ -20,11 +20,11 @@ class XMindConfirmRequest(BaseModel):
 
 
 class XMindTaskConfirmRequest(BaseModel):
-    """确认异步 XMind 任务：仅需模块映射，用例从任务结果读取。"""
+    """确认异步 XMind 任务：仅需目标模块，所有通过的用例统一入库到该模块。"""
 
     model_config = ConfigDict(extra="forbid")
 
-    module_mapping: dict[str, str] = Field(min_length=1, max_length=200)
+    module_id: str = Field(min_length=1, max_length=64)
 
 
 class XMindExportRequest(BaseModel):

@@ -620,7 +620,7 @@ def confirm_generated_task(
     task_id: int,
     payload: XMindTaskConfirmRequest,
 ) -> dict:
-    """确认异步任务生成的预览：校验映射后批量写入正式用例。"""
+    """确认异步任务生成的预览：所有通过用例统一入库到目标模块。"""
     record = session.scalar(
         select(XMindRecord)
         .options(selectinload(XMindRecord.uploader))
@@ -643,26 +643,11 @@ def confirm_generated_task(
             detail="没有已通过审核的用例，请先在审核界面确认后再合并",
         )
 
-    directories = {str(case.get("用例目录") or "").strip() for case in approved_cases}
-    if "" in directories:
-        raise HTTPException(status_code=422, detail="每条用例都必须包含用例目录")
-    missing_names = sorted(directories - payload.module_mapping.keys())
-    if missing_names:
+    # 校验目标模块存在；不再按用例目录做映射，所有通过用例统一写入同一模块。
+    if session.get(Module, payload.module_id) is None:
         raise HTTPException(
             status_code=422,
-            detail=f"Missing module mappings: {', '.join(missing_names)}",
-        )
-    missing_modules = sorted(
-        {
-            module_id
-            for module_id in payload.module_mapping.values()
-            if session.get(Module, module_id) is None
-        }
-    )
-    if missing_modules:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Mapped modules not found: {', '.join(missing_modules)}",
+            detail=f"Target module not found: {payload.module_id}",
         )
 
     uploader = record.uploader or session.get(User, record.uploader_id)
@@ -686,7 +671,7 @@ def confirm_generated_task(
                     TestCaseCreate(
                         title=normalized["用例名称"],
                         type="functional",
-                        module_id=payload.module_mapping[normalized["用例目录"]],
+                        module_id=payload.module_id,
                         priority=normalized["用例等级"],
                         status="草稿",
                         author_id=record.uploader_id,
@@ -698,7 +683,8 @@ def confirm_generated_task(
                     ),
                 )
             )
-        record.module_mapping_json = dict(payload.module_mapping)
+        # 旧的 module_mapping_json 字段保留以便回溯历史任务，但新流程不再写入。
+        record.module_mapping_json = None
         record.status = "COMPLETED"
         record.locked_at = None
         record.last_error = None
