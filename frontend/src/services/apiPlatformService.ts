@@ -802,5 +802,14 @@ export function createApiPlatformService({
         method: 'DELETE',
       });
     },
+
+    async cancelXMindTask(taskId: number): Promise<XMindTaskRecord> {
+      // 后端返回取消后的任务记录（含最新状态），供列表就地刷新。
+      const response = await request<ApiXMindTaskDetail>(
+        `/xmind/tasks/${encodeURIComponent(taskId)}/cancel`,
+        { method: 'POST' },
+      );
+      return mapXMindTaskRecord(response);
+    },
   };
 }

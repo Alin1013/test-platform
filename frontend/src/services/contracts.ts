@@ -175,7 +175,7 @@ export interface XMindTreeNode {
   children: XMindTreeNode[];
 }
 
-export type XMindTaskStatus = 'PENDING' | 'RUNNING' | 'WAITING_REVIEW' | 'FAILED' | 'COMPLETED';
+export type XMindTaskStatus = 'PENDING' | 'RUNNING' | 'WAITING_REVIEW' | 'FAILED' | 'COMPLETED' | 'CANCELLED';
 
 export interface XMindGeneratedCase {
   用例目录: string;
@@ -522,4 +522,6 @@ export interface PlatformService {
   exportXMind(cases: XMindGeneratedCase[]): Promise<Blob>;
   /** 删除 XMind 生成任务（运行中的任务需先取消/等待完成）。 */
   deleteXMindTask(taskId: number): Promise<void>;
+  /** 取消生成中的 XMind 任务（仅排队中/生成中可取消，终态任务拒绝）。 */
+  cancelXMindTask(taskId: number): Promise<XMindTaskRecord>;
 }

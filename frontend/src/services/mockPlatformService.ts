@@ -739,6 +739,20 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       xmindTasks = xmindTasks.filter((task) => task.id !== taskId);
     },
 
+    async cancelXMindTask(taskId: number): Promise<XMindTaskRecord> {
+      // 仅排队中/生成中可取消；终态任务取消无意义，直接拒绝以保持语义一致。
+      const target = xmindTasks.find((task) => task.id === taskId);
+      if (!target) throw new Error('XMind 生成任务不存在');
+      if (target.status !== 'PENDING' && target.status !== 'RUNNING') {
+        throw new Error('只有排队中或生成中的 XMind 任务可以取消');
+      }
+      target.status = 'CANCELLED';
+      target.lockedAt = null;
+      target.lastError = null;
+      const { tree, cases, moduleMapping, ...record } = target;
+      return respond(record);
+    },
+
     async debugApiCase(input: ApiDebugInput) {
       const statusAssertion = input.assertions.find((assertion) => assertion.type === 'statusCode');
       const statusCode = Number(statusAssertion?.expected || input.expectedCode);
