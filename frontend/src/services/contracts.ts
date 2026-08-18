@@ -62,6 +62,7 @@ export interface TestModule {
   name: string;
   projectId: number;
   parentId?: string;
+  moduleType?: TestCaseType;
   children: TestModule[];
 }
 
@@ -69,6 +70,7 @@ export interface CreateTestModuleInput {
   name: string;
   parentId?: string;
   projectId?: number;
+  moduleType: TestCaseType;
 }
 
 export interface UpdateTestModuleInput {
@@ -501,7 +503,7 @@ export interface UiDebugResult {
 // ===== 平台服务接口 =====
 export interface PlatformService {
   getDashboard(): Promise<DashboardData>;
-  listTestModules(projectId?: number): Promise<TestModule[]>;
+  listTestModules(projectId?: number, moduleType?: TestCaseType): Promise<TestModule[]>;
   createTestModule(input: CreateTestModuleInput): Promise<TestModule>;
   updateTestModule(moduleId: string, input: UpdateTestModuleInput): Promise<TestModule>;
   deleteTestModule(moduleId: string): Promise<void>;

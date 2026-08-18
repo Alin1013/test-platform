@@ -197,22 +197,26 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
     },
 
-    async listTestModules(projectId?: number) {
+    async listTestModules(projectId?: number, moduleType?: TestCaseType) {
       return respond(
-        projectId === undefined
-          ? modules
-          : modules.filter((module) => module.projectId === projectId),
+        modules.filter(
+          (module) =>
+            (projectId === undefined || module.projectId === projectId) &&
+            (moduleType === undefined || module.moduleType === moduleType),
+        ),
       );
     },
 
     async createTestModule(input: CreateTestModuleInput) {
       const projectId = input.projectId ?? 1;
+      const moduleType = input.moduleType ?? 'functional';
       const name = input.name.trim();
       if (!name) throw new Error('模块名称不能为空');
       const findModule = (nodes: typeof modules): TestModule | undefined => {
         for (const module of nodes) {
           if (
             module.projectId === projectId &&
+            module.moduleType === moduleType &&
             module.parentId === input.parentId &&
             module.name.toLocaleLowerCase() === name.toLocaleLowerCase()
           ) {
@@ -233,6 +237,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         id: `module-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name,
         projectId,
+        moduleType,
         ...(input.parentId ? { parentId: input.parentId } : {}),
         children: [],
       };

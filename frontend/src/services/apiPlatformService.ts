@@ -110,6 +110,7 @@ interface ApiTestModule {
   name: string;
   parent_id?: string | null;
   project_id: number;
+  module_type?: string | null;
   children: ApiTestModule[];
 }
 
@@ -283,6 +284,7 @@ function mapModule(module: ApiTestModule): TestModule {
     name: module.name,
     projectId: module.project_id,
     ...(module.parent_id ? { parentId: module.parent_id } : {}),
+    ...(module.module_type ? { moduleType: module.module_type as TestCaseType } : {}),
     children: module.children.map(mapModule),
   };
 }
@@ -428,10 +430,12 @@ export function createApiPlatformService({
       };
     },
 
-    async listTestModules(projectId?: number) {
-      const path = projectId === undefined
-        ? '/modules'
-        : `/modules?project_id=${encodeURIComponent(projectId)}`;
+    async listTestModules(projectId?: number, moduleType?: TestCaseType) {
+      const params = new URLSearchParams();
+      if (projectId !== undefined) params.set('project_id', String(projectId));
+      if (moduleType) params.set('module_type', moduleType);
+      const query = params.toString();
+      const path = query ? `/modules?${query}` : '/modules';
       const modules = await request<ApiTestModule[]>(path);
       return modules.map(mapModule);
     },
@@ -443,6 +447,7 @@ export function createApiPlatformService({
           name: input.name,
           parent_id: input.parentId,
           project_id: input.projectId ?? 1,
+          module_type: input.moduleType,
         }),
       });
       return mapModule(module);

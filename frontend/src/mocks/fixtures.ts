@@ -15,10 +15,11 @@ export const initialTestModules: TestModule[] = [
     id: 'core',
     name: '核心模块',
     projectId: 1,
+    moduleType: 'functional',
     children: [
-      { id: 'auth', name: '鉴权', projectId: 1, children: [] },
-      { id: 'payments', name: '支付', projectId: 1, children: [] },
-      { id: 'profile', name: '用户资料', projectId: 1, children: [] },
+      { id: 'auth', name: '鉴权', projectId: 1, moduleType: 'functional', children: [] },
+      { id: 'payments', name: '支付', projectId: 1, moduleType: 'functional', children: [] },
+      { id: 'profile', name: '用户资料', projectId: 1, moduleType: 'functional', children: [] },
     ],
   },
 ];
