@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
 from ..xmind_schemas import (
+    XMindCaseUpdateRequest,
     XMindConfirmRequest,
     XMindExportRequest,
     XMindTaskConfirmRequest,
@@ -119,6 +120,27 @@ def retry_xmind_task(task_id: int, session: Session = Depends(get_session)) -> d
 def cancel_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
     """POST /tasks/{id}/cancel：取消排队中或生成中的任务。"""
     return xmind.cancel_generation_task(session, task_id)
+
+
+@router.patch("/tasks/{task_id}/cases/{case_id}")
+def update_xmind_task_case(
+    task_id: int,
+    case_id: str,
+    payload: XMindCaseUpdateRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """PATCH /tasks/{id}/cases/{caseId}：更新单条用例的审核状态、评价或字段。"""
+    return xmind.update_xmind_task_case(session, task_id, case_id, payload)
+
+
+@router.delete("/tasks/{task_id}/cases/{case_id}", status_code=status.HTTP_200_OK)
+def delete_xmind_task_case(
+    task_id: int,
+    case_id: str,
+    session: Session = Depends(get_session),
+) -> dict:
+    """DELETE /tasks/{id}/cases/{caseId}：删除单条用例。"""
+    return xmind.delete_xmind_task_case(session, task_id, case_id)
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

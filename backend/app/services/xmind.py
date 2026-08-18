@@ -11,15 +11,16 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, attributes, selectinload
 
 from ..models import Module, User, XMindRecord
 from ..schemas import TestCaseCreate
-from ..xmind_schemas import XMindConfirmRequest, XMindTaskConfirmRequest
+from ..xmind_schemas import XMindCaseUpdateRequest, XMindConfirmRequest, XMindTaskConfirmRequest
 from . import settings, test_cases
 from .xmind_skill import (
     LLMConfig,
     OpenAICompatibleClient,
+    STANDARD_HEADERS,
     XMindToTestCaseSkill,
     align_generated_cases,
 )
@@ -553,6 +554,67 @@ def delete_generation_task(session: Session, task_id: int, upload_dir: Path) -> 
     task_path.unlink(missing_ok=True)
 
 
+def _require_review_task(session: Session, task_id: int) -> XMindRecord:
+    """加载一个处于待审核状态的任务；其它状态返回 409。"""
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    if record.status != "WAITING_REVIEW":
+        raise HTTPException(
+            status_code=409,
+            detail="XMind task is not ready for case review",
+        )
+    return record
+
+
+def _resolve_case(record: XMindRecord, case_id: str) -> dict[str, Any]:
+    """按 tempId 定位一条预览用例；找不到返回 404。"""
+    cases = record.preview_cases_json or []
+    # tempId 为前端生成的稳定标识，存储在预览用例 JSON 内。
+    target = next((case for case in cases if case.get("tempId") == case_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="XMind case not found")
+    return target
+
+
+def update_xmind_task_case(
+    session: Session,
+    task_id: int,
+    case_id: str,
+    payload: XMindCaseUpdateRequest,
+) -> dict:
+    """按 tempId 更新单条用例的审核状态、评价或字段；任务须处于待审核状态。"""
+    record = _require_review_task(session, task_id)
+    target = _resolve_case(record, case_id)
+    # 仅写入请求中实际提供的字段，未提供的保持原值。
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    target.update(updates)
+    # MutableList 不追踪内部字典变更，显式标记列已修改以强制 SQLAlchemy 重新序列化写库。
+    attributes.flag_modified(record, "preview_cases_json")
+    session.commit()
+    return _serialize_task_detail(record)
+
+
+def delete_xmind_task_case(session: Session, task_id: int, case_id: str) -> dict:
+    """按 tempId 删除单条用例；任务须处于待审核状态。"""
+    record = _require_review_task(session, task_id)
+    cases = record.preview_cases_json or []
+    remaining = [case for case in cases if case.get("tempId") != case_id]
+    if len(remaining) == len(cases):
+        raise HTTPException(status_code=404, detail="XMind case not found")
+    record.preview_cases_json = remaining
+    # MutableList 不追踪内部字典变更，显式标记列已修改以强制 SQLAlchemy 重新序列化写库。
+    attributes.flag_modified(record, "preview_cases_json")
+    session.commit()
+    return _serialize_task_detail(record)
+
+
 def confirm_generated_task(
     session: Session,
     task_id: int,
@@ -573,7 +635,15 @@ def confirm_generated_task(
     if not cases:
         raise HTTPException(status_code=422, detail="XMind task has no preview cases")
 
-    directories = {str(case.get("用例目录") or "").strip() for case in cases}
+    # 合并时仅取审核通过的用例（通过审核状态筛选），未通过的留在任务中以备后续处理。
+    approved_cases = [case for case in cases if case.get("reviewStatus") == "passed"]
+    if not approved_cases:
+        raise HTTPException(
+            status_code=422,
+            detail="没有已通过审核的用例，请先在审核界面确认后再合并",
+        )
+
+    directories = {str(case.get("用例目录") or "").strip() for case in approved_cases}
     if "" in directories:
         raise HTTPException(status_code=422, detail="每条用例都必须包含用例目录")
     missing_names = sorted(directories - payload.module_mapping.keys())
@@ -601,9 +671,12 @@ def confirm_generated_task(
 
     saved_cases = []
     try:
-        for raw_case in cases:
+        for raw_case in approved_cases:
+            # 预览用例 JSON 含 tempId / reviewStatus 等审核字段，而 GeneratedFunctionalCase
+            # 关闭了 extra，必须先用标准 11 列重建干净用例再交给对齐逻辑，否则会校验失败。
+            clean_case = {header: raw_case.get(header, "") for header in STANDARD_HEADERS}
             normalized = align_generated_cases(
-                [raw_case],
+                [clean_case],
                 directory=str(raw_case["用例目录"]),
                 creator=uploader.name,
             )[0]
@@ -694,8 +767,15 @@ async def generate_task_preview(
             if record.status != "RUNNING":
                 return _serialize_task_detail(record)
 
-            record.preview_cases_json = cases
-            record.parsed_cases_count = len(cases)
+            # 为每条预览用例补充稳定标识 tempId 与初始审核状态，供前端定位与审核流转使用。
+            enriched_cases = []
+            for case in cases:
+                enriched = dict(case)
+                enriched["tempId"] = uuid4().hex
+                enriched.setdefault("reviewStatus", "pending")
+                enriched_cases.append(enriched)
+            record.preview_cases_json = enriched_cases
+            record.parsed_cases_count = len(enriched_cases)
             record.status = "WAITING_REVIEW"
             record.locked_at = None
             record.last_error = None
