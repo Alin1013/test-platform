@@ -401,10 +401,15 @@ def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
 
 def _serialize_task_detail(record: XMindRecord) -> dict[str, Any]:
     """序列化任务完整详情：主记录 + 树、预览用例与模块映射。"""
+    cases = record.preview_cases_json or []
+    uploader_name = record.uploader.name if record.uploader else ""
+    if uploader_name:
+        # 历史任务可能保存了模型生成的创建人；详情出站时统一修正为实际上传人。
+        cases = [{**case, "创建人": uploader_name} for case in cases]
     return {
         **_serialize_task_record(record),
         "tree": record.tree_json or [],
-        "cases": record.preview_cases_json or [],
+        "cases": cases,
         "module_mapping": record.module_mapping_json or {},
     }
 

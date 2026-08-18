@@ -279,7 +279,8 @@ def align_generated_cases(
         values["用例类型"] = "功能测试"
         values["用例状态"] = "草稿"
         values["用例等级"] = _priority(values["用例等级"])
-        values["创建人"] = _as_non_empty(values["创建人"], creator)
+        # 创建人属于任务审计元数据，必须由上传账号决定，不能采信模型可能臆造的字段。
+        values["创建人"] = _as_non_empty(creator, "未指定创建人")
         aligned.append({header: str(values.get(header, "")) for header in STANDARD_HEADERS})
     return aligned
 
