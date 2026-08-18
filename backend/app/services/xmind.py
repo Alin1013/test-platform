@@ -509,6 +509,28 @@ def retry_generation_task(session: Session, task_id: int) -> dict:
     return _serialize_task_detail(record)
 
 
+def cancel_generation_task(session: Session, task_id: int) -> dict:
+    """取消生成任务：仅排队中或生成中的任务可取消，终态任务拒绝取消。"""
+    record = session.scalar(
+        select(XMindRecord)
+        .options(selectinload(XMindRecord.uploader))
+        .where(XMindRecord.id == task_id)
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="XMind task not found")
+    if record.status not in {"PENDING", "RUNNING"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Only PENDING or RUNNING XMind tasks can be cancelled",
+        )
+    # 置为已取消并清空调度锁，worker 认领/落库时据此放弃处理。
+    record.status = "CANCELLED"
+    record.locked_at = None
+    record.last_error = None
+    session.commit()
+    return _serialize_task_detail(record)
+
+
 def delete_generation_task(session: Session, task_id: int, upload_dir: Path) -> None:
     """删除任务记录与对应上传文件；运行中的任务拒绝删除。"""
     record = session.scalar(
@@ -666,6 +688,11 @@ async def generate_task_preview(
                 ),
                 creator=uploader.name,
             )
+
+            # 取消竞态：若任务在生成期间被用户取消，放弃落库结果，保留 CANCELLED 状态。
+            session.refresh(record)
+            if record.status != "RUNNING":
+                return _serialize_task_detail(record)
 
             record.preview_cases_json = cases
             record.parsed_cases_count = len(cases)

@@ -342,7 +342,7 @@ class XMindRecord(Base):
     __tablename__ = "xmind_records"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'RUNNING', 'WAITING_REVIEW', 'FAILED', 'COMPLETED')",
+            "status IN ('PENDING', 'RUNNING', 'WAITING_REVIEW', 'FAILED', 'COMPLETED', 'CANCELLED')",
             name="ck_xmind_records_status",
         ),
         {"comment": "XMind 文件生成任务"},

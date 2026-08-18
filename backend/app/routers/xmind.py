@@ -115,6 +115,12 @@ def retry_xmind_task(task_id: int, session: Session = Depends(get_session)) -> d
     return xmind.retry_generation_task(session, task_id)
 
 
+@router.post("/tasks/{task_id}/cancel", status_code=status.HTTP_200_OK)
+def cancel_xmind_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+    """POST /tasks/{id}/cancel：取消排队中或生成中的任务。"""
+    return xmind.cancel_generation_task(session, task_id)
+
+
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_xmind_task(
     request: Request,
