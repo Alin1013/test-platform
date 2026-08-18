@@ -4,6 +4,7 @@
 import {
   ApartmentOutlined,
   CheckCircleFilled,
+  CloseCircleOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -40,6 +41,7 @@ const statusLabels: Record<XMindTaskStatus, string> = {
   WAITING_REVIEW: '待审核',
   FAILED: '失败',
   COMPLETED: '已完成',
+  CANCELLED: '已取消',
 };
 
 const statusColors: Record<XMindTaskStatus, string> = {
@@ -48,6 +50,7 @@ const statusColors: Record<XMindTaskStatus, string> = {
   WAITING_REVIEW: 'warning',
   FAILED: 'error',
   COMPLETED: 'success',
+  CANCELLED: 'default',
 };
 
 interface FlatModule {
@@ -318,6 +321,30 @@ export function XMindPage() {
     });
   };
 
+  // 取消生成：仅排队中/生成中可取消；二次确认后调用后端并将任务就地标记为已取消。
+  const cancelTask = (task: XMindTaskRecord) => {
+    if (task.status !== 'PENDING' && task.status !== 'RUNNING') return;
+    Modal.confirm({
+      title: '取消生成任务',
+      content: `确认取消任务「${task.fileName}」的生成吗？取消后任务将停留在「已取消」状态。`,
+      okText: '取消生成',
+      okButtonProps: { danger: true },
+      cancelText: '返回',
+      onOk: async () => {
+        try {
+          const updated = await service.cancelXMindTask(task.id);
+          setTasks((current) =>
+            current?.map((item) => (item.id === updated.id ? updated : item)) ?? current,
+          );
+          if (selectedTaskId === task.id) setDetail((current) => (current ? { ...current, status: 'CANCELLED' } : current));
+          void message.success('已取消生成任务');
+        } catch (reason: unknown) {
+          void message.error(reason instanceof Error ? reason.message : '取消任务失败');
+        }
+      },
+    });
+  };
+
   const taskColumns: ColumnsType<XMindTaskRecord> = [
     { title: '文件', dataIndex: 'fileName', ellipsis: true },
     { title: '状态', dataIndex: 'status', width: 100, render: taskStatus },
@@ -326,30 +353,52 @@ export function XMindPage() {
     { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
     {
       title: '操作',
-      width: 160,
-      // 行整体可点击选中，操作按钮上 stopPropagation 防止冒泡触发选中。
+      width: 200,
+      // 三个操作按钮常驻展示：审核仅待审核可用，取消生成仅排队中/生成中可用，
+      // 删除仅非进行中的状态可用；不同状态下对应按钮置灰，行点击仍选中任务。
       render: (_, record) => (
         <Space size="small" onClick={(event) => event.stopPropagation()}>
-          {record.status === 'WAITING_REVIEW' || record.status === 'RUNNING' ? (
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined aria-hidden="true" />}
-              aria-label={`审核 ${record.fileName}`}
-              onClick={() => reviewTask(record)}
-            >
-              审核
-            </Button>
-          ) : null}
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined aria-hidden="true" />}
+            aria-label={`审核 ${record.fileName}`}
+            // 仅待审核状态有可审内容，其余状态置灰。
+            disabled={record.status !== 'WAITING_REVIEW'}
+            title={record.status !== 'WAITING_REVIEW' ? '仅待审核任务可审核' : '审核任务'}
+            onClick={() => reviewTask(record)}
+          >
+            审核
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<CloseCircleOutlined aria-hidden="true" />}
+            aria-label={`取消生成 ${record.fileName}`}
+            // 仅排队中/生成中可取消，终态任务置灰。
+            disabled={record.status !== 'PENDING' && record.status !== 'RUNNING'}
+            title={
+              record.status === 'PENDING' || record.status === 'RUNNING'
+                ? '取消生成'
+                : '仅排队中或生成中的任务可取消'
+            }
+            onClick={() => cancelTask(record)}
+          >
+            取消生成
+          </Button>
           <Button
             type="link"
             size="small"
             danger
             icon={<DeleteOutlined aria-hidden="true" />}
             aria-label={`删除 ${record.fileName}`}
-            // 运行中任务后端拒绝删除，直接禁用避免无效请求与无意义确认。
-            disabled={record.status === 'RUNNING'}
-            title={record.status === 'RUNNING' ? '运行中的任务无法删除' : '删除任务'}
+            // 进行中（排队中/生成中）的任务需先取消或等待，删除置灰。
+            disabled={record.status === 'PENDING' || record.status === 'RUNNING'}
+            title={
+              record.status === 'PENDING' || record.status === 'RUNNING'
+                ? '进行中的任务需先取消生成'
+                : '删除任务'
+            }
             onClick={() => deleteTask(record)}
           >
             删除
