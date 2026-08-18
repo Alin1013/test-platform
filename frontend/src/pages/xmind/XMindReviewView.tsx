@@ -1,7 +1,7 @@
 /**
- * 用例审核视图：以待审核任务的所有生成用例为单位，按用例目录分页签展示。
- * 支持逐条确认通过 / 取消确认 / 删除，行勾选 + 表头全选（当前页签）批量操作，
- * 以及目录到模块的映射后“合并到用例库”。点击行打开详情弹窗。
+ * 用例审核视图：把待审核任务的所有生成用例放入同一个分页列表。
+ * 支持逐条确认通过 / 取消确认 / 删除、跨页勾选，以及表头全选当前页后批量操作。
+ * 所有通过用例统一合并到一个目标模块，点击行可打开详情弹窗。
  */
 import {
   CheckCircleOutlined,
@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   MergeCellsOutlined,
 } from '@ant-design/icons';
-import { App, Button, Empty, Modal, Select, Space, Table, Tabs, Tag } from 'antd';
+import { App, Button, Empty, Modal, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common';
@@ -41,12 +41,6 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const { message } = App.useApp();
   const flatModules = useMemo<FlatModule[]>(() => flattenModules(modules), [modules]);
 
-  // 任务内出现的目录集合，仅作为浏览页签依据；合并时不再按目录分别映射模块。
-  const directories = useMemo(
-    () => [...new Set(task.cases.map((item) => item.用例目录).filter(Boolean))],
-    [task.cases],
-  );
-  const [activeDirectory, setActiveDirectory] = useState<string>(directories[0] ?? '');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[0]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
@@ -55,20 +49,12 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   // 合并目标模块：整任务共用一个，所有通过的用例统一入库到该模块。
   const [targetModuleId, setTargetModuleId] = useState<string>('');
 
-  const casesByDirectory = useMemo(() => {
-    const grouped: Record<string, XMindGeneratedCase[]> = {};
-    for (const directory of directories) {
-      grouped[directory] = task.cases.filter((item) => item.用例目录 === directory);
-    }
-    return grouped;
-  }, [directories, task.cases]);
-
-  // 当前页签内容；目录被删空时回退到首个存在的目录。
-  const safeActive = directories.includes(activeDirectory) ? activeDirectory : directories[0] ?? '';
-  const currentCases = casesByDirectory[safeActive] ?? [];
+  // 目录仅作为用例自身字段保留，审核列表不再按目录拆分。
+  const currentCases = task.cases;
   const totalPages = Math.max(1, Math.ceil(currentCases.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pagedCases = currentCases.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const currentPageKeys = pagedCases.flatMap((item) => (item.tempId ? [item.tempId] : []));
   const passedCount = task.cases.filter((item) => item.reviewStatus === 'passed').length;
   const hasTargetModule = Boolean(targetModuleId);
 
@@ -80,7 +66,27 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   useEffect(() => {
     // 父页面切换审核任务时从第一页开始，避免沿用上一任务的页码。
     setPage(1);
+    setSelectedKeys([]);
   }, [task.id]);
+
+  const setCaseSelected = (caseItem: XMindGeneratedCase, selected: boolean) => {
+    // 单行选择跨页保留，批量操作始终以 selectedKeys 中的稳定 tempId 为准。
+    const key = caseItem.tempId;
+    if (!key) return;
+    setSelectedKeys((current) => {
+      if (!selected) return current.filter((currentKey) => currentKey !== key);
+      return current.includes(key) ? current : [...current, key];
+    });
+  };
+
+  const setCurrentPageSelected = (selected: boolean) => {
+    // 表头复选框只增删当前页键，不清除用户在其它页面已经勾选的用例。
+    const pageKeySet = new Set(currentPageKeys);
+    setSelectedKeys((current) => {
+      if (!selected) return current.filter((key) => !pageKeySet.has(key));
+      return [...new Set([...current, ...currentPageKeys])];
+    });
+  };
 
   const refreshDetail = async () => {
     // 批量/删除后统一重新拉取详情，保证列表与勾选状态一致。
@@ -260,18 +266,6 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
         </Space>
       </div>
 
-      <Tabs
-        activeKey={safeActive}
-        onChange={(directory) => {
-          setActiveDirectory(directory);
-          setPage(1);
-        }}
-        items={directories.map((directory) => ({
-          key: directory,
-          label: `${directory}（${casesByDirectory[directory].length}）`,
-        }))}
-      />
-
       <Space className="xmind-review__toolbar">
         <Button
           icon={<CheckCircleOutlined aria-hidden="true" />}
@@ -299,8 +293,12 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
             dataSource={pagedCases}
             pagination={false}
             size="small"
-            // Ant Design 的 Key 同时允许数字和字符串；任务临时标识统一按字符串处理，避免批量操作时类型漂移。
-            rowSelection={{ selectedRowKeys: selectedKeys, onChange: (keys) => setSelectedKeys(keys.map(String)) }}
+            rowSelection={{
+              selectedRowKeys: selectedKeys,
+              preserveSelectedRowKeys: true,
+              onSelect: (record, selected) => setCaseSelected(record, selected),
+              onSelectAll: (selected) => setCurrentPageSelected(selected),
+            }}
             // 点击行打开详情弹窗；点击复选框或操作按钮时不触发。
             onRow={(record) => ({
               onClick: (event) => {
@@ -321,7 +319,7 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
           />
         </>
       ) : (
-        <Empty description="当前目录暂无用例" />
+        <Empty description="暂无用例" />
       )}
 
       {modalCase ? (
