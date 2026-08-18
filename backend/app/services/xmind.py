@@ -7,7 +7,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -414,6 +414,27 @@ def _serialize_task_detail(record: XMindRecord) -> dict[str, Any]:
     }
 
 
+def _ensure_case_review_metadata(record: XMindRecord) -> bool:
+    """为历史预览用例补齐审核定位字段，返回本次是否修改了记录。"""
+    cases = record.preview_cases_json or []
+    changed = False
+    enriched_cases: list[dict[str, Any]] = []
+    for index, case in enumerate(cases):
+        enriched = dict(case)
+        if not enriched.get("tempId"):
+            # 历史任务没有 tempId；使用任务与序号生成确定性标识，避免并发读取产生不同 ID。
+            enriched["tempId"] = uuid5(NAMESPACE_URL, f"xmind-task:{record.id}:case:{index}").hex
+            changed = True
+        if enriched.get("reviewStatus") not in {"pending", "passed", "needs_modification"}:
+            enriched["reviewStatus"] = "pending"
+            changed = True
+        enriched_cases.append(enriched)
+    if changed:
+        record.preview_cases_json = enriched_cases
+        attributes.flag_modified(record, "preview_cases_json")
+    return changed
+
+
 def create_generation_task(
     session: Session,
     *,
@@ -489,6 +510,9 @@ def get_generation_task(session: Session, task_id: int) -> dict:
     )
     if record is None:
         raise HTTPException(status_code=404, detail="XMind task not found")
+    # 旧任务生成于审核字段上线前，首次读取时原地升级，后续增删改即可稳定按 tempId 定位。
+    if _ensure_case_review_metadata(record):
+        session.commit()
     return _serialize_task_detail(record)
 
 
