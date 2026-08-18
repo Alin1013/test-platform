@@ -5,6 +5,7 @@
  */
 import {
   CheckCircleOutlined,
+  CloseCircleOutlined,
   DeleteOutlined,
   MergeCellsOutlined,
 } from '@ant-design/icons';
@@ -185,24 +186,35 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
     },
     {
       title: '操作',
-      width: 240,
-      // 行内操作按钮阻止冒泡，避免触发整行点击打开弹窗。
+      width: 120,
+      // 行内操作按钮阻止冒泡，避免触发整行点击打开弹窗；改用图标按钮节省列宽。
       render: (_, record) => (
         <Space size="small" onClick={(event) => event.stopPropagation()}>
           <Button
             size="small"
             type="primary"
+            icon={<CheckCircleOutlined aria-hidden="true" />}
+            aria-label={`确认通过 ${record.用例名称 ?? ''}`}
+            title="确认通过"
             disabled={record.reviewStatus === 'passed'}
             onClick={() => confirmCase(record)}
-          >
-            确认通过
-          </Button>
-          <Button size="small" disabled={record.reviewStatus !== 'passed'} onClick={() => cancelConfirmCase(record)}>
-            取消确认
-          </Button>
-          <Button size="small" danger onClick={() => deleteCase(record)}>
-            删除
-          </Button>
+          />
+          <Button
+            size="small"
+            icon={<CloseCircleOutlined aria-hidden="true" />}
+            aria-label={`取消确认 ${record.用例名称 ?? ''}`}
+            title="取消确认"
+            disabled={record.reviewStatus !== 'passed'}
+            onClick={() => cancelConfirmCase(record)}
+          />
+          <Button
+            size="small"
+            danger
+            icon={<DeleteOutlined aria-hidden="true" />}
+            aria-label={`删除 ${record.用例名称 ?? ''}`}
+            title="删除"
+            onClick={() => deleteCase(record)}
+          />
         </Space>
       ),
     },
