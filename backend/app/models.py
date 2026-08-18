@@ -88,10 +88,16 @@ class AuthSession(Base):
 
 
 class Module(Base, TimestampMixin):
-    """测试模块：支持父子层级，挂在项目下。"""
+    """测试模块：支持父子层级，挂在项目下，并按用例类型隔离目录。"""
 
     __tablename__ = "modules"
-    __table_args__ = {"comment": "项目测试模块及父子层级"}
+    __table_args__ = (
+        CheckConstraint(
+            "module_type IN ('functional', 'api', 'ui')",
+            name="ck_modules_module_type",
+        ),
+        {"comment": "项目测试模块及父子层级"},
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
@@ -99,6 +105,9 @@ class Module(Base, TimestampMixin):
         ForeignKey("modules.id", ondelete="CASCADE"), nullable=True
     )
     project_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    module_type: Mapped[str] = mapped_column(
+        String(16), default="functional", server_default="functional", index=True
+    )
 
     parent: Mapped[Module | None] = relationship(remote_side=[id], back_populates="children")
     children: Mapped[list[Module]] = relationship(back_populates="parent")
