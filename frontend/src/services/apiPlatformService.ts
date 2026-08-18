@@ -795,5 +795,12 @@ export function createApiPlatformService({
         body: JSON.stringify({ cases }),
       });
     },
+
+    async deleteXMindTask(taskId: number): Promise<void> {
+      // 后端 204 No Content，request<void> 在 204 状态下返回 undefined。
+      await request<void>(`/xmind/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'DELETE',
+      });
+    },
   };
 }

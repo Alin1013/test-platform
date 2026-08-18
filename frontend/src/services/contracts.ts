@@ -520,4 +520,6 @@ export interface PlatformService {
   confirmXMind(input: XMindConfirmInput): Promise<XMindConfirmResult>;
   confirmXMindTask(taskId: number, input: XMindTaskConfirmInput): Promise<XMindConfirmResult>;
   exportXMind(cases: XMindGeneratedCase[]): Promise<Blob>;
+  /** 删除 XMind 生成任务（运行中的任务需先取消/等待完成）。 */
+  deleteXMindTask(taskId: number): Promise<void>;
 }

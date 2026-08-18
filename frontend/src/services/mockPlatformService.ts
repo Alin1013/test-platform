@@ -731,6 +731,14 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
     },
 
+    async deleteXMindTask(taskId: number) {
+      // 内存数据无需持久化；保持与真实后端一致的语义：运行中任务不允许删除。
+      const target = xmindTasks.find((task) => task.id === taskId);
+      if (!target) throw new Error('XMind 生成任务不存在');
+      if (target.status === 'RUNNING') throw new Error('运行中的 XMind 任务无法删除');
+      xmindTasks = xmindTasks.filter((task) => task.id !== taskId);
+    },
+
     async debugApiCase(input: ApiDebugInput) {
       const statusAssertion = input.assertions.find((assertion) => assertion.type === 'statusCode');
       const statusCode = Number(statusAssertion?.expected || input.expectedCode);
