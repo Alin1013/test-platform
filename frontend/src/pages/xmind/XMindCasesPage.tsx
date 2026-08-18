@@ -8,6 +8,7 @@ import { Alert, Button, Empty, Skeleton, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common/AppPagination';
 import { PageHeader } from '../../components/PageHeader';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type { TestModule, XMindTaskDetail, XMindTaskRecord } from '../../services/contracts';
@@ -29,6 +30,15 @@ export function XMindCasesPage() {
   const flatModules = useMemo<FlatModule[]>(() => flattenModules(modules), [modules]);
   // 标记是否已根据首次加载的任务列表自动选中过任务，避免后续刷新重复覆盖用户选择。
   const didAutoSelect = useRef(false);
+  // 任务列表分页状态：分页重置回首页，避免刷新后停留在越界页码导致空列表。
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[0]);
+  const totalTasks = tasks?.length ?? 0;
+  const pagedTasks = useMemo<XMindTaskRecord[]>(() => {
+    if (!tasks) return [];
+    const start = (page - 1) * pageSize;
+    return tasks.slice(start, start + pageSize);
+  }, [tasks, page, pageSize]);
 
   useEffect(() => {
     // 加载审核任务列表与模块树；优先按 URL 的 taskId 深链选中对应任务。
@@ -41,6 +51,7 @@ export function XMindCasesPage() {
         if (!active) return;
         setTasks(taskPage.items);
         setModules(nextModules);
+        setPage(1);
         if (hasDeep && taskPage.items.some((item) => item.id === deepId)) {
           setSelectedTaskId(deepId);
         } else if (!didAutoSelect.current && taskPage.items[0]) {
@@ -143,15 +154,29 @@ export function XMindCasesPage() {
         </div>
         {tasks ? (
           tasks.length ? (
-            <Table<XMindTaskRecord>
-              rowKey="id"
-              columns={taskColumns}
-              dataSource={tasks}
-              pagination={false}
-              size="small"
-              rowClassName={(record) => (record.id === selectedTaskId ? 'xmind-task-row--selected' : '')}
-              onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
-            />
+            <>
+              <Table<XMindTaskRecord>
+                rowKey="id"
+                columns={taskColumns}
+                dataSource={pagedTasks}
+                pagination={false}
+                size="small"
+                rowClassName={(record) => (record.id === selectedTaskId ? 'xmind-task-row--selected' : '')}
+                onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
+              />
+              {totalTasks > pageSize ? (
+                <AppPagination
+                  className="xmind-task-list__pagination"
+                  current={page}
+                  pageSize={pageSize}
+                  total={totalTasks}
+                  onChange={(nextPage, nextPageSize) => {
+                    setPage(nextPage);
+                    setPageSize(nextPageSize);
+                  }}
+                />
+              ) : null}
+            </>
           ) : <Empty description="暂无生成任务" />
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>

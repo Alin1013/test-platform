@@ -571,3 +571,10 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 任务列表分页器：与表格留出间距，避免紧贴。 */
+.xmind-task-list__pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
