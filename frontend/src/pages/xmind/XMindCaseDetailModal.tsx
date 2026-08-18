@@ -174,7 +174,7 @@ export function XMindCaseDetailModal({
           disabled={isPassed}
           onClick={handleConfirm}
         >
-          确认通过
+          确认
         </Button>,
       ]}
       onCancel={onClosed}

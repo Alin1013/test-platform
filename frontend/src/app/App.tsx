@@ -11,6 +11,7 @@ import { PersonnelPage } from '../pages/personnel/PersonnelPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { TestCasesPage } from '../pages/test-cases/TestCasesPage';
 import { XMindPage } from '../pages/xmind/XMindPage';
+import { XMindCasesPage } from '../pages/xmind/XMindCasesPage';
 import { LoginPage } from '../pages/login/LoginPage';
 import { UiTestExecutionPage } from '../pages/execution/ui/UiTestExecutionPage';
 import { ApiTestExecutionPage } from '../pages/execution/api/ApiTestExecutionPage';
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="/execution/ui-test" element={<UiTestExecutionPage />} />
         <Route path="/execution/api-test" element={<ApiTestExecutionPage />} />
         <Route path="/xmind" element={<XMindPage />} />
+        <Route path="/xmind-cases" element={<XMindCasesPage />} />
         <Route path="/personnel" element={<PersonnelPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

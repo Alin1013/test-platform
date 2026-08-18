@@ -2,6 +2,7 @@
  * 应用外壳：侧边导航、顶栏（搜索/项目/用户菜单）与内容区，含移动端抽屉导航。
  */
 import {
+  AuditOutlined,
   BookOutlined,
   BulbOutlined,
   DashboardOutlined,
@@ -45,6 +46,7 @@ const menuItems = [
     ],
   },
   { key: '/xmind', icon: <BulbOutlined aria-hidden="true" />, label: '用例生成器' },
+  { key: '/xmind-cases', icon: <AuditOutlined aria-hidden="true" />, label: '审核测试点' },
   { key: '/personnel', icon: <TeamOutlined aria-hidden="true" />, label: '人员管理' },
   { key: '/settings', icon: <SettingOutlined aria-hidden="true" />, label: '设置' },
 ];

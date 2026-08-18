@@ -15,15 +15,13 @@ import {
 } from '@ant-design/icons';
 import { Alert, App, Button, Empty, Modal, Progress, Select, Skeleton, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
-import { XMindReviewView } from './XMindReviewView';
 import type {
   TestModule,
-  XMindGeneratedCase,
   XMindTaskDetail,
   XMindTaskRecord,
   XMindTaskStatus,
@@ -36,7 +34,7 @@ type UploadState =
   | { status: 'idle'; error?: string }
   | { status: 'uploading'; fileName: string; progress: number };
 
-const statusLabels: Record<XMindTaskStatus, string> = {
+export const statusLabels: Record<XMindTaskStatus, string> = {
   PENDING: '排队中',
   RUNNING: '生成中',
   WAITING_REVIEW: '待审核',
@@ -45,7 +43,7 @@ const statusLabels: Record<XMindTaskStatus, string> = {
   CANCELLED: '已取消',
 };
 
-const statusColors: Record<XMindTaskStatus, string> = {
+export const statusColors: Record<XMindTaskStatus, string> = {
   PENDING: 'default',
   RUNNING: 'processing',
   WAITING_REVIEW: 'warning',
@@ -94,11 +92,6 @@ function renderTreeNode(node: XMindTreeNode, level: number, key: string): JSX.El
   );
 }
 
-function previewDirectories(cases: XMindGeneratedCase[]): string[] {
-  // 提取预览用例中出现的目录集合（去重保序）。
-  return [...new Set(cases.map((item) => item.用例目录).filter(Boolean))];
-}
-
 function normalizeModulePath(path: string): string {
   // 归一化目录路径：去空格、合并连续斜杠。
   return path
@@ -119,7 +112,7 @@ export function findMappedModule(directory: string, modules: FlatModule[]): Flat
   return leafMatches.length === 1 ? leafMatches[0] : undefined;
 }
 
-function taskStatus(status: XMindTaskStatus) {
+export function taskStatus(status: XMindTaskStatus) {
   return <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>;
 }
 
@@ -133,14 +126,9 @@ export function XMindPage() {
   const [tasks, setTasks] = useState<XMindTaskRecord[] | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [detail, setDetail] = useState<XMindTaskDetail | null>(null);
-  const [modules, setModules] = useState<TestModule[]>([]);
-  const [moduleMapping, setModuleMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
-  const [confirming, setConfirming] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const uploadTimer = useRef<number | null>(null);
-  const flatModules = useMemo(() => flattenModules(modules), [modules]);
-
   const clearUploadTimer = useCallback(() => {
     if (uploadTimer.current !== null) {
       window.clearInterval(uploadTimer.current);
@@ -159,11 +147,10 @@ export function XMindPage() {
   useEffect(() => {
     let active = true;
     setTasks(null);
-    void Promise.all([service.listXMindTasks(1, 20), service.listTestModules()])
-      .then(([taskPage, nextModules]) => {
+    void service.listXMindTasks(1, 20)
+      .then((taskPage) => {
         if (!active) return;
         setTasks(taskPage.items);
-        setModules(nextModules);
         if (selectedTaskId === null && taskPage.items[0]) setSelectedTaskId(taskPage.items[0].id);
       })
       .catch((reason: unknown) => {
@@ -186,13 +173,6 @@ export function XMindPage() {
         const nextDetail = await service.getXMindTask(selectedTaskId);
         if (!active) return;
         setDetail(nextDetail);
-        const defaults = Object.fromEntries(
-          previewDirectories(nextDetail.cases).map((directory) => [
-            directory,
-            nextDetail.moduleMapping[directory] ?? findMappedModule(directory, flatModules)?.id ?? '',
-          ]),
-        );
-        setModuleMapping(defaults);
         await loadTasks();
       } catch (reason: unknown) {
         if (active) setError(reason instanceof Error ? reason.message : '生成任务详情加载失败');
@@ -206,9 +186,7 @@ export function XMindPage() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [detail?.id, detail?.status, flatModules, loadTasks, selectedTaskId, service]);
-
-  const directories = useMemo(() => previewDirectories(detail?.cases ?? []), [detail?.cases]);
+  }, [detail?.id, detail?.status, loadTasks, selectedTaskId, service]);
 
   const startUpload = (file: File) => {
     // 校验扩展名后创建生成任务，成功后自动选中新任务并刷新列表。
@@ -231,7 +209,6 @@ export function XMindPage() {
         setUpload({ status: 'idle' });
         setSelectedTaskId(created.id);
         setDetail(created);
-        setModuleMapping(created.moduleMapping);
         setReloadToken((token) => token + 1);
         void message.success('已创建生成任务，可离开页面后在任务列表查看进度');
       })
@@ -240,26 +217,6 @@ export function XMindPage() {
         setUpload({ status: 'idle' });
         setError(reason instanceof Error ? reason.message : 'XMind 用例生成失败，请稍后重试');
       });
-  };
-
-  const confirmTask = async () => {
-    // 确认入库：先校验所有目录都已映射模块，再提交后端。
-    if (!detail || detail.status !== 'WAITING_REVIEW') return;
-    if (directories.some((directory) => !moduleMapping[directory])) {
-      setError('请为每个用例目录选择目标模块');
-      return;
-    }
-    setConfirming(true);
-    try {
-      const result = await service.confirmXMindTask(detail.id, { moduleMapping });
-      setDetail({ ...detail, status: 'COMPLETED', moduleMapping });
-      setTasks((current) => current?.map((task) => task.id === detail.id ? { ...task, status: 'COMPLETED' } : task) ?? current);
-      void message.success(`已合并 ${result.saved_cases.length} 条功能用例`);
-    } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '保存用例失败，请重试');
-    } finally {
-      setConfirming(false);
-    }
   };
 
   const retryTask = async () => {
@@ -289,11 +246,9 @@ export function XMindPage() {
     }
   };
 
-  // 审核按钮：待审核 / 生成中状态可用，复用行点击的选中逻辑加载任务详情。
-  // 运行中的任务尚无可审核内容，但允许点击查看进度；点击会高亮对应行。
+  // 审核按钮：待审核任务跳转独立的审核测试点路由，按 taskId 深链直达该任务。
   const reviewTask = (task: XMindTaskRecord) => {
-    setSelectedTaskId(task.id);
-    setModuleMapping({});
+    navigate(`/xmind-cases?taskId=${task.id}`);
   };
 
   // 删除任务：Modal 二次确认后调用后端，删除后立即从列表中移除并清空选中。
@@ -369,7 +324,7 @@ export function XMindPage() {
             title={record.status !== 'WAITING_REVIEW' ? '仅待审核任务可审核' : '审核任务'}
             onClick={() => reviewTask(record)}
           >
-            审核
+        
           </Button>
           <Button
             type="link"
@@ -385,7 +340,7 @@ export function XMindPage() {
             }
             onClick={() => cancelTask(record)}
           >
-            取消生成
+          
           </Button>
           <Button
             type="link"
@@ -402,7 +357,7 @@ export function XMindPage() {
             }
             onClick={() => deleteTask(record)}
           >
-            删除
+            
           </Button>
         </Space>
       ),
@@ -477,8 +432,21 @@ export function XMindPage() {
       </div>
 
       {detail && detail.status === 'WAITING_REVIEW' ? (
-        // 待审核任务：渲染用例审核视图，逐条/批量确认与合并入库。
-        <XMindReviewView task={detail} modules={modules} onTaskChange={setDetail} />
+        // 待审核任务：跳转独立的审核测试点页面进行逐条确认与合并入库。
+        <Alert
+          type="warning"
+          showIcon
+          className="xmind-goto-review"
+          message="任务已生成，等待审核"
+          description={
+            <span>
+              该任务的用例需在「审核测试点」页面中逐条确认并合并入库。
+              <Button type="link" style={{ paddingLeft: 8 }} onClick={() => navigate(`/xmind-cases?taskId=${detail.id}`)}>
+                前往审核
+              </Button>
+            </span>
+          }
+        />
       ) : null}
 
     </section>
