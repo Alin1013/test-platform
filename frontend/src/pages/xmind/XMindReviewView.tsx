@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   MergeCellsOutlined,
 } from '@ant-design/icons';
-import { App, Button, Empty, Modal, Select, Space, Table, Tag } from 'antd';
+import { App, Button, Empty, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common';
@@ -38,13 +38,14 @@ interface XMindReviewViewProps {
 
 export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewViewProps) {
   const service = usePlatformService();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const flatModules = useMemo<FlatModule[]>(() => flattenModules(modules), [modules]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[0]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [modalCase, setModalCase] = useState<XMindGeneratedCase | null>(null);
+  const [updatingCaseId, setUpdatingCaseId] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
   // 合并目标模块：整任务共用一个，所有通过的用例统一入库到该模块。
   const [targetModuleId, setTargetModuleId] = useState<string>('');
@@ -95,17 +96,49 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   };
 
   const confirmCase = async (caseItem: XMindGeneratedCase) => {
-    const detail = await service.updateXMindTaskCase(task.id, caseItem.tempId ?? '', { reviewStatus: 'passed' });
-    onTaskChange(detail);
+    const caseId = caseItem.tempId;
+    if (!caseId) {
+      message.error('用例标识缺失，请刷新页面后重试');
+      return;
+    }
+    setUpdatingCaseId(caseId);
+    try {
+      const detail = await service.updateXMindTaskCase(task.id, caseId, { reviewStatus: 'passed' });
+      onTaskChange(detail);
+      message.success('已确认通过该用例');
+    } catch (reason: unknown) {
+      message.error(reason instanceof Error ? reason.message : '确认用例失败');
+    } finally {
+      setUpdatingCaseId(null);
+    }
   };
 
   const cancelConfirmCase = async (caseItem: XMindGeneratedCase) => {
-    const detail = await service.updateXMindTaskCase(task.id, caseItem.tempId ?? '', { reviewStatus: 'pending' });
-    onTaskChange(detail);
+    const caseId = caseItem.tempId;
+    if (!caseId) {
+      message.error('用例标识缺失，请刷新页面后重试');
+      return;
+    }
+    setUpdatingCaseId(caseId);
+    try {
+      const detail = await service.updateXMindTaskCase(task.id, caseId, { reviewStatus: 'pending' });
+      onTaskChange(detail);
+      message.info('已取消确认，用例回到待审核状态');
+    } catch (reason: unknown) {
+      message.error(reason instanceof Error ? reason.message : '取消确认失败');
+    } finally {
+      setUpdatingCaseId(null);
+    }
   };
 
   const deleteCase = (caseItem: XMindGeneratedCase) => {
-    Modal.confirm({
+    const caseId = caseItem.tempId;
+    if (!caseId) {
+      message.error('用例标识缺失，请刷新页面后重试');
+      return;
+    }
+    // 使用应用级弹窗实例继承主题与交互上下文，避免静态弹窗脱离 App 容器。
+    modal.confirm({
       title: '删除用例',
       content: `确认删除用例「${caseItem.用例名称}」吗？删除后无法恢复。`,
       okText: '删除',
@@ -113,9 +146,9 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
       cancelText: '取消',
       onOk: async () => {
         try {
-          const detail = await service.deleteXMindTaskCase(task.id, caseItem.tempId ?? '');
+          const detail = await service.deleteXMindTaskCase(task.id, caseId);
           onTaskChange(detail);
-          setSelectedKeys((keys) => keys.filter((key) => key !== caseItem.tempId));
+          setSelectedKeys((keys) => keys.filter((key) => key !== caseId));
         } catch (reason: unknown) {
           message.error(reason instanceof Error ? reason.message : '删除用例失败');
         }
@@ -142,7 +175,7 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
 
   const batchDelete = async () => {
     if (!selectedKeys.length) return;
-    Modal.confirm({
+    modal.confirm({
       title: '批量删除用例',
       content: `确认删除选中的 ${selectedKeys.length} 条用例吗？删除后无法恢复。`,
       okText: '删除',
@@ -212,7 +245,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
             aria-label={`确认通过 ${record.用例名称 ?? ''}`}
             title="确认通过"
             disabled={record.reviewStatus === 'passed'}
-            onClick={() => confirmCase(record)}
+            loading={updatingCaseId === record.tempId}
+            onClick={() => void confirmCase(record)}
           />
           <Button
             size="small"
@@ -220,7 +254,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
             aria-label={`取消确认 ${record.用例名称 ?? ''}`}
             title="取消确认"
             disabled={record.reviewStatus !== 'passed'}
-            onClick={() => cancelConfirmCase(record)}
+            loading={updatingCaseId === record.tempId}
+            onClick={() => void cancelConfirmCase(record)}
           />
           <Button
             size="small"
@@ -326,7 +361,11 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
         <XMindCaseDetailModal
           taskId={task.id}
           caseItem={modalCase}
-          onUpdated={(detail) => onTaskChange(detail)}
+          onUpdated={(detail) => {
+            // 保存后同时刷新弹窗引用，避免继续展示更新前的字段和审核状态。
+            onTaskChange(detail);
+            setModalCase(detail.cases.find((item) => item.tempId === modalCase.tempId) ?? null);
+          }}
           onClosed={() => setModalCase(null)}
         />
       ) : null}

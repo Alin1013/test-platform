@@ -60,7 +60,7 @@ export function XMindCaseDetailModal({
   onClosed,
 }: XMindCaseDetailModalProps) {
   const service = usePlatformService();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [draft, setDraft] = useState<CaseDraft>(() => buildDraft(caseItem));
   const [saving, setSaving] = useState(false);
   // 用例状态跟随用例本身，弹窗内仅作展示。
@@ -92,14 +92,22 @@ export function XMindCaseDetailModal({
   };
 
   const handleSave = async () => {
-    await persistDraft();
-    message.success('已保存用例修改');
+    try {
+      await persistDraft();
+      message.success('已保存用例修改');
+    } catch (reason: unknown) {
+      message.error(reason instanceof Error ? reason.message : '保存用例失败');
+    }
   };
 
   const handleConfirm = async () => {
-    await persistDraft('passed');
-    message.success('已确认通过该用例');
-    onClosed();
+    try {
+      await persistDraft('passed');
+      message.success('已确认通过该用例');
+      onClosed();
+    } catch (reason: unknown) {
+      message.error(reason instanceof Error ? reason.message : '确认用例失败');
+    }
   };
 
   const handleCancelConfirm = async () => {
@@ -110,13 +118,16 @@ export function XMindCaseDetailModal({
       onUpdated(detail);
       message.info('已取消确认，用例回到待审核');
       onClosed();
+    } catch (reason: unknown) {
+      message.error(reason instanceof Error ? reason.message : '取消确认失败');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = () => {
-    Modal.confirm({
+    // 详情页内继续使用 App 上下文弹窗，确保二级确认框可正确接收主题和点击事件。
+    modal.confirm({
       title: '删除用例',
       content: `确认删除用例「${caseItem.用例名称}」吗？删除后无法恢复。`,
       okText: '删除',
@@ -141,11 +152,12 @@ export function XMindCaseDetailModal({
       open
       width={720}
       footer={[
-        <Button key="close" onClick={onClosed}>关闭</Button>,
+        <Button key="close" disabled={saving} onClick={onClosed}>关闭</Button>,
         <Button
           key="delete"
           danger
           icon={<DeleteOutlined aria-hidden="true" />}
+          disabled={saving}
           onClick={handleDelete}
         >
           删除
@@ -153,6 +165,7 @@ export function XMindCaseDetailModal({
         <Button
           key="cancel-confirm"
           icon={<CloseCircleOutlined aria-hidden="true" />}
+          loading={saving}
           // 始终可点击：未通过时调用为幂等（pending→pending），通过后回退为待审核。
           onClick={handleCancelConfirm}
         >
