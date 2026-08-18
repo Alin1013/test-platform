@@ -11,7 +11,8 @@ import {
 } from '@ant-design/icons';
 import { App, Button, Empty, Modal, Select, Space, Table, Tabs, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
   TestModule,
@@ -46,6 +47,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
     [task.cases],
   );
   const [activeDirectory, setActiveDirectory] = useState<string>(directories[0] ?? '');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[0]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [modalCase, setModalCase] = useState<XMindGeneratedCase | null>(null);
   const [merging, setMerging] = useState(false);
@@ -63,8 +66,21 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   // 当前页签内容；目录被删空时回退到首个存在的目录。
   const safeActive = directories.includes(activeDirectory) ? activeDirectory : directories[0] ?? '';
   const currentCases = casesByDirectory[safeActive] ?? [];
+  const totalPages = Math.max(1, Math.ceil(currentCases.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedCases = currentCases.slice((safePage - 1) * pageSize, safePage * pageSize);
   const passedCount = task.cases.filter((item) => item.reviewStatus === 'passed').length;
   const hasTargetModule = Boolean(targetModuleId);
+
+  useEffect(() => {
+    // 删除当前页最后一条用例后收敛到仍然存在的页，避免出现空白表格。
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  useEffect(() => {
+    // 父页面切换审核任务时从第一页开始，避免沿用上一任务的页码。
+    setPage(1);
+  }, [task.id]);
 
   const refreshDetail = async () => {
     // 批量/删除后统一重新拉取详情，保证列表与勾选状态一致。
@@ -246,7 +262,10 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
 
       <Tabs
         activeKey={safeActive}
-        onChange={setActiveDirectory}
+        onChange={(directory) => {
+          setActiveDirectory(directory);
+          setPage(1);
+        }}
         items={directories.map((directory) => ({
           key: directory,
           label: `${directory}（${casesByDirectory[directory].length}）`,
@@ -273,23 +292,34 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
       </Space>
 
       {currentCases.length ? (
-        <Table<XMindGeneratedCase>
-          rowKey="tempId"
-          columns={columns}
-          dataSource={currentCases}
-          pagination={false}
-          size="small"
-          // Ant Design 的 Key 同时允许数字和字符串；任务临时标识统一按字符串处理，避免批量操作时类型漂移。
-          rowSelection={{ selectedRowKeys: selectedKeys, onChange: (keys) => setSelectedKeys(keys.map(String)) }}
-          // 点击行打开详情弹窗；点击复选框或操作按钮时不触发。
-          onRow={(record) => ({
-            onClick: (event) => {
-              const target = event.target as HTMLElement;
-              if (target.closest('.ant-checkbox-wrapper') || target.closest('.ant-btn')) return;
-              setModalCase(record);
-            },
-          })}
-        />
+        <>
+          <Table<XMindGeneratedCase>
+            rowKey="tempId"
+            columns={columns}
+            dataSource={pagedCases}
+            pagination={false}
+            size="small"
+            // Ant Design 的 Key 同时允许数字和字符串；任务临时标识统一按字符串处理，避免批量操作时类型漂移。
+            rowSelection={{ selectedRowKeys: selectedKeys, onChange: (keys) => setSelectedKeys(keys.map(String)) }}
+            // 点击行打开详情弹窗；点击复选框或操作按钮时不触发。
+            onRow={(record) => ({
+              onClick: (event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest('.ant-checkbox-wrapper') || target.closest('.ant-btn')) return;
+                setModalCase(record);
+              },
+            })}
+          />
+          <AppPagination
+            current={safePage}
+            pageSize={pageSize}
+            total={currentCases.length}
+            onChange={(nextPage, nextPageSize) => {
+              setPageSize(nextPageSize);
+              setPage(nextPageSize === pageSize ? nextPage : 1);
+            }}
+          />
+        </>
       ) : (
         <Empty description="当前目录暂无用例" />
       )}
