@@ -3,7 +3,7 @@
  * 与用例生成器（/xmind）解耦：从生成器的「审核」按钮以 ?taskId= 深链直达某个任务；
  * 进入后若未指定深链，默认选中任务列表中的首个待审核任务，便于直接开始审核。
  */
-import { AuditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, AuditOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Skeleton, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,9 @@ export function XMindCasesPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const service = usePlatformService();
+  // 生成器通过 taskId 深链进入时，只展示该任务的审核内容，不重复展示任务列表。
+  const deepTaskId = Number(searchParams.get('taskId'));
+  const hasDeepLink = Number.isInteger(deepTaskId) && deepTaskId > 0;
   const [tasks, setTasks] = useState<XMindTaskRecord[] | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [detail, setDetail] = useState<XMindTaskDetail | null>(null);
@@ -52,7 +55,8 @@ export function XMindCasesPage() {
         setTasks(taskPage.items);
         setModules(nextModules);
         setPage(1);
-        if (hasDeep && taskPage.items.some((item) => item.id === deepId)) {
+        if (hasDeep) {
+          // 深链任务可能不在当前分页，直接加载详情而不是依赖列表命中。
           setSelectedTaskId(deepId);
         } else if (!didAutoSelect.current && taskPage.items[0]) {
           // 未指定深链时默认选中首个待审核任务，便于直接开始审核。
@@ -139,47 +143,59 @@ export function XMindCasesPage() {
 
   return (
     <section className="page-section xmind-cases-page">
-      <PageHeader title="审核测试点" description="对待审核的 XMind 生成用例逐条确认、修改或删除，并合并到用例库" />
+      <PageHeader
+        title="审核测试点"
+        description={hasDeepLink ? '审核当前 XMind 任务的生成用例' : '对待审核的 XMind 生成用例逐条确认、修改或删除，并合并到用例库'}
+        actions={
+          hasDeepLink ? (
+            <Button type="link" icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => navigate('/xmind-cases')}>
+              返回任务列表
+            </Button>
+          ) : undefined
+        }
+      />
 
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError(undefined)} /> : null}
 
-      <div className="xmind-task-list" aria-label="待审核 XMind 任务列表">
-        <div className="xmind-preview__header">
-          <div>
-            <span className="xmind-eyebrow">用例审核</span>
-            <h2>待审核任务</h2>
-            <p>选择「待审核」任务进入用例审核与合并入库。</p>
+      {!hasDeepLink ? (
+        <div className="xmind-task-list" aria-label="待审核 XMind 任务列表">
+          <div className="xmind-preview__header">
+            <div>
+              <span className="xmind-eyebrow">用例审核</span>
+              <h2>待审核任务</h2>
+              <p>选择「待审核」任务进入用例审核与合并入库。</p>
+            </div>
+            <Button aria-label="刷新审核任务" icon={<ReloadOutlined />} onClick={() => setReloadToken((token) => token + 1)} />
           </div>
-          <Button aria-label="刷新审核任务" icon={<ReloadOutlined />} onClick={() => setReloadToken((token) => token + 1)} />
-        </div>
-        {tasks ? (
-          tasks.length ? (
-            <>
-              <Table<XMindTaskRecord>
-                rowKey="id"
-                columns={taskColumns}
-                dataSource={pagedTasks}
-                pagination={false}
-                size="small"
-                rowClassName={(record) => (record.id === selectedTaskId ? 'xmind-task-row--selected' : '')}
-                onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
-              />
-              {totalTasks > pageSize ? (
-                <AppPagination
-                  className="xmind-task-list__pagination"
-                  current={page}
-                  pageSize={pageSize}
-                  total={totalTasks}
-                  onChange={(nextPage, nextPageSize) => {
-                    setPage(nextPage);
-                    setPageSize(nextPageSize);
-                  }}
+          {tasks ? (
+            tasks.length ? (
+              <>
+                <Table<XMindTaskRecord>
+                  rowKey="id"
+                  columns={taskColumns}
+                  dataSource={pagedTasks}
+                  pagination={false}
+                  size="small"
+                  rowClassName={(record) => (record.id === selectedTaskId ? 'xmind-task-row--selected' : '')}
+                  onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
                 />
-              ) : null}
-            </>
-          ) : <Empty description="暂无生成任务" />
-        ) : <Skeleton active paragraph={{ rows: 3 }} />}
-      </div>
+                {totalTasks > pageSize ? (
+                  <AppPagination
+                    className="xmind-task-list__pagination"
+                    current={page}
+                    pageSize={pageSize}
+                    total={totalTasks}
+                    onChange={(nextPage, nextPageSize) => {
+                      setPage(nextPage);
+                      setPageSize(nextPageSize);
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : <Empty description="暂无生成任务" />
+          ) : <Skeleton active paragraph={{ rows: 3 }} />}
+        </div>
+      ) : null}
 
       {detail && detail.status === 'WAITING_REVIEW' ? (
         // 待审核任务：渲染用例审核视图，逐条/批量确认与合并入库。

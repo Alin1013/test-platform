@@ -279,7 +279,8 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
           dataSource={currentCases}
           pagination={false}
           size="small"
-          rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
+          // Ant Design 的 Key 同时允许数字和字符串；任务临时标识统一按字符串处理，避免批量操作时类型漂移。
+          rowSelection={{ selectedRowKeys: selectedKeys, onChange: (keys) => setSelectedKeys(keys.map(String)) }}
           // 点击行打开详情弹窗；点击复选框或操作按钮时不触发。
           onRow={(record) => ({
             onClick: (event) => {
