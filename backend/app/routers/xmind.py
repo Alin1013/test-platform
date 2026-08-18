@@ -115,6 +115,21 @@ def retry_xmind_task(task_id: int, session: Session = Depends(get_session)) -> d
     return xmind.retry_generation_task(session, task_id)
 
 
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_xmind_task(
+    request: Request,
+    task_id: int,
+    session: Session = Depends(get_session),
+) -> None:
+    """DELETE /tasks/{id}：删除生成任务记录与上传文件；运行中的任务拒绝删除。"""
+    # 上传文件与服务层函数签名一致，需要从应用状态中拿到上传目录。
+    xmind.delete_generation_task(
+        session,
+        task_id,
+        upload_dir=Path(request.app.state.upload_dir),
+    )
+
+
 @router.post("/tasks/{task_id}/confirm", status_code=status.HTTP_201_CREATED)
 def confirm_xmind_task(
     task_id: int,
