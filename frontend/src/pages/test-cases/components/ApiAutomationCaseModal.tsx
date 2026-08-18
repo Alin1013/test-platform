@@ -528,7 +528,7 @@ export function ApiAutomationCaseModal({
     setDebugResult(null);
     setDebugError(null);
     let active = true;
-    void service.listTestModules(1).then((nextModules) => {
+    void service.listTestModules(1, 'api').then((nextModules) => {
       if (active) setModules(nextModules);
     });
     void service.getSystemSettings().then((settings) => {

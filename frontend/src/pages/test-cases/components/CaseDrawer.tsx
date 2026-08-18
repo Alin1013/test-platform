@@ -120,7 +120,7 @@ function FunctionalCaseDrawer({
     });
     let active = true;
     void Promise.all([
-      service.listTestModules(1),
+      service.listTestModules(1, 'functional'),
       service.listUsers(),
       service.getSystemSettings(),
     ]).then(

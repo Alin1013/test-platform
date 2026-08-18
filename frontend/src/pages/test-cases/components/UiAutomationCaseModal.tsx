@@ -281,7 +281,7 @@ export function UiAutomationCaseModal({
     let active = true;
     void Promise.all([
       service.listTestCases({ type: 'ui' }),
-      service.listTestModules(1),
+      service.listTestModules(1, 'ui'),
       service.getSystemSettings(),
     ]).then(
       ([cases, nextModules, settings]) => {
