@@ -1,5 +1,5 @@
 /**
- * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量删除与导入（CSV/XLSX/Apifox）。
+ * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量通过/删除与导入（CSV/XLSX/Apifox）。
  */
 import {
   CheckOutlined,
