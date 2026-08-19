@@ -233,9 +233,9 @@ body.is-resizing-module-panel {
 }
 
 .case-list-toolbar__search {
-  width: min(100%, 360px);
-  flex: 1 1 280px;
-  min-width: 200px;
+  /* 搜索框保持固定宽度，避免宽屏下挤占筛选字段的展示空间。 */
+  width: 280px;
+  flex: 0 0 280px;
 }
 
 .case-list-filter-fields {
@@ -1059,11 +1059,13 @@ body.is-resizing-module-panel {
 
   .case-list-toolbar__search {
     width: 100%;
+    flex: 1 1 auto;
     margin-bottom: 8px;
   }
 
   .case-list-toolbar.has-module-panel-toggle .case-list-toolbar__search {
     width: calc(100% - 40px);
+    flex: 1 1 auto;
     margin-left: 40px;
   }
 
