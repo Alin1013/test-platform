@@ -2,6 +2,7 @@
  * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量删除与导入（CSV/XLSX/Apifox）。
  */
 import {
+  CheckOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -27,6 +28,7 @@ import type {
   TestCaseRecord,
   TestCaseStatus,
   TestCaseType,
+  UpdateTestCaseInput,
   PaginatedResult,
 } from '../../services/contracts';
 import { CaseDrawer } from './components/CaseDrawer';
@@ -77,6 +79,27 @@ function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
     reader.onerror = () => reject(new Error('无法读取导入文件'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+function toStatusUpdateInput(testCase: TestCaseRecord, status: TestCaseStatus): UpdateTestCaseInput {
+  // 更新接口要求携带完整用例字段；批量状态操作只替换 status，避免覆盖其它内容。
+  return {
+    moduleId: testCase.moduleId,
+    name: testCase.name,
+    priority: testCase.priority,
+    status,
+    requirementId: testCase.requirementId,
+    precondition: testCase.precondition,
+    steps: testCase.steps,
+    expectedResult: testCase.expectedResult,
+    iteration: testCase.iteration,
+    isSmoke: testCase.isSmoke,
+    endpoint: testCase.endpoint,
+    method: testCase.method,
+    expectedStatus: testCase.expectedStatus,
+    apiDetails: testCase.apiDetails,
+    uiDetails: testCase.uiDetails,
+  };
 }
 
 async function hasMissingFunctionalModule(file: File): Promise<boolean> {
@@ -142,6 +165,7 @@ export function TestCasesPage() {
   const [isModulePanelCollapsed, setIsModulePanelCollapsed] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
@@ -278,6 +302,40 @@ export function TestCasesPage() {
         }
       },
     });
+  };
+
+  const markCasesPassed = async (cases: TestCaseRecord[]) => {
+    // 并行更新选中用例；失败项继续保留选中，方便用户直接重试。
+    if (!cases.length || isBulkUpdating) return;
+    setIsBulkUpdating(true);
+    try {
+      const results = await Promise.allSettled(
+        cases.map((testCase) =>
+          service.updateTestCase(testCase.storageId, toStatusUpdateInput(testCase, '已通过')),
+        ),
+      );
+      const nextRows = await refreshRowsAndFilterOptions();
+      const failedStorageIds = cases
+        .filter((_, index) => results[index].status === 'rejected')
+        .map((testCase) => testCase.storageId)
+        .filter((storageId) => nextRows.some((testCase) => testCase.storageId === storageId));
+      setSelectedStorageIds(failedStorageIds);
+
+      if (failedStorageIds.length) {
+        const passedCount = cases.length - failedStorageIds.length;
+        void message.error(
+          passedCount
+            ? `已通过 ${passedCount} 条，${failedStorageIds.length} 条更新失败`
+            : '批量通过失败，请重试',
+        );
+        return;
+      }
+      void message.success(`已将 ${cases.length} 条用例标记为已通过`);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '批量通过失败');
+    } finally {
+      setIsBulkUpdating(false);
+    }
   };
 
   const columns: ColumnsType<TestCaseRecord> = (() => {
@@ -628,9 +686,21 @@ export function TestCasesPage() {
             <div className="case-bulk-actions" role="toolbar" aria-label="批量操作">
               <span>已选择 {selectedStorageIds.length} 项</span>
               <Button
+                type="primary"
+                size="small"
+                icon={<CheckOutlined />}
+                loading={isBulkUpdating}
+                disabled={isBulkUpdating}
+                aria-label={`通过已选 ${selectedStorageIds.length} 项`}
+                onClick={() => void markCasesPassed(selectedCases)}
+              >
+                批量通过
+              </Button>
+              <Button
                 danger
                 size="small"
                 icon={<DeleteOutlined />}
+                disabled={isBulkUpdating}
                 aria-label={`删除已选 ${selectedStorageIds.length} 项`}
                 onClick={() => deleteCases(selectedCases)}
               >
