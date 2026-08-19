@@ -7,10 +7,9 @@ import {
   EditOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
-  SearchOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
-import { App, Button, Empty, Input, Select, Skeleton, Table, Tabs, Tag, Tooltip } from 'antd';
+import { App, Button, Empty, Skeleton, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Key } from 'react';
@@ -31,8 +30,8 @@ import type {
   PaginatedResult,
 } from '../../services/contracts';
 import { CaseDrawer } from './components/CaseDrawer';
+import { CaseListFilters } from './components/CaseListFilters';
 import { ModuleTreePanel } from './components/ModuleTreePanel';
-import { testCaseStatusOptions } from './testCaseOptions';
 import { parseApifoxOpenApi } from './apifoxImport';
 import './test-cases.css';
 
@@ -203,15 +202,6 @@ export function TestCasesPage() {
   }, [rows, totalPages]);
 
   const visibleRows = rows?.items ?? [];
-
-  const projectOptions = useMemo(
-    () => filterOptions.projectNames.map((value) => ({ value, label: value })),
-    [filterOptions.projectNames],
-  );
-  const iterationOptions = useMemo(
-    () => filterOptions.iterations.map((value) => ({ value, label: value })),
-    [filterOptions.iterations],
-  );
 
   const refreshFilterOptions = async () => {
     if (type !== 'functional') return;
@@ -604,66 +594,22 @@ export function TestCasesPage() {
                 />
               </Tooltip>
             ) : null}
-            <Input
-              className="case-list-toolbar__search"
-              prefix={<SearchOutlined />}
-              placeholder="搜索用例名称或接口地址"
-              allowClear
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
+            <CaseListFilters
+              type={type}
+              keyword={keyword}
+              priority={priority}
+              status={status}
+              projectName={projectName}
+              iteration={iteration}
+              smokeFilter={smokeFilter}
+              filterOptions={filterOptions}
+              onKeywordChange={setKeyword}
+              onPriorityChange={setPriority}
+              onStatusChange={setStatus}
+              onProjectNameChange={setProjectName}
+              onIterationChange={setIteration}
+              onSmokeFilterChange={setSmokeFilter}
             />
-            <Select
-              id="priority-filter"
-              aria-label="筛选优先级"
-              placeholder="优先级"
-              allowClear
-              value={priority}
-              options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))}
-              onChange={setPriority}
-            />
-            <Select
-              id="status-filter"
-              aria-label="筛选状态"
-              placeholder="状态"
-              allowClear
-              value={status}
-              options={testCaseStatusOptions.map((value) => ({ value, label: value }))}
-              onChange={setStatus}
-            />
-            {type === 'functional' ? (
-              <div className="case-list-toolbar__functional-filters">
-                <Select
-                  id="project-filter"
-                  aria-label="筛选项目归属"
-                  placeholder="项目归属"
-                  allowClear
-                  value={projectName}
-                  options={projectOptions}
-                  onChange={setProjectName}
-                />
-                <Select
-                  id="smoke-filter"
-                  aria-label="筛选是否冒烟"
-                  placeholder="是否冒烟"
-                  allowClear
-                  value={smokeFilter}
-                  options={[
-                    { value: 'smoke', label: '是' },
-                    { value: 'non-smoke', label: '否' },
-                  ]}
-                  onChange={setSmokeFilter}
-                />
-                <Select
-                  id="iteration-filter"
-                  aria-label="筛选归属迭代"
-                  placeholder="归属迭代"
-                  allowClear
-                  value={iteration}
-                  options={iterationOptions}
-                  onChange={setIteration}
-                />
-              </div>
-            ) : null}
           </div>
 
           {selectedStorageIds.length ? (
