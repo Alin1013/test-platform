@@ -69,8 +69,9 @@ export function PersonnelPage() {
   }, [service]);
 
   useEffect(() => {
-    if (activeTab === 'permissions' && permissionRoles === null) void loadRoles();
-  }, [activeTab, loadRoles, permissionRoles]);
+    // 用户抽屉也依赖角色列表，因此进入人员页时就加载，避免角色选项与权限配置脱节。
+    if (permissionRoles === null) void loadRoles();
+  }, [loadRoles, permissionRoles]);
 
   const changedPermissionRoles = useMemo(
     // 与已保存快照对比，只提交发生变化的角色。
@@ -384,7 +385,12 @@ export function PersonnelPage() {
         </section>
       )}
 
-      <UserDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSubmit={addUser} />
+      <UserDrawer
+        open={drawerOpen}
+        roles={permissionRoles}
+        onClose={() => setDrawerOpen(false)}
+        onSubmit={addUser}
+      />
     </section>
   );
 }

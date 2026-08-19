@@ -3,21 +3,31 @@
  */
 import { App, Button, Drawer, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useState } from 'react';
-import type { CreateUserInput, UserRecord, UserRole } from '../../../services/contracts';
+import type {
+  CreateUserInput,
+  PermissionRole,
+  UserRecord,
+  UserRole,
+} from '../../../services/contracts';
 
 interface UserDrawerProps {
   open: boolean;
+  /** 当前角色及权限配置；为空时使用内置角色，避免加载期间无法创建用户。 */
+  roles: PermissionRole[] | null;
   onClose: () => void;
   onSubmit: (input: CreateUserInput) => Promise<UserRecord>;
 }
 
 const roleOptions: UserRole[] = ['测试负责人', '测试工程师', '开发人员'];
 
-export function UserDrawer({ open, onClose, onSubmit }: UserDrawerProps) {
+export function UserDrawer({ open, roles, onClose, onSubmit }: UserDrawerProps) {
   const [form] = Form.useForm<CreateUserInput>();
   const { message } = App.useApp();
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const roleSelectOptions = (roles?.length ? roles.map((role) => role.name) : roleOptions).map(
+    (value) => ({ value, label: value }),
+  );
 
   useEffect(() => {
     // 每次打开时重置部门与角色的默认值。
@@ -120,7 +130,7 @@ export function UserDrawer({ open, onClose, onSubmit }: UserDrawerProps) {
             <Select
               id="user-role-select"
               aria-label="角色"
-              options={roleOptions.map((value) => ({ value, label: value }))}
+              options={roleSelectOptions}
             />
           </Form.Item>
           <Form.Item

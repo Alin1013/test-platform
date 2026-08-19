@@ -15,6 +15,7 @@ import type {
   CreateTestCaseInput,
   CreateTestModuleInput,
   CreateUserInput,
+  PermissionRole,
   SystemSettings,
   PlatformService,
   TestCaseQuery,
@@ -43,6 +44,15 @@ import type {
 interface MockServiceOptions {
   delay?: number;
 }
+
+interface MockPersonnelSnapshot {
+  /** 只持久化人员域，避免 Mock 服务把执行中的临时数据写入浏览器。 */
+  users: UserRecord[];
+  roles: PermissionRole[];
+  userSequence: number;
+}
+
+const MOCK_PERSONNEL_STORAGE_KEY = 'test-platform.mock.personnel.v1';
 
 const copy = <T,>(value: T): T => {
   // 深拷贝隔离，避免调用方直接改写内部状态。
@@ -133,6 +143,34 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let xmindTasks: XMindTaskDetail[] = [];
   const uiExecutions = new Map<string, UiExecutionResult>();
   const apiExecutions = new Map<string, ApiExecutionReport>();
+
+  // Mock 模式没有后端数据库，因此把人员域快照写入浏览器存储，刷新后仍能恢复。
+  try {
+    const rawSnapshot = window.localStorage.getItem(MOCK_PERSONNEL_STORAGE_KEY);
+    if (rawSnapshot) {
+      const snapshot = JSON.parse(rawSnapshot) as Partial<MockPersonnelSnapshot>;
+      if (Array.isArray(snapshot.users) && Array.isArray(snapshot.roles)) {
+        users = copy(snapshot.users);
+        roles = copy(snapshot.roles);
+        userSequence =
+          typeof snapshot.userSequence === 'number' && Number.isFinite(snapshot.userSequence)
+            ? snapshot.userSequence
+            : userSequence;
+      }
+    }
+  } catch {
+    // 隐私模式或禁用存储时继续使用内存态，不能阻断人员页面正常工作。
+  }
+
+  const persistPersonnel = () => {
+    // 单独保存用户和角色，权限矩阵与添加用户流程共享同一份持久化快照。
+    try {
+      const snapshot: MockPersonnelSnapshot = { users, roles, userSequence };
+      window.localStorage.setItem(MOCK_PERSONNEL_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch {
+      // 存储配额不足或不可用时保留内存态；调用方仍可继续操作当前会话。
+    }
+  };
 
   const respond = async <T,>(value: T): Promise<T> => {
     // 模拟网络延迟并返回深拷贝，行为上接近真实 API。
@@ -464,11 +502,13 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         enabled: true,
       };
       users = [created, ...users];
+      persistPersonnel();
       return respond(created);
     },
 
     async setUserEnabled(id: string, enabled: boolean) {
       users = users.map((user) => (user.id === id ? { ...user, enabled } : user));
+      persistPersonnel();
       await respond(undefined);
     },
 
@@ -477,6 +517,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       if (!existing) throw new Error('用户不存在');
       if (existing.enabled) throw new Error('请先停用账号');
       users = users.filter((user) => user.id !== id);
+      persistPersonnel();
       await respond(undefined);
     },
 
@@ -490,6 +531,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
 
       const updated = { ...existing, permissions: copy(permissions) };
       roles = roles.map((role) => (role.id === id ? updated : role));
+      persistPersonnel();
       return respond(updated);
     },
 
