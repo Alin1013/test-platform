@@ -31,6 +31,7 @@ import type {
 } from '../../services/contracts';
 import { CaseDrawer } from './components/CaseDrawer';
 import { CaseListFilters } from './components/CaseListFilters';
+import type { CaseFilterKey } from './components/CaseListFilters';
 import { ModuleTreePanel } from './components/ModuleTreePanel';
 import { parseApifoxOpenApi } from './apifoxImport';
 import './test-cases.css';
@@ -117,6 +118,8 @@ export function TestCasesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedModule, setSelectedModule] = useState('all');
   const [keyword, setKeyword] = useState('');
+  // 默认只展示状态筛选；其他字段由用户按当前列表表头主动添加。
+  const [activeFilters, setActiveFilters] = useState<CaseFilterKey[]>(['status']);
   const [priority, setPriority] = useState<Priority | undefined>();
   const [status, setStatus] = useState<TestCaseStatus | undefined>();
   const [iteration, setIteration] = useState<string | undefined>();
@@ -138,22 +141,28 @@ export function TestCasesPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
-    // 功能用例额外携带迭代与冒烟筛选，其余类型不带。
+    // 只把当前可见字段带入查询，移除筛选字段后旧值不会继续过滤列表。
     () => ({
       type,
       moduleId: selectedModule === 'all' ? undefined : selectedModule,
       keyword,
-      priority,
-      status,
-      ...(type === 'functional'
-        ? {
-            iteration,
-            isSmoke: smokeFilter === undefined ? undefined : smokeFilter === 'smoke',
-          }
+      priority: activeFilters.includes('priority') ? priority : undefined,
+      status: activeFilters.includes('status') ? status : undefined,
+      ...(type === 'functional' && activeFilters.includes('iteration') ? { iteration } : {}),
+      ...(type === 'functional' && activeFilters.includes('smoke')
+        ? { isSmoke: smokeFilter === undefined ? undefined : smokeFilter === 'smoke' }
         : {}),
     }),
-    [iteration, keyword, priority, selectedModule, smokeFilter, status, type],
+    [activeFilters, iteration, keyword, priority, selectedModule, smokeFilter, status, type],
   );
+
+  useEffect(() => {
+    // 切换用例类型时只保留通用状态字段，避免上一个模块的筛选条件泄漏。
+    setActiveFilters(['status']);
+    setPriority(undefined);
+    setIteration(undefined);
+    setSmokeFilter(undefined);
+  }, [type]);
 
   useEffect(() => {
     setDrawerOpen(searchParams.get('create') === '1');
@@ -592,12 +601,14 @@ export function TestCasesPage() {
             ) : null}
             <CaseListFilters
               type={type}
+              activeFilters={activeFilters}
               keyword={keyword}
               priority={priority}
               status={status}
               iteration={iteration}
               smokeFilter={smokeFilter}
               filterOptions={filterOptions}
+              onActiveFiltersChange={setActiveFilters}
               onKeywordChange={setKeyword}
               onPriorityChange={setPriority}
               onStatusChange={setStatus}
