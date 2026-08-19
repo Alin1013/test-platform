@@ -90,11 +90,12 @@ def start_ui_test_execution(
     payload: UiExecutionCreate,
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
-    """POST /api/v1/ui-test/executions：启动 UI 用例执行。"""
+    """POST /api/v1/ui-test/executions：创建并入队 UI 用例执行。"""
     return {
         "code": 200,
         "message": "success",
-        "data": executions.start_ui_execution(session, payload),
+        # 专用入口与通用入口都必须先入队；仅由 worker 在实际领取任务后置为 RUNNING。
+        "data": executions.start_ui_execution(session, payload, initial_status="PENDING"),
     }
 
 

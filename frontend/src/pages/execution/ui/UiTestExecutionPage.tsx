@@ -112,6 +112,9 @@ export function UiTestExecutionPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // 排队与运行中都属于可取消但不可重复提交的活动执行。
+  const isExecutionActive = ['PENDING', 'RUNNING'].includes(execution?.status ?? '');
+
   useEffect(() => {
     let active = true;
     void Promise.all([
@@ -134,8 +137,8 @@ export function UiTestExecutionPage() {
   }, [service]);
 
   useEffect(() => {
-    // 仅当执行状态为 RUNNING 时轮询，避免终态后继续请求。
-    if (!executionId || execution?.status !== 'RUNNING') return;
+    // 排队或运行中的任务都需轮询，避免刚入队时因 PENDING 而错过 worker 后续状态。
+    if (!executionId || !['PENDING', 'RUNNING'].includes(execution?.status ?? '')) return;
     const timer = window.setInterval(() => {
       void service.getUiExecution(executionId).then(setExecution).catch(() => undefined);
     }, 2000);
@@ -387,7 +390,7 @@ export function UiTestExecutionPage() {
               icon={<PlayCircleOutlined />}
               aria-label="立即执行"
               loading={submitting}
-              disabled={execution?.status === 'RUNNING'}
+              disabled={isExecutionActive}
               onClick={() => void run()}
             >
               立即执行
@@ -396,7 +399,7 @@ export function UiTestExecutionPage() {
               danger
               icon={<CloseCircleOutlined />}
               aria-label="取消或中断执行"
-              disabled={execution?.status !== 'RUNNING'}
+              disabled={!isExecutionActive}
               onClick={() => void stop()}
             >
               中断
