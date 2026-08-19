@@ -3,7 +3,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .domain_defaults import DEFAULT_PROJECT_NAME
 from .models import ApiCaseDetails, Module, Role, SystemConfig, TestCase, UiCaseDetails, User
 from .services.auth import hash_password
 
@@ -40,9 +39,6 @@ DEFAULT_SETTINGS = {
         "platformName": "测试平台",
         "announcement": "",
         "caseNumberPrefix": "TC-",
-    },
-    "caseManagement": {
-        "projectNames": [DEFAULT_PROJECT_NAME],
     },
     "execution": {
         "environments": [

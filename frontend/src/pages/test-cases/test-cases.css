@@ -226,9 +226,10 @@ body.is-resizing-module-panel {
 }
 
 .case-list-toolbar__functional-filters {
+  /* 项目归属下线后，功能用例只保留冒烟与迭代两项扩展筛选。 */
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 

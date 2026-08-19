@@ -40,7 +40,6 @@ export interface TestCaseRecord {
   expectedResult?: string;
   iteration?: string;
   isSmoke?: boolean;
-  projectName?: string;
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
@@ -133,13 +132,11 @@ export interface TestCaseQuery {
   keyword?: string;
   priority?: Priority;
   status?: TestCaseStatus;
-  projectName?: string;
   iteration?: string;
   isSmoke?: boolean;
 }
 
 export interface TestCaseFilterOptions {
-  projectNames: string[];
   iterations: string[];
 }
 
@@ -156,7 +153,6 @@ export interface CreateTestCaseInput {
   expectedResult?: string;
   iteration?: string;
   isSmoke?: boolean;
-  projectName?: string;
   endpoint?: string;
   method?: HttpMethod;
   expectedStatus?: number;
@@ -294,8 +290,6 @@ export interface DashboardData {
 
 export type NotificationChannel = 'wechatWork' | 'feishu' | 'dingtalk';
 
-export const DEFAULT_PROJECT_NAME = '官网环境';
-
 export interface TestEnvironment {
   id: string;
   name: string;
@@ -307,9 +301,6 @@ export interface SystemSettings {
     platformName: string;
     announcement: string;
     caseNumberPrefix: string;
-  };
-  caseManagement: {
-    projectNames: string[];
   };
   execution: {
     environments: TestEnvironment[];

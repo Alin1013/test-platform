@@ -49,7 +49,7 @@ function isTestCaseType(value: string | undefined): value is TestCaseType {
 
 const FUNCTIONAL_IMPORT_HEADERS = [
   '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
-  '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+  '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟',
 ];
 const MODULE_IMPORT_HEADERS = new Set([
   'module_id', '用例目录', '模块ID', '模块', '模块名称', '所属模块', '所属模块名称',
@@ -119,11 +119,9 @@ export function TestCasesPage() {
   const [keyword, setKeyword] = useState('');
   const [priority, setPriority] = useState<Priority | undefined>();
   const [status, setStatus] = useState<TestCaseStatus | undefined>();
-  const [projectName, setProjectName] = useState<string | undefined>();
   const [iteration, setIteration] = useState<string | undefined>();
   const [smokeFilter, setSmokeFilter] = useState<'smoke' | 'non-smoke' | undefined>();
   const [filterOptions, setFilterOptions] = useState<TestCaseFilterOptions>({
-    projectNames: [],
     iterations: [],
   });
   const [rows, setRows] = useState<PaginatedResult<TestCaseRecord> | null>(null);
@@ -140,7 +138,7 @@ export function TestCasesPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const functionalImportInputRef = useRef<HTMLInputElement>(null);
   const query = useMemo<TestCaseQuery>(
-    // 功能用例额外携带项目/迭代/冒烟筛选，其余类型不带。
+    // 功能用例额外携带迭代与冒烟筛选，其余类型不带。
     () => ({
       type,
       moduleId: selectedModule === 'all' ? undefined : selectedModule,
@@ -149,13 +147,12 @@ export function TestCasesPage() {
       status,
       ...(type === 'functional'
         ? {
-            projectName,
             iteration,
             isSmoke: smokeFilter === undefined ? undefined : smokeFilter === 'smoke',
           }
         : {}),
     }),
-    [iteration, keyword, priority, projectName, selectedModule, smokeFilter, status, type],
+    [iteration, keyword, priority, selectedModule, smokeFilter, status, type],
   );
 
   useEffect(() => {
@@ -287,7 +284,6 @@ export function TestCasesPage() {
         },
         { title: '归属迭代', dataIndex: 'iteration', width: 120, render: (value) => value || '-' },
         { title: '是否冒烟', dataIndex: 'isSmoke', width: 92, render: (value: boolean) => <Tag color={value ? 'success' : 'error'}>{value ? '是' : '否'}</Tag> },
-        { title: '项目归属', dataIndex: 'projectName', width: 120, render: (value) => value || '-' },
         {
           title: '操作', key: 'actions', width: 96, fixed: 'right',
           render: (_, record) => (
@@ -599,14 +595,12 @@ export function TestCasesPage() {
               keyword={keyword}
               priority={priority}
               status={status}
-              projectName={projectName}
               iteration={iteration}
               smokeFilter={smokeFilter}
               filterOptions={filterOptions}
               onKeywordChange={setKeyword}
               onPriorityChange={setPriority}
               onStatusChange={setStatus}
-              onProjectNameChange={setProjectName}
               onIterationChange={setIteration}
               onSmokeFilterChange={setSmokeFilter}
             />

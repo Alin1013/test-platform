@@ -2,7 +2,6 @@
  * Mock 服务使用的演示数据：模块、系统设置、用例、用户与角色。
  */
 import {
-  DEFAULT_PROJECT_NAME,
   type PermissionRole,
   type SystemSettings,
   type TestCaseRecord,
@@ -29,9 +28,6 @@ export const initialSystemSettings: SystemSettings = {
     platformName: '测试平台',
     announcement: '',
     caseNumberPrefix: 'TC-',
-  },
-  caseManagement: {
-    projectNames: [DEFAULT_PROJECT_NAME],
   },
   execution: {
     environments: [
@@ -69,7 +65,6 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '登录成功并进入首页',
     iteration: 'Sprint 12',
     isSmoke: true,
-    projectName: DEFAULT_PROJECT_NAME,
     maintainer: '江珊',
     creator: '江珊',
     updatedAt: '8 分钟前',
@@ -145,7 +140,6 @@ export const initialTestCases: TestCaseRecord[] = [
     expectedResult: '退款成功，订单状态更新为已退款',
     iteration: 'Sprint 12',
     isSmoke: false,
-    projectName: DEFAULT_PROJECT_NAME,
     maintainer: '林然',
     creator: '林然',
     updatedAt: '昨天 18:10',

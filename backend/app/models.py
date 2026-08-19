@@ -10,7 +10,6 @@ from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
-from .domain_defaults import DEFAULT_PROJECT_NAME
 
 
 def utc_now() -> datetime:
@@ -146,7 +145,6 @@ class TestCase(Base, TimestampMixin):
     expected_result: Mapped[str] = mapped_column(Text, default="")
     iteration: Mapped[str] = mapped_column(String(128), default="")
     is_smoke: Mapped[bool] = mapped_column(Boolean, default=False)
-    project_name: Mapped[str] = mapped_column(String(128), default=DEFAULT_PROJECT_NAME)
 
     module: Mapped[Module] = relationship(back_populates="test_cases")
     author: Mapped[User] = relationship(back_populates="test_cases")

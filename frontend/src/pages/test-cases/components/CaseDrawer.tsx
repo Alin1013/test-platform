@@ -49,7 +49,6 @@ interface CaseFormValues {
   authorId: number;
   iteration?: string;
   isSmoke: boolean;
-  projectName: string;
 }
 
 export function CaseDrawer(props: CaseDrawerProps) {
@@ -88,7 +87,7 @@ function FunctionalCaseDrawer({
   onClose,
   onSubmit,
 }: CaseDrawerProps) {
-  // 功能用例表单：加载模块/用户/项目配置，支持新建与编辑。
+  // 功能用例表单：加载模块与用户，支持新建与编辑。
   const [form] = Form.useForm<CaseFormValues>();
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -96,11 +95,10 @@ function FunctionalCaseDrawer({
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [modules, setModules] = useState<TestModule[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
-  const [projectNames, setProjectNames] = useState<string[]>([]);
   const title = `${initialCase ? '编辑' : '新建'}${typeLabels.functional}`;
 
   useEffect(() => {
-    // 打开时初始化表单；并行拉取模块、用户与项目配置，避免表单空白。
+    // 打开时初始化表单；并行拉取模块与用户，避免表单空白。
     if (!open) return;
     form.resetFields();
     form.setFieldsValue({
@@ -116,26 +114,16 @@ function FunctionalCaseDrawer({
       authorId: user?.id ?? 1,
       iteration: initialCase?.iteration ?? '',
       isSmoke: initialCase?.isSmoke ?? false,
-      projectName: initialCase?.projectName,
     });
     let active = true;
     void Promise.all([
       service.listTestModules(1, 'functional'),
       service.listUsers(),
-      service.getSystemSettings(),
     ]).then(
-      ([nextModules, nextUsers, settings]) => {
+      ([nextModules, nextUsers]) => {
         if (!active) return;
         setModules(nextModules);
         setUsers(nextUsers);
-        const nextProjectNames = initialCase?.projectName
-          ? Array.from(new Set([...settings.caseManagement.projectNames, initialCase.projectName]))
-          : settings.caseManagement.projectNames;
-        setProjectNames(nextProjectNames);
-        form.setFieldValue(
-          'projectName',
-          initialCase?.projectName ?? settings.caseManagement.projectNames[0],
-        );
         if (initialCase) {
           const author = nextUsers.find((item) => item.name === initialCase.creator);
           if (author) form.setFieldValue('authorId', Number(author.id));
@@ -178,7 +166,6 @@ function FunctionalCaseDrawer({
       expectedResult: values.expectedResult.trim(),
       iteration: values.iteration?.trim() ?? '',
       isSmoke: values.isSmoke,
-      projectName: values.projectName,
     });
     form.resetFields();
     onClose();
@@ -248,13 +235,6 @@ function FunctionalCaseDrawer({
             </Form.Item>
             <Form.Item name="iteration" label="归属迭代">
               <Input maxLength={128} placeholder="例如：Sprint 12" />
-            </Form.Item>
-            <Form.Item name="projectName" label="项目归属" rules={[{ required: true, message: '请选择项目归属' }]}>
-              <Select
-                aria-label="项目归属"
-                options={projectNames.map((value) => ({ value, label: value }))}
-                placeholder="选择项目归属"
-              />
             </Form.Item>
             <Form.Item name="isSmoke" label="是否冒烟" valuePropName="checked">
               <Checkbox>设为冒烟用例</Checkbox>

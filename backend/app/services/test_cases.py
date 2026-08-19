@@ -8,7 +8,6 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from ..models import ApiCaseDetails, Module, TestCase, UiCaseDetails, User
 from ..schemas import TestCaseCreate, TestCaseUpdate, TestModuleCreate, TestModuleUpdate
-from .settings import get_case_project_names
 
 
 def module_tree(session: Session, project_id: int, module_type: str | None = None) -> list[dict]:
@@ -168,7 +167,6 @@ def serialize_case(test_case: TestCase) -> dict:
         "expected_result": test_case.expected_result,
         "iteration": test_case.iteration,
         "is_smoke": test_case.is_smoke,
-        "project_name": test_case.project_name,
         "created_at": test_case.created_at,
         "updated_at": test_case.updated_at,
         "api_details": None,
@@ -225,11 +223,8 @@ def _distinct_case_values(
 
 
 def get_filter_options(session: Session, *, case_type: str | None) -> dict:
-    """返回项目名与迭代的筛选选项（配置优先，兼容历史数据）。"""
-    configured_names = get_case_project_names(session)
-    stored_names = _distinct_case_values(session, TestCase.project_name, case_type)
+    """返回当前用例类型可用的迭代筛选选项。"""
     return {
-        "project_names": list(dict.fromkeys([*configured_names, *stored_names])),
         "iterations": _distinct_case_values(session, TestCase.iteration, case_type),
     }
 
@@ -241,7 +236,6 @@ def filtered_case_query(
     priority: str | None,
     status: str | None,
     keyword: str | None,
-    project_name: str | None = None,
     iteration: str | None = None,
     is_smoke: bool | None = None,
 ):
@@ -255,8 +249,6 @@ def filtered_case_query(
         query = query.where(TestCase.priority == priority)
     if status:
         query = query.where(TestCase.status == status)
-    if project_name:
-        query = query.where(TestCase.project_name == project_name)
     if iteration:
         query = query.where(TestCase.iteration == iteration)
     if is_smoke is not None:
@@ -281,7 +273,6 @@ def list_cases(
     module_id: str | None,
     priority: str | None,
     status: str | None,
-    project_name: str | None,
     iteration: str | None,
     is_smoke: bool | None,
     keyword: str | None,
@@ -294,7 +285,6 @@ def list_cases(
         module_id=module_id,
         priority=priority,
         status=status,
-        project_name=project_name,
         iteration=iteration,
         is_smoke=is_smoke,
         keyword=keyword,
@@ -341,7 +331,6 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
         expected_result=payload.expected_result,
         iteration=payload.iteration,
         is_smoke=payload.is_smoke,
-        project_name=payload.project_name,
     )
     session.add(test_case)
     session.flush()

@@ -100,7 +100,6 @@ interface ApiTestCase {
   expected_result?: string;
   iteration?: string;
   is_smoke?: boolean;
-  project_name?: string;
   api_details?: ApiCaseDetails | null;
   ui_details?: ApiUiCaseDetails | null;
 }
@@ -115,7 +114,6 @@ interface ApiTestModule {
 }
 
 interface ApiTestCaseFilterOptions {
-  project_names: string[];
   iterations: string[];
 }
 
@@ -187,7 +185,6 @@ function mapCase(testCase: ApiTestCase): TestCaseRecord {
     expectedResult: testCase.expected_result,
     iteration: testCase.iteration,
     isSmoke: testCase.is_smoke,
-    projectName: testCase.project_name,
     updatedAt: Number.isNaN(updatedDate.valueOf())
       ? testCase.updated_at
       : updatedDate.toLocaleString('zh-CN'),
@@ -473,7 +470,6 @@ export function createApiPlatformService({
         `/test-cases/filter-options${suffix}`,
       );
       return {
-        projectNames: options.project_names,
         iterations: options.iterations,
       };
     },
@@ -485,7 +481,6 @@ export function createApiPlatformService({
       if (query.keyword) params.set('keyword', query.keyword);
       if (query.priority) params.set('priority', query.priority);
       if (query.status) params.set('status', query.status);
-      if (query.projectName) params.set('project_name', query.projectName);
       if (query.iteration) params.set('iteration', query.iteration);
       if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
       const page = await request<Page<ApiTestCase>>(`/test-cases?${params}`);
@@ -502,7 +497,6 @@ export function createApiPlatformService({
       if (query.keyword) params.set('keyword', query.keyword);
       if (query.priority) params.set('priority', query.priority);
       if (query.status) params.set('status', query.status);
-      if (query.projectName) params.set('project_name', query.projectName);
       if (query.iteration) params.set('iteration', query.iteration);
       if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
       const response = await request<ApiPaginatedResponse<ApiTestCase>>(`/test-cases?${params}`);
@@ -532,7 +526,6 @@ export function createApiPlatformService({
           expected_result: input.expectedResult ?? '',
           iteration: input.iteration ?? '',
           is_smoke: input.isSmoke ?? false,
-          project_name: input.projectName,
           api_details: apiDetails,
           ui_details:
             input.type === 'ui' && input.uiDetails
@@ -561,7 +554,6 @@ export function createApiPlatformService({
           expected_result: input.expectedResult,
           iteration: input.iteration,
           is_smoke: input.isSmoke,
-          project_name: input.projectName,
           api_details: apiDetails,
           ui_details: input.uiDetails ? mapUiDetailsToApi(input.uiDetails) : undefined,
         }),
@@ -595,7 +587,6 @@ export function createApiPlatformService({
           keyword: query.keyword,
           priority: query.priority,
           status: query.status,
-          project_name: query.projectName,
           iteration: query.iteration,
           is_smoke: query.isSmoke,
         }),

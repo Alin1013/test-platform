@@ -132,7 +132,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let xmindTasks: XMindTaskDetail[] = [];
   const uiExecutions = new Map<string, UiExecutionResult>();
   const apiExecutions = new Map<string, ApiExecutionReport>();
-  const defaultProjectName = () => systemSettings.caseManagement.projectNames[0];
 
   const respond = async <T,>(value: T): Promise<T> => {
     // 模拟网络延迟并返回深拷贝，行为上接近真实 API。
@@ -284,10 +283,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         Array.from(new Set(values.filter((value): value is string => Boolean(value))))
           .sort((left, right) => left.localeCompare(right, 'zh-CN'));
       return respond({
-        projectNames: uniqueValues([
-          ...systemSettings.caseManagement.projectNames,
-          ...matchingCases.map((testCase) => testCase.projectName),
-        ]),
         iterations: uniqueValues(matchingCases.map((testCase) => testCase.iteration)),
       });
     },
@@ -307,7 +302,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           (!query.moduleId || testCase.moduleId === query.moduleId) &&
           (!query.priority || testCase.priority === query.priority) &&
           (!query.status || testCase.status === query.status) &&
-          (!query.projectName || testCase.projectName === query.projectName) &&
           (!query.iteration || testCase.iteration === query.iteration) &&
           (query.isSmoke === undefined || testCase.isSmoke === query.isSmoke)
         );
@@ -333,7 +327,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       });
       const created: TestCaseRecord = {
         ...input,
-        projectName: input.projectName ?? defaultProjectName(),
         storageId: storageIdSequence++,
         id: `${input.type.toUpperCase()}-${caseSequence++}`,
         creator: author?.name ?? '江珊',
@@ -379,7 +372,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       const values = utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
       const expectedHeaders = [
         '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
-        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟',
       ];
       const headers = values[0]?.map((value) => String(value).trim()) ?? [];
       if (headers.length !== expectedHeaders.length || headers.some((value, index) => value !== expectedHeaders[index])) {
@@ -414,8 +407,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           maintainer: String(row[9] ?? '').trim() || '江珊',
           iteration: String(row[10] ?? '').trim(),
           isSmoke: ['是', 'true', '1', 'yes'].includes(String(row[11] ?? '').trim().toLowerCase()),
-          projectName:
-            String(row[12] ?? '').trim() || defaultProjectName(),
           updatedAt: '刚刚',
         };
         return record;
@@ -429,7 +420,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       const rows = await this.listTestCases(query);
       const headers = [
         '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
-        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟', '项目归属',
+        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟',
       ];
       const values = rows.map((testCase) => [
         testCase.moduleName ?? '',
@@ -444,7 +435,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         testCase.creator ?? '',
         testCase.iteration ?? '',
         testCase.isSmoke === undefined ? '' : testCase.isSmoke ? '是' : '否',
-        testCase.projectName ?? '',
       ]);
       const { utils, write } = await import('xlsx');
       const workbook = utils.book_new();
@@ -723,7 +713,6 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           steps: item.用例步骤,
           expectedResult: item.预期结果,
           iteration: item.归属迭代,
-          projectName: defaultProjectName(),
           isSmoke: false,
         };
         return created;

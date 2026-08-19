@@ -15,11 +15,7 @@ import { PersonAvatar } from '../../components/PersonAvatar';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
-import {
-  DEFAULT_PROJECT_NAME,
-  type NotificationChannel,
-  type SystemSettings,
-} from '../../services/contracts';
+import type { NotificationChannel, SystemSettings } from '../../services/contracts';
 import './settings.css';
 
 const { TextArea } = Input;
@@ -75,7 +71,6 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState('');
   const [testingChannel, setTestingChannel] = useState<NotificationChannel | null>(null);
   const environments = Form.useWatch(['execution', 'environments'], form) ?? [];
-  const projectNames = Form.useWatch(['caseManagement', 'projectNames'], form) ?? [];
 
   useEffect(() => {
     // URL 上的 tab 参数变化时同步切换，例如从顶栏账号菜单进入个人资料。
@@ -438,67 +433,6 @@ export function SettingsPage() {
               <InputNumber min={1000} max={300000} step={1000} precision={0} suffix="ms" />
             </Form.Item>
           </div>
-        </div>
-      ),
-    },
-    {
-      key: 'cases',
-      label: '用例配置',
-      children: (
-        <div className="settings-case-content">
-          <Form.List name={['caseManagement', 'projectNames']}>
-            {(fields, { add, remove }) => (
-              <>
-                <div className="settings-section-heading">
-                  <h2>项目归属</h2>
-                  <Button
-                    type="default"
-                    icon={<PlusOutlined aria-hidden="true" />}
-                    onClick={() => add('')}
-                  >
-                    添加项目归属
-                  </Button>
-                </div>
-                <div className="settings-project-list">
-                  {fields.map((field, index) => (
-                    <div className="settings-project-row" key={field.key}>
-                      <Form.Item
-                        name={field.name}
-                        label="项目名称"
-                        rules={[
-                          { required: true, whitespace: true, message: '请输入项目名称' },
-                          {
-                            validator: (_rule, value: string) =>
-                              validateUniqueName(
-                                projectNames,
-                                index,
-                                value,
-                                '项目名称不能重复',
-                              ),
-                          },
-                        ]}
-                      >
-                        <Input
-                          disabled={projectNames[index] === DEFAULT_PROJECT_NAME}
-                          maxLength={128}
-                          placeholder="例如：官网环境"
-                        />
-                      </Form.Item>
-                      <Button
-                        danger
-                        type="text"
-                        icon={<DeleteOutlined aria-hidden="true" />}
-                        aria-label={`删除${projectNames[index] || `第${index + 1}个项目归属`}`}
-                        disabled={projectNames[index] === DEFAULT_PROJECT_NAME}
-                        onClick={() => remove(index)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </Form.List>
-
         </div>
       ),
     },

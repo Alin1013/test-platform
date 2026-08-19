@@ -16,32 +16,28 @@ interface CaseListFiltersProps {
   keyword: string;
   priority: Priority | undefined;
   status: TestCaseStatus | undefined;
-  projectName: string | undefined;
   iteration: string | undefined;
   smokeFilter: 'smoke' | 'non-smoke' | undefined;
   filterOptions: TestCaseFilterOptions;
   onKeywordChange: (value: string) => void;
   onPriorityChange: (value: Priority | undefined) => void;
   onStatusChange: (value: TestCaseStatus | undefined) => void;
-  onProjectNameChange: (value: string | undefined) => void;
   onIterationChange: (value: string | undefined) => void;
   onSmokeFilterChange: (value: 'smoke' | 'non-smoke' | undefined) => void;
 }
 
-/** 按用例类型渲染列表筛选项；功能用例保留项目、冒烟与迭代的附加筛选。 */
+/** 按用例类型渲染列表筛选项；功能用例保留冒烟与迭代的附加筛选。 */
 export function CaseListFilters({
   type,
   keyword,
   priority,
   status,
-  projectName,
   iteration,
   smokeFilter,
   filterOptions,
   onKeywordChange,
   onPriorityChange,
   onStatusChange,
-  onProjectNameChange,
   onIterationChange,
   onSmokeFilterChange,
 }: CaseListFiltersProps) {
@@ -76,15 +72,6 @@ export function CaseListFilters({
       />
       {type === 'functional' ? (
         <div className="case-list-toolbar__functional-filters">
-          <Select
-            id="project-filter"
-            aria-label="筛选项目归属"
-            placeholder="项目归属"
-            allowClear
-            value={projectName}
-            options={filterOptions.projectNames.map((value) => ({ value, label: value }))}
-            onChange={onProjectNameChange}
-          />
           <Select
             id="smoke-filter"
             aria-label="筛选是否冒烟"

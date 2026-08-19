@@ -14,7 +14,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..case_file_schemas import TestCaseExportRequest
-from ..domain_defaults import DEFAULT_PROJECT_NAME
 from ..models import Module, TestCase, User
 from ..schemas import ApiDetailsCreate, TestCaseCreate, UiDetailsCreate
 from . import test_cases
@@ -42,11 +41,10 @@ EXPORT_HEADERS = (
     "expected_result",
     "iteration",
     "is_smoke",
-    "project_name",
 )
 FUNCTIONAL_HEADERS = (
     "用例目录", "用例名称", "需求ID", "前置条件", "用例步骤", "预期结果",
-    "用例类型", "用例状态", "用例等级", "创建人", "归属迭代", "是否冒烟", "项目归属",
+    "用例类型", "用例状态", "用例等级", "创建人", "归属迭代", "是否冒烟",
 )
 HEADER_ALIASES = {
     "编号": "code",
@@ -78,7 +76,6 @@ HEADER_ALIASES = {
     "创建人": "author_id",
     "归属迭代": "iteration",
     "是否冒烟": "is_smoke",
-    "项目归属": "project_name",
 }
 TYPE_ALIASES = {
     "功能用例": "functional",
@@ -155,7 +152,6 @@ def _export_row(test_case: dict) -> list[Any]:
         test_case.get("expected_result", ""),
         test_case.get("iteration", ""),
         "是" if test_case.get("is_smoke") else "否",
-        test_case.get("project_name", DEFAULT_PROJECT_NAME),
     ]
 
 
@@ -175,7 +171,6 @@ def _functional_export_row(test_case: dict) -> list[Any]:
         test_case.get("author_name") or "",
         test_case.get("iteration") or "",
         "" if is_smoke is None else ("是" if is_smoke else "否"),
-        test_case.get("project_name") or "",
     ]
 
 
@@ -189,7 +184,6 @@ def export_cases(
         priority=payload.priority,
         status=payload.status,
         keyword=payload.keyword,
-        project_name=payload.project_name,
         iteration=payload.iteration,
         is_smoke=payload.is_smoke,
     )
@@ -333,7 +327,6 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
         "expected_result": str(row.get("expected_result") or "").strip(),
         "iteration": str(row.get("iteration") or "").strip(),
         "is_smoke": str(row.get("is_smoke") or "").strip().lower() in {"是", "yes", "true", "1", "y"},
-        "project_name": str(row.get("project_name") or DEFAULT_PROJECT_NAME).strip(),
     }
     if case_type == "api":
         common["api_details"] = ApiDetailsCreate(

@@ -5,28 +5,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import SystemConfig
-from ..schemas import CaseManagementSettings, SystemSettings
+from ..schemas import SystemSettings
 
 
 SETTINGS_KEY = "platform_settings"
 
 
 def get_settings(session: Session) -> dict:
-    """读取平台配置；caseManagement 中动态项目名不下发前端。"""
+    """读取平台配置；丢弃旧版本已下线的用例管理配置。"""
     config = session.scalar(select(SystemConfig).where(SystemConfig.key == SETTINGS_KEY))
     if config is None:
         raise HTTPException(status_code=404, detail="System settings not found")
     value = dict(config.value)
-    case_management = dict(value.get("caseManagement", {}))
-    case_management.pop("defaultProjectName", None)
-    value["caseManagement"] = case_management
+    # 兼容升级前保存的 JSON，避免旧字段被响应模型的 extra=forbid 拒绝。
+    value.pop("caseManagement", None)
     return value
-
-
-def get_case_project_names(session: Session) -> list[str]:
-    """返回配置中允许使用的项目名称列表。"""
-    case_management = get_settings(session).get("caseManagement", {})
-    return CaseManagementSettings.model_validate(case_management).projectNames
 
 
 def get_environment(session: Session, environment_id: str) -> dict:

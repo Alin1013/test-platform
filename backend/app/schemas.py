@@ -5,9 +5,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from .domain_defaults import DEFAULT_PROJECT_NAME
-
-
 CaseType = Literal["functional", "api", "ui"]
 # 用例类型：功能 / API / UI。
 Priority = Literal["P0", "P1", "P2", "P3"]
@@ -290,7 +287,6 @@ class TestCaseCreate(BaseModel):
     expected_result: str = Field(default="", max_length=10000)
     iteration: str = Field(default="", max_length=128)
     is_smoke: bool = False
-    project_name: str = Field(default=DEFAULT_PROJECT_NAME, min_length=1, max_length=128)
     api_details: ApiDetailsCreate | None = None
     ui_details: UiDetailsCreate | None = None
 
@@ -322,7 +318,6 @@ class TestCaseUpdate(BaseModel):
     expected_result: str | None = Field(default=None, max_length=10000)
     iteration: str | None = Field(default=None, max_length=128)
     is_smoke: bool | None = None
-    project_name: str | None = Field(default=None, min_length=1, max_length=128)
     api_details: ApiDetailsUpdate | None = None
     ui_details: UiDetailsCreate | None = None
 
@@ -449,32 +444,6 @@ class GeneralSettings(SettingsModel):
     caseNumberPrefix: str = Field(pattern=r"^[A-Za-z0-9_-]+$", max_length=16)
 
 
-class CaseManagementSettings(SettingsModel):
-    """用例管理设置：项目名称列表，必须包含默认官网项目且不重复。"""
-
-    projectNames: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
-        default_factory=lambda: [DEFAULT_PROJECT_NAME], min_length=1, max_length=32
-    )
-
-    @model_validator(mode="after")
-    def website_project_is_available(self) -> "CaseManagementSettings":
-        """校验项目名非空且唯一，并强制保留默认官网项目。"""
-        normalized_names = [name.strip().casefold() for name in self.projectNames]
-        if any(not name for name in normalized_names):
-            raise ValueError("project names cannot be blank")
-        if len(normalized_names) != len(set(normalized_names)):
-            raise ValueError("project names must be unique")
-        default_key = DEFAULT_PROJECT_NAME.casefold()
-        if default_key not in normalized_names:
-            raise ValueError("project names must include the website project")
-        trimmed_names = [name.strip() for name in self.projectNames]
-        self.projectNames = [
-            DEFAULT_PROJECT_NAME,
-            *[name for name in trimmed_names if name.casefold() != default_key],
-        ]
-        return self
-
-
 class TestEnvironment(SettingsModel):
     """执行环境：id、展示名与 baseUrl。"""
 
@@ -522,10 +491,9 @@ class AiSettings(SettingsModel):
 
 
 class SystemSettings(SettingsModel):
-    """系统设置聚合：通用、用例管理、执行、通知与 AI 五组配置。"""
+    """系统设置聚合：通用、执行、通知与 AI 四组配置。"""
 
     general: GeneralSettings
-    caseManagement: CaseManagementSettings = Field(default_factory=CaseManagementSettings)
     execution: ExecutionSettings
     notifications: NotificationSettings
     ai: AiSettings
