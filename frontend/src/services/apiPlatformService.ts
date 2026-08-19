@@ -661,6 +661,19 @@ export function createApiPlatformService({
       return response.data;
     },
 
+    async getLatestUiExecutionCases() {
+      const response = await request<ApiEnvelope<UiExecutionResult['cases']>>(
+        '/ui-test/case-results/latest',
+      );
+      // 历史结果与实时结果使用同一套产物地址解析，刷新后详情链接仍可访问。
+      return response.data.map((item) => ({
+        ...item,
+        screenshotUrl: resolveArtifactUrl(item.screenshotUrl ?? null),
+        videoUrl: resolveArtifactUrl(item.videoUrl ?? null),
+        traceUrl: resolveArtifactUrl(item.traceUrl ?? null),
+      }));
+    },
+
     async getUiExecution(executionId: string) {
       const response = await request<ApiEnvelope<UiExecutionResult>>(
         `/ui-test/executions/${encodeURIComponent(executionId)}`,

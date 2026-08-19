@@ -330,33 +330,61 @@ def _summary(execution: TestExecution) -> dict[str, int]:
     }
 
 
+def _ui_case_result(
+    execution: TestExecution, detail: TestExecutionDetail
+) -> dict[str, object]:
+    """把持久化的 UI 执行明细转换为前端统一展示结构。"""
+    request_payload = (
+        detail.request_payload if isinstance(detail.request_payload, dict) else {}
+    )
+    response_payload = (
+        detail.response_payload if isinstance(detail.response_payload, dict) else {}
+    )
+    config = execution.config_json if isinstance(execution.config_json, dict) else {}
+    return {
+        "caseId": detail.target_id,
+        "caseName": detail.target_name,
+        "browser": config.get("browser", "chrome"),
+        "status": detail.status,
+        "durationMs": detail.duration_ms,
+        "errorMessage": response_payload.get("errorMessage"),
+        "screenshotUrl": response_payload.get("screenshotUrl"),
+        "videoUrl": response_payload.get("videoUrl"),
+        "traceUrl": response_payload.get("traceUrl"),
+        "steps": request_payload.get("steps", []),
+        "stepResults": response_payload.get("stepResults", []),
+        "logs": response_payload.get("logs", []),
+    }
+
+
+def latest_ui_case_results(session: Session) -> list[dict[str, object]]:
+    """返回每个 UI 用例最近一次持久化执行结果，供页面刷新后恢复状态。"""
+    rows = session.execute(
+        select(TestExecutionDetail, TestExecution)
+        .join(TestExecution, TestExecutionDetail.execution_id == TestExecution.id)
+        .where(TestExecution.type == "UI")
+        .order_by(
+            TestExecutionDetail.target_id,
+            TestExecution.created_at.desc(),
+            TestExecutionDetail.id.desc(),
+        )
+    ).all()
+    latest_by_case: dict[int, dict[str, object]] = {}
+    for detail, execution in rows:
+        # 查询已按用例和执行时间倒序排列，每个用例只保留第一条最新记录。
+        if detail.target_id not in latest_by_case:
+            latest_by_case[detail.target_id] = _ui_case_result(execution, detail)
+    return list(latest_by_case.values())
+
+
 def ui_execution_result(session: Session, execution_code: str) -> dict:
     """返回 UI 执行结果：逐用例状态、步骤结果、日志与截图/视频。"""
     execution = get_execution(session, execution_code, "UI")
-    browser = execution.config_json["browser"]
     return {
         "executionId": execution.execution_code,
         "status": execution.status,
         "summary": _summary(execution),
-        "cases": [
-            {
-                "caseId": detail.target_id,
-                "caseName": detail.target_name,
-                "browser": browser,
-                "status": detail.status,
-                "durationMs": detail.duration_ms,
-                "errorMessage": (detail.response_payload or {}).get("errorMessage"),
-                "screenshotUrl": (detail.response_payload or {}).get("screenshotUrl"),
-                "videoUrl": (detail.response_payload or {}).get("videoUrl"),
-                "traceUrl": (detail.response_payload or {}).get("traceUrl"),
-                "steps": (detail.request_payload or {}).get("steps", []),
-                "stepResults": (detail.response_payload or {}).get(
-                    "stepResults", []
-                ),
-                "logs": (detail.response_payload or {}).get("logs", []),
-            }
-            for detail in execution.details
-        ],
+        "cases": [_ui_case_result(execution, detail) for detail in execution.details],
     }
 
 

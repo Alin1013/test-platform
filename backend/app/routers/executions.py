@@ -99,6 +99,14 @@ def start_ui_test_execution(
     }
 
 
+@router.get("/api/v1/ui-test/case-results/latest")
+def get_latest_ui_case_results(
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    """GET /ui-test/case-results/latest：返回每个 UI 用例最近一次执行结果。"""
+    return {"code": 200, "data": executions.latest_ui_case_results(session)}
+
+
 @router.get("/api/v1/ui-test/executions/{execution_id}")
 def get_ui_test_execution(
     execution_id: str,

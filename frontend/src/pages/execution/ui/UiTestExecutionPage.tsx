@@ -97,6 +97,7 @@ export function UiTestExecutionPage() {
   const service = usePlatformService();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
+  const [latestResults, setLatestResults] = useState<UiExecutionCase[]>([]);
   const [environments, setEnvironments] = useState<TestEnvironment[]>([]);
   const [modules, setModules] = useState<TestModule[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -119,11 +120,13 @@ export function UiTestExecutionPage() {
     let active = true;
     void Promise.all([
       service.listTestCases({ type: 'ui' }),
+      service.getLatestUiExecutionCases(),
       service.getSystemSettings(),
       service.listTestModules(),
-    ]).then(([rows, settings, testModules]) => {
+    ]).then(([rows, persistedResults, settings, testModules]) => {
       if (!active) return;
       setCases(rows);
+      setLatestResults(persistedResults);
       setEnvironments(settings.execution.environments);
       setModules(testModules);
       const defaultEnvironment = settings.execution.environments.find(
@@ -146,29 +149,28 @@ export function UiTestExecutionPage() {
   }, [execution?.status, executionId, service]);
 
   const rows = useMemo<UiCaseRow[]>(() => {
-    // 未启动执行时展示全部用例（PENDING）；执行后把结果按用例表合并。
+    // 当前执行优先于历史结果；无记录的用例才显示为未执行。
     if (!cases) return [];
-    if (!execution) {
-      return cases.map((testCase) => ({
-        caseId: testCase.storageId ?? 0,
+    const latestByCaseId = new Map(latestResults.map((result) => [result.caseId, result]));
+    const currentByCaseId = new Map(
+      (execution?.cases ?? []).map((result) => [result.caseId, result]),
+    );
+    return cases.map((testCase) => {
+      const persistedResult = currentByCaseId.get(testCase.storageId)
+        ?? latestByCaseId.get(testCase.storageId);
+      return {
+        ...(persistedResult ?? {
+          caseId: testCase.storageId ?? 0,
+          browser,
+          status: 'PENDING',
+          durationMs: 0,
+        }),
         caseName: testCase.name,
         code: testCase.id,
         moduleId: testCase.moduleId,
-        browser,
-        status: 'PENDING',
-        durationMs: 0,
-      }));
-    }
-    const recordsByStorageId = new Map(cases.map((item) => [item.storageId, item]));
-    return execution.cases.map((result) => {
-      const record = recordsByStorageId.get(result.caseId);
-      return {
-        ...result,
-        code: record?.id ?? String(result.caseId),
-        moduleId: record?.moduleId ?? '-',
       };
     });
-  }, [browser, cases, execution]);
+  }, [browser, cases, execution, latestResults]);
 
   const moduleList = useMemo(() => flattenModules(modules), [modules]);
   const modulesById = useMemo(

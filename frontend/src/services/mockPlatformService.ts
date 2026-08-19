@@ -24,6 +24,7 @@ import type {
   TestModule,
   UpdateTestModuleInput,
   UpdateTestCaseInput,
+  UiExecutionCase,
   UiExecutionInput,
   UiExecutionResult,
   UiDebugInput,
@@ -540,6 +541,17 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         })),
       });
       return respond({ executionId, status: 'RUNNING' as const, startTime: new Date().toISOString() });
+    },
+
+    async getLatestUiExecutionCases() {
+      // Map 按创建顺序保存执行，倒序合并后每个用例只保留最近一次结果。
+      const latestByCase = new Map<number, UiExecutionCase>();
+      [...uiExecutions.values()].reverse().forEach((execution) => {
+        execution.cases.forEach((result) => {
+          if (!latestByCase.has(result.caseId)) latestByCase.set(result.caseId, result);
+        });
+      });
+      return respond([...latestByCase.values()]);
     },
 
     async getUiExecution(executionId: string) {

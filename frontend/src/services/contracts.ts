@@ -523,6 +523,8 @@ export interface PlatformService {
   updateSystemSettings(settings: SystemSettings): Promise<SystemSettings>;
   testWebhookConnection(input: TestWebhookConnectionInput): Promise<TestConnectionResult>;
   startUiExecution(input: UiExecutionInput): Promise<ExecutionStart>;
+  /** 获取每个 UI 用例最近一次持久化执行结果，用于页面刷新后恢复状态。 */
+  getLatestUiExecutionCases(): Promise<UiExecutionCase[]>;
   getUiExecution(executionId: string): Promise<UiExecutionResult>;
   stopUiExecution(executionId: string): Promise<void>;
   startApiExecution(input: ApiExecutionInput): Promise<ExecutionStart>;
