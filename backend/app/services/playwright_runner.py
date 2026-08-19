@@ -39,7 +39,8 @@ class PlaywrightUiRunner:
         action = step["action"]
         value = step.get("value", "")
         if action == "navigate":
-            page.goto(value)
+            # 批量执行保存的旧步骤把导航地址放在 target，兼容两种格式避免 goto 空字符串。
+            page.goto(value or step.get("target", ""))
             return
         if action == "wait":
             page.wait_for_timeout(int(value or "1000"))
