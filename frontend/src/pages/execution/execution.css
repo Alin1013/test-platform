@@ -201,8 +201,33 @@
 
 .execution-step-list {
   display: grid;
+  min-width: 0;
   gap: 10px;
+  margin: 0;
   padding-left: 22px;
+}
+
+.execution-step-list li,
+.execution-step-list code {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.execution-step-list code {
+  display: block;
+  font: 13px/1.65 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* 详情内容必须约束在 Drawer 内，长步骤只换行而不扩张 Tabs 容器。 */
+.ui-execution-detail-drawer .ant-drawer-body,
+.ui-execution-detail-drawer .ant-tabs,
+.ui-execution-detail-drawer .ant-tabs-content,
+.ui-execution-detail-drawer .ant-tabs-tabpane {
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .execution-log,

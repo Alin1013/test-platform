@@ -470,6 +470,7 @@ export function UiTestExecutionPage() {
       </section>
 
       <Drawer
+        className="ui-execution-detail-drawer"
         title={
           // 标题直接带上用例名 + 编号，避免在右侧 Drawer 中还要再扫一眼列表才知道打开的是哪条。
           <span id="ui-execution-detail-title">
@@ -513,7 +514,12 @@ export function UiTestExecutionPage() {
                   label: '步骤明细',
                   children: detail.steps?.length ? (
                     <ol className="execution-step-list">
-                      {detail.steps.map((step, index) => <li key={index}>{typeof step === 'string' ? step : JSON.stringify(step)}</li>)}
+                      {detail.steps.map((step, index) => (
+                        <li key={index}>
+                          {/* 格式化对象步骤，并让长 URL / XPath 由样式在抽屉宽度内换行。 */}
+                          <code>{typeof step === 'string' ? step : JSON.stringify(step, null, 2)}</code>
+                        </li>
+                      ))}
                     </ol>
                   ) : (
                     <Empty
