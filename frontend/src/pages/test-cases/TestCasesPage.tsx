@@ -685,27 +685,29 @@ export function TestCasesPage() {
           {selectedStorageIds.length ? (
             <div className="case-bulk-actions" role="toolbar" aria-label="批量操作">
               <span>已选择 {selectedStorageIds.length} 项</span>
-              <Button
-                type="primary"
-                size="small"
-                icon={<CheckOutlined />}
-                loading={isBulkUpdating}
-                disabled={isBulkUpdating}
-                aria-label={`通过已选 ${selectedStorageIds.length} 项`}
-                onClick={() => void markCasesPassed(selectedCases)}
-              >
-                批量通过
-              </Button>
-              <Button
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                disabled={isBulkUpdating}
-                aria-label={`删除已选 ${selectedStorageIds.length} 项`}
-                onClick={() => deleteCases(selectedCases)}
-              >
-                批量删除
-              </Button>
+              <div className="case-bulk-actions__buttons">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckOutlined />}
+                  loading={isBulkUpdating}
+                  disabled={isBulkUpdating}
+                  aria-label={`通过已选 ${selectedStorageIds.length} 项`}
+                  onClick={() => void markCasesPassed(selectedCases)}
+                >
+                  批量通过
+                </Button>
+                <Button
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  disabled={isBulkUpdating}
+                  aria-label={`删除已选 ${selectedStorageIds.length} 项`}
+                  onClick={() => deleteCases(selectedCases)}
+                >
+                  批量删除
+                </Button>
+              </div>
             </div>
           ) : null}
 

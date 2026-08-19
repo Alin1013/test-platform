@@ -283,6 +283,13 @@ body.is-resizing-module-panel {
   font-weight: 600;
 }
 
+.case-bulk-actions__buttons {
+  /* 将批量命令作为一个整体贴近排列，避免 space-between 把按钮拉开。 */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .case-row-actions {
   display: inline-flex;
   align-items: center;
