@@ -118,14 +118,18 @@ export function TestCasesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedModule, setSelectedModule] = useState('all');
   const [keyword, setKeyword] = useState('');
-  // 默认只展示状态筛选；其他字段由用户按当前列表表头主动添加。
-  const [activeFilters, setActiveFilters] = useState<CaseFilterKey[]>(['status']);
+  // 功能用例默认展示归属迭代，自动化用例仍以状态作为默认筛选。
+  const [activeFilters, setActiveFilters] = useState<CaseFilterKey[]>(
+    type === 'functional' ? ['iteration'] : ['status'],
+  );
   const [priority, setPriority] = useState<Priority | undefined>();
   const [status, setStatus] = useState<TestCaseStatus | undefined>();
+  const [creatorId, setCreatorId] = useState<number | undefined>();
   const [iteration, setIteration] = useState<string | undefined>();
   const [smokeFilter, setSmokeFilter] = useState<'smoke' | 'non-smoke' | undefined>();
   const [filterOptions, setFilterOptions] = useState<TestCaseFilterOptions>({
     iterations: [],
+    creators: [],
   });
   const [rows, setRows] = useState<PaginatedResult<TestCaseRecord> | null>(null);
   const [page, setPage] = useState(1);
@@ -148,18 +152,21 @@ export function TestCasesPage() {
       keyword,
       priority: activeFilters.includes('priority') ? priority : undefined,
       status: activeFilters.includes('status') ? status : undefined,
+      creatorId: activeFilters.includes('creator') ? creatorId : undefined,
       ...(type === 'functional' && activeFilters.includes('iteration') ? { iteration } : {}),
       ...(type === 'functional' && activeFilters.includes('smoke')
         ? { isSmoke: smokeFilter === undefined ? undefined : smokeFilter === 'smoke' }
         : {}),
     }),
-    [activeFilters, iteration, keyword, priority, selectedModule, smokeFilter, status, type],
+    [activeFilters, creatorId, iteration, keyword, priority, selectedModule, smokeFilter, status, type],
   );
 
   useEffect(() => {
-    // 切换用例类型时只保留通用状态字段，避免上一个模块的筛选条件泄漏。
-    setActiveFilters(['status']);
+    // 切换类型时恢复该表格的默认字段，避免上一个模块的筛选条件泄漏。
+    setActiveFilters(type === 'functional' ? ['iteration'] : ['status']);
     setPriority(undefined);
+    setStatus(undefined);
+    setCreatorId(undefined);
     setIteration(undefined);
     setSmokeFilter(undefined);
   }, [type]);
@@ -182,7 +189,6 @@ export function TestCasesPage() {
   }, [page, pageSize, query, service]);
 
   useEffect(() => {
-    if (type !== 'functional') return;
     let active = true;
     void service.getTestCaseFilterOptions(type).then((nextOptions) => {
       if (active) setFilterOptions(nextOptions);
@@ -210,7 +216,6 @@ export function TestCasesPage() {
   const visibleRows = rows?.items ?? [];
 
   const refreshFilterOptions = async () => {
-    if (type !== 'functional') return;
     setFilterOptions(await service.getTestCaseFilterOptions(type));
   };
 
@@ -605,6 +610,7 @@ export function TestCasesPage() {
               keyword={keyword}
               priority={priority}
               status={status}
+              creatorId={creatorId}
               iteration={iteration}
               smokeFilter={smokeFilter}
               filterOptions={filterOptions}
@@ -612,6 +618,7 @@ export function TestCasesPage() {
               onKeywordChange={setKeyword}
               onPriorityChange={setPriority}
               onStatusChange={setStatus}
+              onCreatorChange={setCreatorId}
               onIterationChange={setIteration}
               onSmokeFilterChange={setSmokeFilter}
             />

@@ -17,6 +17,7 @@ class TestCaseExportRequest(BaseModel):
     module_id: str | None = None
     priority: Priority | None = None
     status: CaseStatus | None = None
+    author_id: int | None = None
     keyword: str | None = None
     iteration: str | None = None
     is_smoke: bool | None = None

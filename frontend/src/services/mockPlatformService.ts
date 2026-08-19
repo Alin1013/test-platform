@@ -284,6 +284,11 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           .sort((left, right) => left.localeCompare(right, 'zh-CN'));
       return respond({
         iterations: uniqueValues(matchingCases.map((testCase) => testCase.iteration)),
+        // 创建人选项保持与真实接口一致，按名称找到对应用户 id。
+        creators: uniqueValues(matchingCases.map((testCase) => testCase.creator)).map((name) => ({
+          id: Number(users.find((user) => user.name === name)?.id ?? 0),
+          name,
+        })).filter((creator) => creator.id > 0),
       });
     },
 
@@ -302,6 +307,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           (!query.moduleId || testCase.moduleId === query.moduleId) &&
           (!query.priority || testCase.priority === query.priority) &&
           (!query.status || testCase.status === query.status) &&
+          (!query.creatorId || Number(users.find((user) => user.name === testCase.creator)?.id) === query.creatorId) &&
           (!query.iteration || testCase.iteration === query.iteration) &&
           (query.isSmoke === undefined || testCase.isSmoke === query.isSmoke)
         );

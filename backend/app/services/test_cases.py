@@ -223,9 +223,17 @@ def _distinct_case_values(
 
 
 def get_filter_options(session: Session, *, case_type: str | None) -> dict:
-    """返回当前用例类型可用的迭代筛选选项。"""
+    """返回当前用例类型可用的迭代与创建人筛选选项。"""
+    creator_query = select(User.id, User.name).join(TestCase, TestCase.author_id == User.id)
+    if case_type:
+        creator_query = creator_query.where(TestCase.type == case_type)
+    # 创建人按用户去重，避免同一用户创建多条用例时产生重复菜单项。
+    creators = session.execute(
+        creator_query.distinct().order_by(User.name, User.id)
+    ).all()
     return {
         "iterations": _distinct_case_values(session, TestCase.iteration, case_type),
+        "creators": [{"id": creator_id, "name": name} for creator_id, name in creators],
     }
 
 
@@ -235,6 +243,7 @@ def filtered_case_query(
     module_id: str | None,
     priority: str | None,
     status: str | None,
+    author_id: int | None,
     keyword: str | None,
     iteration: str | None = None,
     is_smoke: bool | None = None,
@@ -249,6 +258,8 @@ def filtered_case_query(
         query = query.where(TestCase.priority == priority)
     if status:
         query = query.where(TestCase.status == status)
+    if author_id is not None:
+        query = query.where(TestCase.author_id == author_id)
     if iteration:
         query = query.where(TestCase.iteration == iteration)
     if is_smoke is not None:
@@ -273,6 +284,7 @@ def list_cases(
     module_id: str | None,
     priority: str | None,
     status: str | None,
+    author_id: int | None,
     iteration: str | None,
     is_smoke: bool | None,
     keyword: str | None,
@@ -285,6 +297,7 @@ def list_cases(
         module_id=module_id,
         priority=priority,
         status=status,
+        author_id=author_id,
         iteration=iteration,
         is_smoke=is_smoke,
         keyword=keyword,

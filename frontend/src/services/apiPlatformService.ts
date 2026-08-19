@@ -115,6 +115,7 @@ interface ApiTestModule {
 
 interface ApiTestCaseFilterOptions {
   iterations: string[];
+  creators: Array<{ id: number; name: string }>;
 }
 
 interface ApiUser {
@@ -471,6 +472,7 @@ export function createApiPlatformService({
       );
       return {
         iterations: options.iterations,
+        creators: options.creators,
       };
     },
 
@@ -481,6 +483,7 @@ export function createApiPlatformService({
       if (query.keyword) params.set('keyword', query.keyword);
       if (query.priority) params.set('priority', query.priority);
       if (query.status) params.set('status', query.status);
+      if (query.creatorId) params.set('author_id', String(query.creatorId));
       if (query.iteration) params.set('iteration', query.iteration);
       if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
       const page = await request<Page<ApiTestCase>>(`/test-cases?${params}`);
@@ -497,6 +500,7 @@ export function createApiPlatformService({
       if (query.keyword) params.set('keyword', query.keyword);
       if (query.priority) params.set('priority', query.priority);
       if (query.status) params.set('status', query.status);
+      if (query.creatorId) params.set('author_id', String(query.creatorId));
       if (query.iteration) params.set('iteration', query.iteration);
       if (query.isSmoke !== undefined) params.set('is_smoke', String(query.isSmoke));
       const response = await request<ApiPaginatedResponse<ApiTestCase>>(`/test-cases?${params}`);
@@ -587,6 +591,7 @@ export function createApiPlatformService({
           keyword: query.keyword,
           priority: query.priority,
           status: query.status,
+          author_id: query.creatorId,
           iteration: query.iteration,
           is_smoke: query.isSmoke,
         }),

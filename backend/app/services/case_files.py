@@ -183,6 +183,7 @@ def export_cases(
         module_id=payload.module_id,
         priority=payload.priority,
         status=payload.status,
+        author_id=payload.author_id,
         keyword=payload.keyword,
         iteration=payload.iteration,
         is_smoke=payload.is_smoke,

@@ -132,12 +132,14 @@ export interface TestCaseQuery {
   keyword?: string;
   priority?: Priority;
   status?: TestCaseStatus;
+  creatorId?: number;
   iteration?: string;
   isSmoke?: boolean;
 }
 
 export interface TestCaseFilterOptions {
   iterations: string[];
+  creators: Array<{ id: number; name: string }>;
 }
 
 export interface CreateTestCaseInput {
