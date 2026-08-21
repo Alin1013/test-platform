@@ -14,6 +14,44 @@
   background: var(--surface);
 }
 
+/* 失败状态沿用 Tag 视觉，但用按钮语义提供可发现的日志入口。 */
+.xmind-task-status-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.xmind-task-status-trigger:focus-visible {
+  outline: 2px solid #91caff;
+  outline-offset: 2px;
+}
+
+.xmind-task-status-trigger .ant-tag {
+  margin-inline-end: 0;
+}
+
+.xmind-failure-log__heading {
+  margin-top: 18px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.xmind-failure-log__content {
+  max-height: 260px;
+  margin: 8px 0 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #8f1d1d;
+  background: #fff7f7;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .xmind-dropzone {
   display: flex;
   min-height: 430px;

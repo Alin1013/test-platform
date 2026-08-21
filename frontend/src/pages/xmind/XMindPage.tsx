@@ -13,7 +13,20 @@ import {
   ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
-import { Alert, App, Button, Empty, Modal, Progress, Select, Skeleton, Space, Table, Tag } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Descriptions,
+  Empty,
+  Modal,
+  Progress,
+  Select,
+  Skeleton,
+  Space,
+  Table,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -126,6 +139,7 @@ export function XMindPage() {
   const [tasks, setTasks] = useState<XMindTaskRecord[] | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [detail, setDetail] = useState<XMindTaskDetail | null>(null);
+  const [failureLogTask, setFailureLogTask] = useState<XMindTaskRecord | null>(null);
   const [error, setError] = useState<string>();
   const [reloadToken, setReloadToken] = useState(0);
   const uploadTimer = useRef<number | null>(null);
@@ -301,9 +315,34 @@ export function XMindPage() {
     });
   };
 
+  const openFailureLog = (task: XMindTaskRecord) => {
+    // 列表接口已经携带服务端保存的完整失败原因，点击后直接展示避免再次等待详情请求。
+    setFailureLogTask(task);
+  };
+
+  const renderTaskStatus = (status: XMindTaskStatus, task: XMindTaskRecord) => {
+    if (status !== 'FAILED') return taskStatus(status);
+
+    // 用原生按钮承载状态标签，既保留视觉标识，也支持键盘访问失败日志。
+    return (
+      <button
+        type="button"
+        className="xmind-task-status-trigger"
+        aria-label={`查看 ${task.fileName} 的失败日志`}
+        title="点击查看失败日志"
+        onClick={(event) => {
+          event.stopPropagation();
+          openFailureLog(task);
+        }}
+      >
+        {taskStatus(status)}
+      </button>
+    );
+  };
+
   const taskColumns: ColumnsType<XMindTaskRecord> = [
     { title: '文件', dataIndex: 'fileName', ellipsis: true },
-    { title: '状态', dataIndex: 'status', width: 100, render: taskStatus },
+    { title: '状态', dataIndex: 'status', width: 100, render: renderTaskStatus },
     { title: '用例数', dataIndex: 'parsedCasesCount', width: 82 },
     { title: '提交人', dataIndex: 'uploaderName', width: 100 },
     { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
@@ -430,6 +469,36 @@ export function XMindPage() {
           ) : <Empty description="暂无生成任务" />
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>
+
+      <Modal
+        title="生成失败日志"
+        open={failureLogTask !== null}
+        footer={<Button onClick={() => setFailureLogTask(null)}>关闭</Button>}
+        onCancel={() => setFailureLogTask(null)}
+        destroyOnHidden
+      >
+        {failureLogTask ? (
+          <div className="xmind-failure-log">
+            <Descriptions
+              size="small"
+              column={1}
+              items={[
+                { key: 'file', label: '文件', children: failureLogTask.fileName },
+                { key: 'attempts', label: '尝试次数', children: failureLogTask.attempts },
+                {
+                  key: 'createdAt',
+                  label: '任务时间',
+                  children: new Date(failureLogTask.createdAt).toLocaleString('zh-CN'),
+                },
+              ]}
+            />
+            <div className="xmind-failure-log__heading">失败原因</div>
+            <pre className="xmind-failure-log__content">
+              {failureLogTask.lastError?.trim() || '服务端未记录具体失败原因。'}
+            </pre>
+          </div>
+        ) : null}
+      </Modal>
 
     </section>
   );
