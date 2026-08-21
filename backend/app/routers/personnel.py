@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
-from ..schemas import RoleCreate, RolePermissionsUpdate, RoleUpdate, UserCreate, UserStatusUpdate
+from ..schemas import (
+    RoleCreate,
+    RolePermissionsUpdate,
+    RoleUpdate,
+    UserCreate,
+    UserRoleUpdate,
+    UserStatusUpdate,
+)
 from ..services import personnel
 
 router = APIRouter(prefix="/api/v1", tags=["personnel"])
@@ -48,6 +55,16 @@ def set_user_status(
 ) -> dict:
     """PATCH /users/{id}/status：启用或停用用户。"""
     return personnel.set_user_status(session, user_id, payload.status)
+
+
+@router.patch("/users/{user_id}/role")
+def set_user_role(
+    user_id: int,
+    payload: UserRoleUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    """PATCH /users/{id}/role：调整既有用户的角色归属。"""
+    return personnel.set_user_role(session, user_id, payload.role)
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

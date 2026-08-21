@@ -108,6 +108,25 @@ def set_user_status(session: Session, user_id: int, status: str) -> dict:
     return _serialize_user(user)
 
 
+def set_user_role(session: Session, user_id: int, role_name: str) -> dict:
+    """修改既有用户的角色归属，并返回带最新角色名的用户记录。"""
+    user = session.scalar(
+        select(User).options(selectinload(User.role)).where(User.id == user_id)
+    )
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_name = role_name.strip()
+    role = session.scalar(select(Role).where(Role.name == normalized_name))
+    if role is None:
+        raise HTTPException(status_code=404, detail="Role not found")
+
+    user.role = role
+    session.commit()
+    session.refresh(user)
+    return _serialize_user(user)
+
+
 def delete_user(session: Session, user_id: int) -> None:
     """删除用户；启用中的用户必须先停用，有关联数据时拒绝删除。"""
     user = session.get(User, user_id)

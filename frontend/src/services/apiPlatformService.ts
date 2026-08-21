@@ -23,6 +23,7 @@ import type {
   TestModule,
   UpdateTestModuleInput,
   UpdateRoleInput,
+  UpdateUserRoleInput,
   UiExecutionInput,
   UiExecutionResult,
   UiDebugInput,
@@ -608,6 +609,15 @@ export function createApiPlatformService({
     async addUser(input: CreateUserInput) {
       const user = await request<ApiUser>('/users', {
         method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return mapUser(user);
+    },
+
+    async updateUserRole(id: string, input: UpdateUserRoleInput) {
+      // 角色调整只更新用户关联，不触碰账号资料与启停状态。
+      const user = await request<ApiUser>(`/users/${encodeURIComponent(id)}/role`, {
+        method: 'PATCH',
         body: JSON.stringify(input),
       });
       return mapUser(user);
