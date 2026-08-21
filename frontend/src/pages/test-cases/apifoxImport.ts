@@ -4,7 +4,6 @@
 import type {
   ApiAutomationCaseDetails,
   ApiKeyValueItem,
-  ApiResponseAssertion,
   CreateTestCaseInput,
   HttpMethod,
 } from '../../services/contracts';
@@ -113,11 +112,141 @@ const expectedStatus = (responses: unknown): number => {
   return Number(code);
 };
 
+const nativeParameterValue = (parameter: JsonRecord): string =>
+  // Apifox 原生导出把示例直接放在参数上，schema 仅作为无示例时的兜底。
+  asString(parameter.example) ??
+  asString(parameter.default) ??
+  asString(valueExample(parameter.schema, {})) ??
+  '';
+
+const nativeKeyValues = (
+  parameters: unknown,
+  location: 'header' | 'query',
+): ApiKeyValueItem[] => {
+  // 原生格式按位置分组参数，不使用 OpenAPI 的 `in` 字段。
+  const parameterMap = asRecord(parameters);
+  const entries = Array.isArray(parameterMap?.[location]) ? parameterMap[location] : [];
+  return entries
+    .map(asRecord)
+    .filter((parameter): parameter is JsonRecord => Boolean(parameter))
+    .map((parameter) => ({
+      enabled: parameter.enable !== false && parameter.required !== false,
+      key: asString(parameter.name) ?? '',
+      value: nativeParameterValue(parameter),
+    }))
+    .filter((item) => item.key);
+};
+
+const nativeRequestBody = (value: unknown): Pick<ApiAutomationCaseDetails, 'bodyType' | 'bodyContent'> => {
+  // 原生导出的 JSON 示例可能是字符串，也可能已经是对象；统一成表单可编辑的 JSON 文本。
+  const body = asRecord(value);
+  const bodyType = asString(body?.type) ?? 'none';
+  if (bodyType === 'none') return { bodyType: 'none', bodyContent: '' };
+  const examples = Array.isArray(body?.examples) ? body.examples : [];
+  const example = asRecord(examples[0])?.value;
+  const parameterEntries = Array.isArray(body?.parameters) ? body.parameters : [];
+  const parameterObject = Object.fromEntries(
+    parameterEntries
+      .map(asRecord)
+      .filter((parameter): parameter is JsonRecord => Boolean(parameter && parameter.name))
+      .map((parameter) => [String(parameter.name), nativeParameterValue(parameter)]),
+  );
+  const content = example ?? (Object.keys(parameterObject).length ? parameterObject : undefined);
+  if (!bodyType.includes('json') || content === undefined) return { bodyType: 'none', bodyContent: '' };
+  if (typeof content === 'string') {
+    try {
+      return { bodyType: 'json', bodyContent: JSON.stringify(JSON.parse(content), null, 2) };
+    } catch {
+      // 保留原始文本，让保存/执行阶段给出明确的 JSON 格式错误，而不是静默丢弃请求体。
+      return { bodyType: 'json', bodyContent: content };
+    }
+  }
+  return { bodyType: 'json', bodyContent: JSON.stringify(content, null, 2) };
+};
+
+const nativeExpectedStatus = (responses: unknown): number => {
+  // 原生格式响应是数组，优先使用第一个明确的数字状态码。
+  const responseList = Array.isArray(responses) ? responses : [];
+  const code = responseList
+    .map(asRecord)
+    .map((response) => response?.code)
+    .map(asString)
+    .find((value) => value && /^\d{3}$/.test(value));
+  return code ? Number(code) : 200;
+};
+
+const createApiCase = (
+  moduleId: string,
+  name: string,
+  endpoint: string,
+  method: HttpMethod,
+  headers: ApiKeyValueItem[],
+  queryParams: ApiKeyValueItem[],
+  body: Pick<ApiAutomationCaseDetails, 'bodyType' | 'bodyContent'>,
+  status: number,
+): CreateTestCaseInput => ({
+  type: 'api',
+  moduleId,
+  name,
+  priority: 'P1',
+  status: '维护中',
+  endpoint,
+  method,
+  expectedStatus: status,
+  apiDetails: {
+    headers,
+    queryParams,
+    bodyType: body.bodyType,
+    bodyContent: body.bodyContent,
+    bodyFields: [],
+    assertions: [{ type: 'statusCode', target: '', comparison: 'equals', expected: String(status) }],
+    extracts: [],
+  },
+});
+
+const parseNativeApifox = (document: JsonRecord, moduleId: string): CreateTestCaseInput[] => {
+  // 递归遍历原生项目导出的目录树，收集每个目录项中的 `api` 定义。
+  const cases: CreateTestCaseInput[] = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    const record = asRecord(value);
+    if (!record) return;
+    const api = asRecord(record.api);
+    const method = asString(api?.method)?.toUpperCase() as HttpMethod | undefined;
+    const endpoint = asString(api?.path);
+    if (api && method && supportedMethods.includes(method) && endpoint) {
+      const name = firstNonEmpty(record.name, api.name, api.operationId) ?? `${method} ${endpoint}`;
+      const parameters = api.parameters;
+      const body = nativeRequestBody(api.requestBody);
+      cases.push(
+        createApiCase(
+          moduleId,
+          name,
+          endpoint.startsWith('/') ? endpoint : `/${endpoint}`,
+          method,
+          nativeKeyValues(parameters, 'header'),
+          nativeKeyValues(parameters, 'query'),
+          body,
+          nativeExpectedStatus(api.responses),
+        ),
+      );
+    }
+    if (Array.isArray(record.items)) record.items.forEach(visit);
+  };
+  visit(document.apiCollection);
+  if (!cases.length) throw new Error('导入文件中没有找到可导入的接口用例');
+  return cases;
+};
+
 export function parseApifoxOpenApi(value: unknown, moduleId: string): CreateTestCaseInput[] {
-  // 遍历所有 path × 支持方法，生成 API 用例并附带状态码断言。
+  // 同时兼容 OpenAPI 文档与 Apifox 原生项目导出，避免把 apiCollection 误判为缺少 paths。
   const document = asRecord(value);
+  if (document?.apiCollection) return parseNativeApifox(document, moduleId);
   const paths = asRecord(document?.paths);
-  if (!paths) throw new Error('导入文件不是有效的 Apifox OpenAPI JSON（缺少 paths）');
+  if (!paths) throw new Error('导入文件不是有效的 Apifox JSON（缺少 paths 或 apiCollection）');
   const root = document ?? {};
 
   const cases: CreateTestCaseInput[] = [];
@@ -135,29 +264,7 @@ export function parseApifoxOpenApi(value: unknown, moduleId: string): CreateTest
       const body = requestBody(operation.requestBody, root);
       const status = expectedStatus(operation.responses);
       const name = firstNonEmpty(operation.summary, operation.operationId) ?? `${method} ${endpoint}`;
-      const assertions: ApiResponseAssertion[] = [
-        { type: 'statusCode', target: '', comparison: 'equals', expected: String(status) },
-      ];
-      const details: ApiAutomationCaseDetails = {
-        headers,
-        queryParams,
-        bodyType: body.bodyType,
-        bodyContent: body.bodyContent,
-        bodyFields: [],
-        assertions,
-        extracts: [],
-      };
-      cases.push({
-        type: 'api',
-        moduleId,
-        name,
-        priority: 'P1',
-        status: '维护中',
-        endpoint,
-        method,
-        expectedStatus: status,
-        apiDetails: details,
-      });
+      cases.push(createApiCase(moduleId, name, endpoint, method, headers, queryParams, body, status));
     });
   });
   if (!cases.length) throw new Error('导入文件中没有找到可导入的接口用例');
