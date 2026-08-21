@@ -23,6 +23,7 @@ from .xmind_skill import (
     STANDARD_HEADERS,
     XMindToTestCaseSkill,
     align_generated_cases,
+    generation_groups,
 )
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -382,6 +383,24 @@ def _root_cause_text(error: Exception) -> str:
     return f"{error}：{cause}"
 
 
+def _append_generation_log(record: XMindRecord, level: str, message: str) -> None:
+    """向任务日志追加带时间和级别的一行，避免日志内容被最终异常覆盖。"""
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    line = f"[{timestamp}] {level.upper():<5} {message}"
+    record.generation_log = (
+        f"{record.generation_log}\n{line}" if record.generation_log else line
+    )
+
+
+def _count_tree_nodes(tree: list[dict[str, Any]]) -> int:
+    """统计节点总数，用于日志说明解析规模，避免只记录根节点数量。"""
+    def count(node: dict[str, Any]) -> int:
+        children = node.get("children") or []
+        return 1 + sum(count(child) for child in children if isinstance(child, dict))
+
+    return sum(count(root) for root in tree)
+
+
 def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
     """序列化任务主记录（不含树与预览内容）。"""
     return {
@@ -396,6 +415,7 @@ def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
         "available_at": record.available_at,
         "locked_at": record.locked_at,
         "last_error": record.last_error,
+        "generation_log": record.generation_log,
         "created_at": record.created_at,
     }
 
@@ -461,9 +481,17 @@ def create_generation_task(
         available_at=datetime.now(timezone.utc),
         locked_at=None,
         last_error=None,
+        generation_log=None,
         tree_json=tree,
         preview_cases_json=None,
         module_mapping_json=None,
+    )
+    # 创建阶段已经完成了解析，因此任务一入队就能提供可读的初始诊断上下文。
+    _append_generation_log(record, "INFO", f"任务创建：{original_name}")
+    _append_generation_log(
+        record,
+        "INFO",
+        f"XMind 树解析完成：根节点 {len(tree)} 个，节点总数 {_count_tree_nodes(tree)} 个",
     )
     session.add(record)
     try:
@@ -533,6 +561,7 @@ def retry_generation_task(session: Session, task_id: int) -> dict:
     record.available_at = datetime.now(timezone.utc)
     record.locked_at = None
     record.last_error = None
+    _append_generation_log(record, "INFO", f"任务重试入队：第 {record.attempts + 1} 次尝试")
     record.preview_cases_json = None
     record.module_mapping_json = None
     record.parsed_cases_count = 0
@@ -558,6 +587,7 @@ def cancel_generation_task(session: Session, task_id: int) -> dict:
     record.status = "CANCELLED"
     record.locked_at = None
     record.last_error = None
+    _append_generation_log(record, "INFO", "任务已取消：用户主动取消生成")
     session.commit()
     return _serialize_task_detail(record)
 
@@ -756,19 +786,51 @@ async def generate_task_preview(
             if record.status != "RUNNING":
                 raise HTTPException(status_code=409, detail="XMind task is not running")
 
+            # 各阶段先提交日志再执行可能抛错的操作，保证失败时前置诊断信息仍可见。
+            _append_generation_log(
+                record,
+                "INFO",
+                f"开始生成：{record.file_name}，第 {record.attempts} 次尝试",
+            )
+            session.commit()
+
             tree = list(record.tree_json or [])
             if not tree:
                 tree = parse_xmind(_task_upload_path(upload_dir, record).read_bytes())
                 record.tree_json = tree
+                _append_generation_log(
+                    record,
+                    "INFO",
+                    f"XMind 树解析完成：根节点 {len(tree)} 个，节点总数 {_count_tree_nodes(tree)} 个",
+                )
+                session.commit()
+            else:
+                _append_generation_log(
+                    record,
+                    "INFO",
+                    f"读取已缓存的 XMind 树：根节点 {len(tree)} 个，节点总数 {_count_tree_nodes(tree)} 个",
+                )
+                session.commit()
 
             uploader = record.uploader or session.get(User, record.uploader_id)
             if uploader is None:
                 raise HTTPException(status_code=404, detail="Uploader not found")
 
             ai_settings = settings.get_settings(session)["ai"]
+            _append_generation_log(
+                record,
+                "INFO",
+                (
+                    f"模型配置加载完成：模型 {ai_settings['defaultModel']}，"
+                    f"生成分组 {len(generation_groups(tree))} 个"
+                ),
+            )
+            session.commit()
             skill = XMindToTestCaseSkill(
                 OpenAICompatibleClient(transport=llm_transport),
             )
+            _append_generation_log(record, "INFO", "开始调用模型生成用例")
+            session.commit()
             cases = await skill.generate(
                 tree,
                 config=LLMConfig(
@@ -778,6 +840,8 @@ async def generate_task_preview(
                 ),
                 creator=uploader.name,
             )
+            _append_generation_log(record, "INFO", f"模型生成完成：共得到 {len(cases)} 条用例")
+            session.commit()
 
             # 取消竞态：若任务在生成期间被用户取消，放弃落库结果，保留 CANCELLED 状态。
             session.refresh(record)
@@ -796,6 +860,7 @@ async def generate_task_preview(
             record.status = "WAITING_REVIEW"
             record.locked_at = None
             record.last_error = None
+            _append_generation_log(record, "INFO", "生成结果已保存，任务进入待审核")
             session.commit()
             return _serialize_task_detail(record)
     except Exception as error:
@@ -805,5 +870,6 @@ async def generate_task_preview(
                 record.status = "FAILED"
                 record.locked_at = None
                 record.last_error = _root_cause_text(error)
+                _append_generation_log(record, "ERROR", f"任务失败：{record.last_error}")
                 session.commit()
         raise
