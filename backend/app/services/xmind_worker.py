@@ -11,7 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..models import XMindRecord
-from .xmind import generate_task_preview
+from .xmind import _append_generation_log, generate_task_preview
 
 
 def _claim_task(session_factory: sessionmaker[Session]) -> int | None:
@@ -45,6 +45,10 @@ def _claim_task(session_factory: sessionmaker[Session]) -> int | None:
         if result.rowcount != 1:
             session.rollback()
             return None
+        record = session.get(XMindRecord, task_id)
+        if record is not None:
+            # 领取日志与状态更新在同一事务提交，避免任务看似运行中却没有尝试记录。
+            _append_generation_log(record, "INFO", f"Worker 已领取任务：第 {record.attempts} 次尝试")
         session.commit()
     return task_id
 

@@ -229,6 +229,8 @@ export interface XMindTaskRecord {
   availableAt: string;
   lockedAt?: string | null;
   lastError?: string | null;
+  /** 服务端按阶段保存的生成日志，旧任务可能为空。 */
+  generationLog?: string | null;
   createdAt: string;
 }
 

@@ -365,6 +365,8 @@ class XMindRecord(Base):
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 最终异常摘要之外，保存可跨请求查看的分阶段诊断日志。
+    generation_log: Mapped[str | None] = mapped_column(Text, nullable=True)
     tree_json: Mapped[list[dict[str, Any]]] = mapped_column(MutableList.as_mutable(JSON), default=list)
     preview_cases_json: Mapped[list[dict[str, Any]] | None] = mapped_column(
         MutableList.as_mutable(JSON), nullable=True

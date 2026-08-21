@@ -52,6 +52,12 @@
   overflow-wrap: anywhere;
 }
 
+/* 最终异常摘要单独着色，避免在长日志中被阶段信息淹没。 */
+.xmind-failure-log__content--summary {
+  max-height: 120px;
+  color: #8f1d1d;
+}
+
 .xmind-dropzone {
   display: flex;
   min-height: 430px;

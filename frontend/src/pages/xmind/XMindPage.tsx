@@ -492,10 +492,20 @@ export function XMindPage() {
                 },
               ]}
             />
-            <div className="xmind-failure-log__heading">失败原因</div>
+            <div className="xmind-failure-log__heading">生成过程日志</div>
             <pre className="xmind-failure-log__content">
-              {failureLogTask.lastError?.trim() || '服务端未记录具体失败原因。'}
+              {failureLogTask.generationLog?.trim() ||
+                failureLogTask.lastError?.trim() ||
+                '服务端未记录具体生成日志。'}
             </pre>
+            {failureLogTask.lastError?.trim() ? (
+              <>
+                <div className="xmind-failure-log__heading">最终失败原因</div>
+                <pre className="xmind-failure-log__content xmind-failure-log__content--summary">
+                  {failureLogTask.lastError}
+                </pre>
+              </>
+            ) : null}
           </div>
         ) : null}
       </Modal>

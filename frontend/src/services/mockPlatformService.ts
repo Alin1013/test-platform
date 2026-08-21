@@ -756,6 +756,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         availableAt: new Date().toISOString(),
         lockedAt: null,
         lastError: null,
+        // Mock 任务也保留阶段日志，保证离线演示与真实接口的失败弹窗语义一致。
+        generationLog: `[${new Date().toISOString()}] INFO 任务创建：${file.name}`,
         createdAt: new Date().toISOString(),
         tree: [
           {
@@ -792,6 +794,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         task.status = 'WAITING_REVIEW';
         task.attempts = Math.max(1, task.attempts);
         task.parsedCasesCount = task.cases.length;
+        task.generationLog = `${task.generationLog ?? ''}\n[${new Date().toISOString()}] INFO 模拟生成完成：共得到 ${task.cases.length} 条用例`;
       }
       return respond(task);
     },
@@ -802,6 +805,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       if (task.status !== 'FAILED') throw new Error('只有失败的 XMind 任务可以重试');
       task.status = 'PENDING';
       task.lastError = null;
+      task.generationLog = `${task.generationLog ?? ''}\n[${new Date().toISOString()}] INFO 任务重试入队`;
       task.parsedCasesCount = 0;
       return respond(task);
     },
@@ -929,6 +933,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       target.status = 'CANCELLED';
       target.lockedAt = null;
       target.lastError = null;
+      target.generationLog = `${target.generationLog ?? ''}\n[${new Date().toISOString()}] INFO 任务已取消：用户主动取消生成`;
       const { tree, cases, moduleMapping, ...record } = target;
       return respond(record);
     },

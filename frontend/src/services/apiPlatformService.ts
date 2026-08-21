@@ -159,6 +159,7 @@ interface ApiXMindTaskRecord {
   available_at: string;
   locked_at?: string | null;
   last_error?: string | null;
+  generation_log?: string | null;
   created_at: string;
 }
 
@@ -253,6 +254,7 @@ function mapXMindTaskRecord(record: ApiXMindTaskRecord): XMindTaskRecord {
     availableAt: record.available_at,
     lockedAt: record.locked_at ?? null,
     lastError: record.last_error ?? null,
+    generationLog: record.generation_log ?? null,
     createdAt: record.created_at,
   };
 }
