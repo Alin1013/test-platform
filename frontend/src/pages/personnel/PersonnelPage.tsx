@@ -3,6 +3,7 @@
  */
 import {
   DeleteOutlined,
+  EditOutlined,
   PlusOutlined,
   SaveOutlined,
   SearchOutlined,
@@ -66,6 +67,9 @@ export function PersonnelPage() {
   const [editingRole, setEditingRole] = useState<PermissionRole | null>(null);
   const [savingRole, setSavingRole] = useState(false);
   const [roleForm] = Form.useForm<CreateRoleInput | UpdateRoleInput>();
+  const [roleEditingUser, setRoleEditingUser] = useState<UserRecord | null>(null);
+  const [savingUserRole, setSavingUserRole] = useState(false);
+  const [userRoleForm] = Form.useForm<{ role: UserRole }>();
 
   const loadUsers = useCallback(async () => {
     // 加载失败降级为空列表并提示，避免整页报错。
@@ -217,6 +221,40 @@ export function PersonnelPage() {
     }
   };
 
+  const openUserRoleEditor = (user: UserRecord) => {
+    // 用户角色编辑只改变角色归属，角色权限仍统一从角色配置矩阵继承。
+    setRoleEditingUser(user);
+  };
+
+  useEffect(() => {
+    // 弹窗挂载后再回填当前角色，避免表单实例尚未连接时产生 Ant Design 警告。
+    if (roleEditingUser) userRoleForm.setFieldsValue({ role: roleEditingUser.role });
+  }, [roleEditingUser, userRoleForm]);
+
+  const closeUserRoleEditor = () => {
+    if (savingUserRole) return;
+    userRoleForm.resetFields();
+    setRoleEditingUser(null);
+  };
+
+  const submitUserRole = async (values: { role: UserRole }) => {
+    if (!roleEditingUser) return;
+    setSavingUserRole(true);
+    try {
+      const updated = await service.updateUserRole(roleEditingUser.id, values);
+      setUsers((current) =>
+        current?.map((user) => (user.id === updated.id ? updated : user)) ?? null,
+      );
+      userRoleForm.resetFields();
+      setRoleEditingUser(null);
+      void message.success('用户角色已更新');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '更新用户角色失败');
+    } finally {
+      setSavingUserRole(false);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     // 客户端过滤：姓名/邮箱关键字 + 角色 + 启用状态。
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -329,7 +367,7 @@ export function PersonnelPage() {
       {
         title: '操作',
         key: 'actions',
-        width: 150,
+        width: 220,
         render: (_, user) => (
           <Space size={8}>
             <Switch
@@ -340,6 +378,15 @@ export function PersonnelPage() {
               disabled={updatingUserId !== null}
               onChange={(enabled) => void setUserEnabled(user, enabled)}
             />
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              aria-label={`编辑用户${user.name}的角色`}
+              onClick={() => openUserRoleEditor(user)}
+            >
+              角色
+            </Button>
             <Button
               type="link"
               danger
@@ -454,7 +501,7 @@ export function PersonnelPage() {
                   dataSource={filteredUsers}
                   size="small"
                   pagination={false}
-                  scroll={{ x: 880 }}
+                  scroll={{ x: 950 }}
                 />
               ) : (
                 <Empty description="没有符合条件的用户" />
@@ -508,6 +555,39 @@ export function PersonnelPage() {
               maxLength={64}
               placeholder="例如：产品经理"
               aria-label="角色名称"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`修改${roleEditingUser?.name ?? ''}的角色`}
+        open={roleEditingUser !== null}
+        destroyOnHidden
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={savingUserRole}
+        onOk={() => userRoleForm.submit()}
+        onCancel={closeUserRoleEditor}
+      >
+        <Form
+          form={userRoleForm}
+          layout="vertical"
+          requiredMark={false}
+          onFinish={(values) => void submitUserRole(values)}
+        >
+          <Form.Item
+            name="role"
+            label="角色"
+            rules={[{ required: true, message: '请选择角色' }]}
+          >
+            <Select
+              aria-label="角色"
+              options={(permissionRoles ?? []).map((role) => ({
+                value: role.name,
+                label: role.name,
+              }))}
+              placeholder="请选择角色"
             />
           </Form.Item>
         </Form>

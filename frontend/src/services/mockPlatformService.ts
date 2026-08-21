@@ -26,6 +26,7 @@ import type {
   TestModule,
   UpdateTestModuleInput,
   UpdateRoleInput,
+  UpdateUserRoleInput,
   UpdateTestCaseInput,
   UiExecutionCase,
   UiExecutionInput,
@@ -506,6 +507,18 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       users = [created, ...users];
       persistPersonnel();
       return respond(created);
+    },
+
+    async updateUserRole(id: string, input: UpdateUserRoleInput) {
+      // Mock 同样要求目标角色存在，避免用户出现无法在角色配置中解释的归属。
+      const role = roles.find((candidate) => candidate.name === input.role);
+      if (!role) throw new Error('角色不存在');
+      const existing = users.find((user) => user.id === id);
+      if (!existing) throw new Error('用户不存在');
+      const updated = { ...existing, role: role.name };
+      users = users.map((user) => (user.id === id ? updated : user));
+      persistPersonnel();
+      return respond(updated);
     },
 
     async setUserEnabled(id: string, enabled: boolean) {

@@ -278,6 +278,10 @@ export interface CreateUserInput {
   password: string;
 }
 
+export interface UpdateUserRoleInput {
+  role: UserRole;
+}
+
 export interface PermissionRole {
   id: string;
   name: UserRole;
@@ -521,6 +525,7 @@ export interface PlatformService {
   exportTestCases(query?: TestCaseQuery): Promise<Blob>;
   listUsers(): Promise<UserRecord[]>;
   addUser(input: CreateUserInput): Promise<UserRecord>;
+  updateUserRole(id: string, input: UpdateUserRoleInput): Promise<UserRecord>;
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
   deleteUser(id: string): Promise<void>;
   listRoles(): Promise<PermissionRole[]>;

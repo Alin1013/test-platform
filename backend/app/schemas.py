@@ -424,6 +424,14 @@ class UserStatusUpdate(BaseModel):
     status: Literal["enabled", "disabled"]
 
 
+class UserRoleUpdate(BaseModel):
+    """用户角色调整请求；角色名称必须指向已配置的角色。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(min_length=1, max_length=64)
+
+
 class RolePermissionsUpdate(BaseModel):
     """角色权限整体替换请求。"""
 
