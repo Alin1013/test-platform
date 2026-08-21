@@ -142,6 +142,17 @@ class LLMClient(Protocol):
 class OpenAICompatibleClient:
     """调用 OpenAI、DeepSeek、Qwen 等兼容 Chat Completions 的模型端点。"""
 
+    @staticmethod
+    def _response_detail(response: httpx.Response) -> str:
+        """提取可诊断的响应摘要，避免上游返回 HTML/空体时只剩 JSONDecodeError。"""
+        content_type = response.headers.get("content-type", "未知")
+        body = response.text.strip()
+        # 只保留短片段，既能定位网关错误，也避免把完整模型响应写入任务日志。
+        preview = body[:500] or "无响应内容"
+        return (
+            f"Content-Type: {content_type}，响应片段：{preview}"
+        )
+
     def __init__(
         self,
         *,
@@ -184,15 +195,25 @@ class OpenAICompatibleClient:
             raise XMindSkillError(f"LLM 请求失败：{error}") from error
         if response.status_code >= 400:
             # 携带状态码与响应体片段，让 401/400/429 等失败可直接定位配置问题。
-            detail = response.text.strip()[:500]
             raise XMindSkillError(
-                f"LLM 服务返回错误（HTTP {response.status_code}）：{detail or '无响应内容'}"
+                f"LLM 服务返回错误（HTTP {response.status_code}）："
+                f"{self._response_detail(response)}"
             )
         try:
             data = response.json()
             content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError, ValueError) as error:
-            raise XMindSkillError("LLM 响应格式无效") from error
+        except ValueError as error:
+            # 2xx 并不保证网关返回 JSON；保留原始摘要以识别错误页面、空响应或 SSE。
+            raise XMindSkillError(
+                f"LLM 响应不是 JSON（HTTP {response.status_code}）："
+                f"{self._response_detail(response)}"
+            ) from error
+        except (KeyError, IndexError, TypeError) as error:
+            # 响应是 JSON 但不是 Chat Completions 结构，通常意味着端点或代理配置错误。
+            raise XMindSkillError(
+                f"LLM 响应结构无效（HTTP {response.status_code}）："
+                f"{self._response_detail(response)}"
+            ) from error
         if not isinstance(content, str) or not content.strip():
             raise XMindSkillError("LLM 响应内容为空")
         return content
