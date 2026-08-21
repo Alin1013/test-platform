@@ -13,7 +13,8 @@ export type ApiComparison = 'equals' | 'contains' | 'notNull';
 export type UiAction = 'click' | 'input' | 'navigate' | 'hover' | 'wait' | 'assert';
 export type UiLocatorType = 'xpath' | 'css' | 'id' | 'text';
 export type UiAssertion = 'none' | 'textEquals' | 'isVisible' | 'urlEquals';
-export type UserRole = '测试负责人' | '测试工程师' | '开发人员';
+/** 角色名称由角色配置维护，因此不能再限制为固定的演示角色联合类型。 */
+export type UserRole = string;
 export type PermissionKey =
   | 'caseView'
   | 'caseEdit'
@@ -283,6 +284,14 @@ export interface PermissionRole {
   permissions: Record<PermissionKey, boolean>;
 }
 
+export interface CreateRoleInput {
+  name: string;
+}
+
+export interface UpdateRoleInput {
+  name: string;
+}
+
 // ===== 仪表盘与系统设置 =====
 export interface DashboardData {
   counts: Record<TestCaseType, number>;
@@ -515,6 +524,8 @@ export interface PlatformService {
   setUserEnabled(id: string, enabled: boolean): Promise<void>;
   deleteUser(id: string): Promise<void>;
   listRoles(): Promise<PermissionRole[]>;
+  createRole(input: CreateRoleInput): Promise<PermissionRole>;
+  updateRole(id: string, input: UpdateRoleInput): Promise<PermissionRole>;
   updateRolePermissions(
     id: string,
     permissions: PermissionRole['permissions'],

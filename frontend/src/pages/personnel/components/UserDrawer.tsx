@@ -30,11 +30,12 @@ export function UserDrawer({ open, roles, onClose, onSubmit }: UserDrawerProps) 
   );
 
   useEffect(() => {
-    // 每次打开时重置部门与角色的默认值。
+    // 每次打开时重置部门与角色的默认值；角色已可配置时优先使用当前列表首项。
     if (open) {
-      form.setFieldsValue({ department: '质量保障部', role: '测试工程师' });
+      const defaultRole = roles?.find((role) => role.name === '测试工程师')?.name ?? roles?.[0]?.name;
+      form.setFieldsValue({ department: '质量保障部', role: defaultRole });
     }
-  }, [form, open]);
+  }, [form, open, roles]);
 
   const closeDrawer = () => {
     // 表单未填写时直接关闭；已填写则先弹放弃确认。

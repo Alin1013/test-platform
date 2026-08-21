@@ -4,6 +4,7 @@
 import type {
   CreateTestCaseInput,
   CreateTestModuleInput,
+  CreateRoleInput,
   CreateUserInput,
   ApiDebugInput,
   ApiDebugResult,
@@ -21,6 +22,7 @@ import type {
   TestCaseType,
   TestModule,
   UpdateTestModuleInput,
+  UpdateRoleInput,
   UiExecutionInput,
   UiExecutionResult,
   UiDebugInput,
@@ -625,6 +627,24 @@ export function createApiPlatformService({
     async listRoles() {
       const roles = await request<ApiRole[]>('/roles');
       return roles.map(mapRole);
+    },
+
+    async createRole(input: CreateRoleInput) {
+      // 角色名称通过独立接口保存，权限仍由权限矩阵单独维护。
+      const role = await request<ApiRole>('/roles', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return mapRole(role);
+    },
+
+    async updateRole(id, input: UpdateRoleInput) {
+      // 重命名角色不会覆盖权限，避免编辑名称时意外清空权限配置。
+      const role = await request<ApiRole>(`/roles/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      });
+      return mapRole(role);
     },
 
     async updateRolePermissions(id, permissions) {

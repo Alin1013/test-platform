@@ -14,6 +14,7 @@ import type {
   ApiDebugInput,
   CreateTestCaseInput,
   CreateTestModuleInput,
+  CreateRoleInput,
   CreateUserInput,
   PermissionRole,
   SystemSettings,
@@ -24,6 +25,7 @@ import type {
   TestCaseType,
   TestModule,
   UpdateTestModuleInput,
+  UpdateRoleInput,
   UpdateTestCaseInput,
   UiExecutionCase,
   UiExecutionInput,
@@ -523,6 +525,50 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
 
     async listRoles() {
       return respond(roles);
+    },
+
+    async createRole(input: CreateRoleInput) {
+      // Mock 与真实接口保持相同的唯一性约束，便于离线演示覆盖冲突场景。
+      const name = input.name.trim();
+      if (!name) throw new Error('角色名称不能为空');
+      if (roles.some((role) => role.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        throw new Error('角色名称已存在');
+      }
+      const created: PermissionRole = {
+        id: `role-${Date.now()}`,
+        name,
+        permissions: {
+          caseView: false,
+          caseEdit: false,
+          xmindConvert: false,
+          personnelManage: false,
+          systemSettings: false,
+        },
+      };
+      roles = [...roles, created];
+      persistPersonnel();
+      return respond(created);
+    },
+
+    async updateRole(id: string, input: UpdateRoleInput) {
+      // 只替换名称，保留当前权限位与用户角色关联。
+      const name = input.name.trim();
+      if (!name) throw new Error('角色名称不能为空');
+      const existing = roles.find((role) => role.id === id);
+      if (!existing) throw new Error('角色不存在');
+      if (
+        roles.some(
+          (role) => role.id !== id && role.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        )
+      ) {
+        throw new Error('角色名称已存在');
+      }
+      const updated = { ...existing, name };
+      roles = roles.map((role) => (role.id === id ? updated : role));
+      // Mock 用户以角色名称保存归属，重命名时同步迁移，模拟后端外键关联的展示结果。
+      users = users.map((user) => (user.role === existing.name ? { ...user, role: name } : user));
+      persistPersonnel();
+      return respond(updated);
     },
 
     async updateRolePermissions(id, permissions) {

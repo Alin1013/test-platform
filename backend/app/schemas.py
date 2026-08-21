@@ -430,6 +430,22 @@ class RolePermissionsUpdate(BaseModel):
     permissions: dict[str, bool]
 
 
+class RoleCreate(BaseModel):
+    """角色配置：创建角色时只要求唯一名称，权限默认由服务层初始化。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+
+
+class RoleUpdate(BaseModel):
+    """角色配置：修改角色展示名称，不改变已保存的权限位。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+
+
 class SettingsModel(BaseModel):
     """设置分组的公共基类：禁止多余字段。"""
 

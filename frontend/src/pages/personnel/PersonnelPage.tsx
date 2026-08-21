@@ -1,19 +1,40 @@
 /**
  * 人员管理页：用户列表（搜索/筛选/启停/删除）与角色权限矩阵两个 Tab。
  */
-import { DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Input, Select, Skeleton, Space, Switch, Table, Tabs, Tag } from 'antd';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import {
+  App,
+  Button,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Select,
+  Skeleton,
+  Space,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { PersonAvatar } from '../../components/PersonAvatar';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
+  CreateRoleInput,
   CreateUserInput,
   PermissionKey,
   PermissionRole,
   UserRecord,
   UserRole,
+  UpdateRoleInput,
 } from '../../services/contracts';
 import { PermissionMatrix } from './components/PermissionMatrix';
 import { UserDrawer } from './components/UserDrawer';
@@ -21,9 +42,7 @@ import './personnel.css';
 
 type UserStatusFilter = 'enabled' | 'disabled';
 
-const roleOptions: UserRole[] = ['测试负责人', '测试工程师', '开发人员'];
-
-const roleColors: Record<UserRole, string> = {
+const roleColors: Record<string, string> = {
   测试负责人: 'blue',
   测试工程师: 'cyan',
   开发人员: 'gold',
@@ -43,6 +62,10 @@ export function PersonnelPage() {
   const [permissionRoles, setPermissionRoles] = useState<PermissionRole[] | null>(null);
   const [savedPermissionRoles, setSavedPermissionRoles] = useState<PermissionRole[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<PermissionRole | null>(null);
+  const [savingRole, setSavingRole] = useState(false);
+  const [roleForm] = Form.useForm<CreateRoleInput | UpdateRoleInput>();
 
   const loadUsers = useCallback(async () => {
     // 加载失败降级为空列表并提示，避免整页报错。
@@ -135,6 +158,62 @@ export function PersonnelPage() {
       void message.error('角色权限保存失败');
     } finally {
       setSavingPermissions(false);
+    }
+  };
+
+  const openCreateRole = () => {
+    // 新增角色从空权限开始，管理员必须显式授予访问权限。
+    setEditingRole(null);
+    setRoleModalOpen(true);
+  };
+
+  const openEditRole = (nextRole: PermissionRole) => {
+    // 编辑只修改名称，权限位继续由矩阵和保存按钮负责。
+    setEditingRole(nextRole);
+    setRoleModalOpen(true);
+  };
+
+  useEffect(() => {
+    // Modal 挂载 Form 后再写入字段，避免 Ant Design 在弹窗尚未连接时产生控制台警告。
+    if (!roleModalOpen) return;
+    roleForm.setFieldsValue(editingRole ? { name: editingRole.name } : { name: undefined });
+  }, [editingRole, roleForm, roleModalOpen]);
+
+  const closeRoleModal = () => {
+    roleForm.resetFields();
+    setEditingRole(null);
+    setRoleModalOpen(false);
+  };
+
+  const submitRole = async (values: CreateRoleInput | UpdateRoleInput) => {
+    const name = values.name.trim();
+    if (!name) {
+      roleForm.setFields([{ name: 'name', errors: ['请输入角色名称'] }]);
+      return;
+    }
+
+    setSavingRole(true);
+    try {
+      const saved = editingRole
+        ? await service.updateRole(editingRole.id, { name })
+        : await service.createRole({ name });
+      setPermissionRoles((current) => {
+        if (!current) return [saved];
+        return editingRole
+          ? current.map((role) => (role.id === saved.id ? saved : role))
+          : [...current, saved];
+      });
+      setSavedPermissionRoles((current) =>
+        editingRole
+          ? current.map((role) => (role.id === saved.id ? saved : role))
+          : [...current, saved],
+      );
+      closeRoleModal();
+      void message.success(editingRole ? '角色已修改' : '角色已添加');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '角色保存失败');
+    } finally {
+      setSavingRole(false);
     }
   };
 
@@ -232,7 +311,9 @@ export function PersonnelPage() {
         title: '角色',
         dataIndex: 'role',
         width: 130,
-        render: (userRole: UserRole) => <Tag color={roleColors[userRole]}>{userRole}</Tag>,
+        render: (userRole: UserRole) => (
+          <Tag color={roleColors[userRole] ?? 'default'}>{userRole}</Tag>
+        ),
       },
       {
         title: '状态',
@@ -299,16 +380,21 @@ export function PersonnelPage() {
               添加用户
             </Button>
           ) : (
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              aria-label="保存"
-              loading={savingPermissions}
-              disabled={savingPermissions || !changedPermissionRoles.length}
-              onClick={() => void savePermissions()}
-            >
-              保存
-            </Button>
+            <Space>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                aria-label="保存"
+                loading={savingPermissions}
+                disabled={savingPermissions || !changedPermissionRoles.length}
+                onClick={() => void savePermissions()}
+              >
+                保存
+              </Button>
+              <Button icon={<PlusOutlined />} aria-label="添加角色" onClick={openCreateRole}>
+                添加角色
+              </Button>
+            </Space>
           )
         }
       />
@@ -339,7 +425,10 @@ export function PersonnelPage() {
               placeholder="全部角色"
               allowClear
               value={role}
-              options={roleOptions.map((value) => ({ value, label: value }))}
+              options={(permissionRoles ?? []).map((item) => ({
+                value: item.name,
+                label: item.name,
+              }))}
               onChange={setRole}
             />
             <Select
@@ -381,6 +470,7 @@ export function PersonnelPage() {
             roles={permissionRoles}
             disabled={savingPermissions}
             onToggle={togglePermission}
+            onEditRole={openEditRole}
           />
         </section>
       )}
@@ -391,6 +481,37 @@ export function PersonnelPage() {
         onClose={() => setDrawerOpen(false)}
         onSubmit={addUser}
       />
+
+      <Modal
+        title={editingRole ? '编辑角色' : '添加角色'}
+        open={roleModalOpen}
+        destroyOnHidden
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={savingRole}
+        onOk={() => roleForm.submit()}
+        onCancel={closeRoleModal}
+      >
+        <Form
+          form={roleForm}
+          layout="vertical"
+          requiredMark={false}
+          onFinish={(values) => void submitRole(values)}
+        >
+          <Form.Item
+            name="name"
+            label="角色名称"
+            rules={[{ required: true, whitespace: true, message: '请输入角色名称' }]}
+          >
+            <Input
+              autoFocus
+              maxLength={64}
+              placeholder="例如：产品经理"
+              aria-label="角色名称"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </section>
   );
 }

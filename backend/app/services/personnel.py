@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Role, User
-from ..schemas import RolePermissionsUpdate, UserCreate
+from ..schemas import RoleCreate, RolePermissionsUpdate, RoleUpdate, UserCreate
 from .accounts import (
     AccountConflictError,
     AccountCreateInput,
@@ -14,6 +14,15 @@ from .accounts import (
     create_account,
 )
 from .auth import hash_password
+
+DEFAULT_ROLE_PERMISSIONS = {
+    # 新角色必须显式授权，避免创建配置时意外开放系统能力。
+    "caseView": False,
+    "caseEdit": False,
+    "xmindConvert": False,
+    "personnelManage": False,
+    "systemSettings": False,
+}
 
 
 def _serialize_user(user: User) -> dict:
@@ -125,6 +134,50 @@ def list_roles(session: Session) -> list[dict]:
     ]
 
 
+def _serialize_role(role: Role) -> dict:
+    """把角色 ORM 对象转换成角色配置接口的稳定响应结构。"""
+    return {"id": role.id, "name": role.name, "permissions": role.permissions}
+
+
+def create_role(session: Session, payload: RoleCreate) -> dict:
+    """新增角色并关闭全部权限，要求名称在角色表中唯一。"""
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="角色名称不能为空")
+    if session.scalar(select(Role.id).where(func.lower(Role.name) == name.casefold())) is not None:
+        raise HTTPException(status_code=409, detail="角色名称已存在")
+
+    role = Role(name=name, permissions=DEFAULT_ROLE_PERMISSIONS.copy())
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    return _serialize_role(role)
+
+
+def update_role(session: Session, role_id: int, payload: RoleUpdate) -> dict:
+    """修改角色名称；用户通过外键关联角色，因此重命名不会丢失用户归属。"""
+    role = session.get(Role, role_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Role not found")
+
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="角色名称不能为空")
+    duplicate = session.scalar(
+        select(Role.id).where(
+            func.lower(Role.name) == name.casefold(),
+            Role.id != role_id,
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="角色名称已存在")
+
+    role.name = name
+    session.commit()
+    session.refresh(role)
+    return _serialize_role(role)
+
+
 def update_role_permissions(
     session: Session, role_id: int, payload: RolePermissionsUpdate
 ) -> dict:
@@ -134,4 +187,4 @@ def update_role_permissions(
         raise HTTPException(status_code=404, detail="Role not found")
     role.permissions = payload.permissions
     session.commit()
-    return {"id": role.id, "name": role.name, "permissions": role.permissions}
+    return _serialize_role(role)

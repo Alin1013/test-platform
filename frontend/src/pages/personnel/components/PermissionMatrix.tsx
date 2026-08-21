@@ -1,7 +1,8 @@
 /**
  * 权限矩阵：角色 × 权限项的勾选表格。
  */
-import { Checkbox, Empty, Skeleton } from 'antd';
+import { EditOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Empty, Skeleton } from 'antd';
 import type { PermissionKey, PermissionRole } from '../../../services/contracts';
 
 const permissionColumns: Array<{ key: PermissionKey; label: string }> = [
@@ -17,9 +18,15 @@ interface PermissionMatrixProps {
   roles: PermissionRole[] | null;
   disabled?: boolean;
   onToggle: (roleId: string, permission: PermissionKey) => void;
+  onEditRole: (role: PermissionRole) => void;
 }
 
-export function PermissionMatrix({ roles, disabled = false, onToggle }: PermissionMatrixProps) {
+export function PermissionMatrix({
+  roles,
+  disabled = false,
+  onToggle,
+  onEditRole,
+}: PermissionMatrixProps) {
   // roles 为 null 显示骨架，空数组显示加载失败提示。
 
   if (!roles) {
@@ -41,6 +48,7 @@ export function PermissionMatrix({ roles, disabled = false, onToggle }: Permissi
                 {permission.label}
               </th>
             ))}
+            <th scope="col">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -57,6 +65,18 @@ export function PermissionMatrix({ roles, disabled = false, onToggle }: Permissi
                   />
                 </td>
               ))}
+              <td>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  aria-label={`编辑角色${role.name}`}
+                  disabled={disabled}
+                  onClick={() => onEditRole(role)}
+                >
+                  编辑
+                </Button>
+              </td>
             </tr>
           ))}
         </tbody>

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
-from ..schemas import RolePermissionsUpdate, UserCreate, UserStatusUpdate
+from ..schemas import RoleCreate, RolePermissionsUpdate, RoleUpdate, UserCreate, UserStatusUpdate
 from ..services import personnel
 
 router = APIRouter(prefix="/api/v1", tags=["personnel"])
@@ -63,6 +63,24 @@ def delete_user(
 def list_roles(session: Annotated[Session, Depends(get_session)]) -> list[dict]:
     """GET /roles：返回全部角色及其权限。"""
     return personnel.list_roles(session)
+
+
+@router.post("/roles", status_code=status.HTTP_201_CREATED)
+def create_role(
+    payload: RoleCreate, session: Annotated[Session, Depends(get_session)]
+) -> dict:
+    """POST /roles：新增角色配置，权限默认关闭。"""
+    return personnel.create_role(session, payload)
+
+
+@router.patch("/roles/{role_id}")
+def update_role(
+    role_id: int,
+    payload: RoleUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict:
+    """PATCH /roles/{id}：修改角色名称并保留原权限。"""
+    return personnel.update_role(session, role_id, payload)
 
 
 @router.put("/roles/{role_id}/permissions")
