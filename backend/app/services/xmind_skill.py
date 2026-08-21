@@ -13,29 +13,38 @@ STANDARD_HEADERS = (
     "用例名称",
     "需求ID",
     "前置条件",
+    "用例步骤",
+    "预期结果",
     "用例类型",
     "用例状态",
     "用例等级",
     "创建人",
     "归属迭代",
-    "用例步骤",
-    "预期结果",
+    "是否冒烟",
 )
+
+SYSTEM_PROMPT = """你是一名资深软件测试专家，负责把 XMind 功能节点拆解成可直接评审和导出的功能测试用例。
+
+请在内部分析需求，不要输出思维链、解释或 Markdown。输出要贴近真实测试用例模板：
+1. 每条用例只覆盖一个可验证场景，标题使用“功能点—具体场景”格式，例如“创建抽取任务—任务名称输入201字符”。
+2. 前置条件写成有序的可执行条件，每行一个“1. ”、“2. ”编号，包含登录身份、权限和必要数据；不要写空泛的“环境正常”。
+3. 用例步骤和预期结果都使用连续编号，每个步骤都要有对应结果；结果要写可观察的页面、数据或状态变化。
+4. 每个功能点至少覆盖一个正向场景和一个逆向、边界或异常场景，优先覆盖必填校验、长度边界、重复提交、权限隔离、空结果和跨页选择。
+5. 用例名称、前置条件、步骤和预期结果使用简洁中文，保留产品界面中的按钮、Tab、提示语和状态原文；不要猜测 URL、HTTP 方法、状态码或不存在的产品文案。
+6. “是否冒烟”仅对核心主流程填写“是”，边界、异常、权限和辅助筛选场景填写“否”。未知的需求ID和归属迭代留空，不要臆造。
+
+参考附件的表达风格（只学习结构和粒度，不要照抄其中业务内容）：
+用例名称“创建抽取任务—任务名称限制200字符”；前置条件为“1. 系统运行正常\n2. 用户已登录系统\n3. 用户拥有可用的本体”；步骤为“1. 进入新建抽取任务页面\n2. 输入恰好200个字符的任务名称\n3. 选择一个词条\n4. 点击「开始抽取」”；预期结果为“1. 任务创建成功\n2. 任务列表展示部分任务名称，hover展示完整的200字符名称”。
+
+必须返回一个 JSON 对象，格式为 {"cases": [...]}。数组中的每个对象只能包含以下 12 个中文字段，字段顺序按此列表输出：
+用例目录、用例名称、需求ID、前置条件、用例步骤、预期结果、用例类型、用例状态、用例等级、创建人、归属迭代、是否冒烟。
+其中用例类型固定为“功能测试”，用例状态固定为“正常”，用例等级只允许“高”“中”“低”，是否冒烟只允许“是”“否”。
+"""
 
 MAX_ATTEMPTS = 3
 MAX_GENERATED_CASES = 5000
 DEFAULT_MAX_CONCURRENCY = 4
 DEFAULT_RETRY_DELAY_SECONDS = 0.2
-
-SYSTEM_PROMPT = """你是一名资深软件测试专家，负责把 XMind 功能节点拆解成高覆盖率的功能测试用例。
-
-请在内部分析需求，不要输出思维链、解释或 Markdown。每个功能点至少生成一个正向流程和一个逆向、边界或异常测试点；覆盖非空校验、特殊字符、重复提交、网络异常、权限越界等适用场景。
-
-只生成功能测试用例，不生成接口自动化或 UI 自动化配置，不猜测 URL、HTTP 方法和状态码。用例步骤和预期结果必须使用编号格式（1.、2.、3.）。用例目录必须使用给定的 XMind 目录路径。
-
-必须返回一个 JSON 对象，格式为 {"cases": [...]}。数组中的每个对象只能包含以下 11 个中文字段：
-用例目录、用例名称、需求ID、前置条件、用例类型、用例状态、用例等级、创建人、归属迭代、用例步骤、预期结果。
-"""
 
 
 class XMindSkillError(ValueError):
@@ -111,6 +120,12 @@ class GeneratedFunctionalCase(BaseModel):
         max_length=128,
         validation_alias=AliasChoices("归属迭代", "iteration"),
         serialization_alias="归属迭代",
+    )
+    is_smoke: str = Field(
+        default="否",
+        max_length=5,
+        validation_alias=AliasChoices("是否冒烟", "is_smoke", "smoke"),
+        serialization_alias="是否冒烟",
     )
     steps: str = Field(
         default="",
@@ -272,13 +287,18 @@ def _priority(value: str) -> str:
     return aliases.get(normalized, normalized if normalized in {"P0", "P1", "P2", "P3"} else "P2")
 
 
+def _smoke(value: str) -> str:
+    """把模型可能返回的英文/中文冒烟标记归一化为模板允许的值。"""
+    return "是" if value.strip().lower() in {"是", "yes", "true", "1", "y"} else "否"
+
+
 def align_generated_cases(
     raw_cases: Any,
     *,
     directory: str,
     creator: str,
 ) -> list[dict[str, str]]:
-    """校验模型输出并规整为标准用例结构（目录/类型/状态由平台决定）。"""
+    """校验模型输出并规整为模板结构（目录/类型/状态由平台决定）。"""
     if isinstance(raw_cases, dict):
         raw_cases = raw_cases.get("cases")
     if not isinstance(raw_cases, list) or not raw_cases:
@@ -287,7 +307,37 @@ def align_generated_cases(
     aligned: list[dict[str, str]] = []
     for raw_case in raw_cases:
         try:
-            case = GeneratedFunctionalCase.model_validate(raw_case)
+            # Excel/部分模型会把需求 ID 或冒烟标记返回为数字、布尔值，先转文本再执行长度约束。
+            normalized_input = dict(raw_case) if isinstance(raw_case, dict) else raw_case
+            if isinstance(normalized_input, dict):
+                for key in (
+                    "需求ID",
+                    "requirement_id",
+                    "用例目录",
+                    "directory",
+                    "用例名称",
+                    "name",
+                    "title",
+                    "前置条件",
+                    "precondition",
+                    "用例步骤",
+                    "steps",
+                    "test_steps",
+                    "预期结果",
+                    "expected_result",
+                    "创建人",
+                    "creator",
+                    "归属迭代",
+                    "iteration",
+                    "是否冒烟",
+                    "is_smoke",
+                    "smoke",
+                ):
+                    if normalized_input.get(key) is not None and not isinstance(
+                        normalized_input[key], str
+                    ):
+                        normalized_input[key] = str(normalized_input[key])
+            case = GeneratedFunctionalCase.model_validate(normalized_input)
         except (ValidationError, TypeError) as error:
             raise XMindSkillError("LLM 用例字段不符合结构约束") from error
         values = case.model_dump(by_alias=True)
@@ -300,6 +350,7 @@ def align_generated_cases(
         values["用例类型"] = "功能测试"
         values["用例状态"] = "草稿"
         values["用例等级"] = _priority(values["用例等级"])
+        values["是否冒烟"] = _smoke(values["是否冒烟"])
         # 创建人属于任务审计元数据，必须由上传账号决定，不能采信模型可能臆造的字段。
         values["创建人"] = _as_non_empty(creator, "未指定创建人")
         aligned.append({header: str(values.get(header, "")) for header in STANDARD_HEADERS})

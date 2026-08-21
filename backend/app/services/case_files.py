@@ -17,7 +17,7 @@ from ..case_file_schemas import TestCaseExportRequest
 from ..models import Module, TestCase, User
 from ..schemas import ApiDetailsCreate, TestCaseCreate, UiDetailsCreate
 from . import test_cases
-from .xmind_skill import STANDARD_HEADERS
+
 
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
 EXPORT_HEADERS = (
@@ -46,6 +46,25 @@ FUNCTIONAL_HEADERS = (
     "用例目录", "用例名称", "需求ID", "前置条件", "用例步骤", "预期结果",
     "用例类型", "用例状态", "用例等级", "创建人", "归属迭代", "是否冒烟",
 )
+# XMind 导出沿用附件中的外部测试用例模板；后三列是环境扩展列，当前平台没有环境矩阵数据时保持为空。
+XMIND_EXPORT_HEADERS = (
+    "用例目录",
+    "用例名称",
+    "需求ID",
+    "前置条件",
+    "用例步骤",
+    "预期结果",
+    "用例类型",
+    "用例状态",
+    "用例等级",
+    "创建人",
+    "归属迭代",
+    "是否冒烟",
+    "OS官网",
+    "百丽环境",
+    "sass环境",
+)
+XMIND_PRIORITY_LABELS = {"P0": "高", "P1": "中", "P2": "低", "P3": "很低"}
 HEADER_ALIASES = {
     "编号": "code",
     "用例名称": "title",
@@ -228,14 +247,33 @@ def export_cases(
 
 
 def export_generated_cases(cases: list[dict[str, Any]]) -> ExportedFile:
-    """导出尚未入库的 XMind 生成预览，表头顺序与 Skill 契约一致。"""
+    """按外部功能用例模板导出尚未入库的 XMind 预览。"""
 
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "XMind Generated Cases"
-    sheet.append(STANDARD_HEADERS)
+    sheet.title = "Sheet1"
+    sheet.append(XMIND_EXPORT_HEADERS)
     for case in cases:
-        sheet.append([case.get(header, "") for header in STANDARD_HEADERS])
+        # 导出层只转换展示枚举，审核与入库仍使用平台内部的 P0/P1/草稿值。
+        sheet.append(
+            [
+                case.get("用例目录", ""),
+                case.get("用例名称", ""),
+                case.get("需求ID", ""),
+                case.get("前置条件", ""),
+                case.get("用例步骤", ""),
+                case.get("预期结果", ""),
+                "功能测试",
+                "正常",
+                XMIND_PRIORITY_LABELS.get(str(case.get("用例等级", "")), "中"),
+                case.get("创建人", ""),
+                case.get("归属迭代", ""),
+                case.get("是否冒烟", "否"),
+                "",
+                "",
+                "",
+            ]
+        )
     output_bytes = io.BytesIO()
     workbook.save(output_bytes)
     return ExportedFile(

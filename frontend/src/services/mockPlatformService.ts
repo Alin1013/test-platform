@@ -866,12 +866,32 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     async exportXMind(cases: XMindGeneratedCase[]): Promise<Blob> {
       const { utils, write } = await import('xlsx');
       const headers = [
-        '用例目录', '用例名称', '需求ID', '前置条件', '用例类型', '用例状态',
-        '用例等级', '创建人', '归属迭代', '用例步骤', '预期结果',
+        '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
+        '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟',
+        'OS官网', '百丽环境', 'sass环境',
       ];
       const workbook = utils.book_new();
-      const sheet = utils.json_to_sheet(cases, { header: headers });
-      utils.book_append_sheet(workbook, sheet, 'XMind Generated Cases');
+      // Mock 导出与后端一致：展示模板使用中文枚举，环境扩展列暂不填充。
+      const priorityLabels: Record<string, string> = { P0: '高', P1: '中', P2: '低', P3: '很低' };
+      const rows = cases.map((item) => [
+        item.用例目录 ?? '',
+        item.用例名称 ?? '',
+        item.需求ID ?? '',
+        item.前置条件 ?? '',
+        item.用例步骤 ?? '',
+        item.预期结果 ?? '',
+        '功能测试',
+        '正常',
+        priorityLabels[item.用例等级] ?? '中',
+        item.创建人 ?? '',
+        item.归属迭代 ?? '',
+        item.是否冒烟 ?? '否',
+        '',
+        '',
+        '',
+      ]);
+      const sheet = utils.aoa_to_sheet([headers, ...rows]);
+      utils.book_append_sheet(workbook, sheet, 'Sheet1');
       const output = write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
       return new Blob([output], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

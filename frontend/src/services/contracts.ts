@@ -193,6 +193,8 @@ export interface XMindGeneratedCase {
   归属迭代: string;
   用例步骤: string;
   预期结果: string;
+  /** 外部功能用例模板中的冒烟标记；旧任务没有该字段时按“否”展示。 */
+  是否冒烟?: '是' | '否';
   /** 前端/后端生成的稳定标识，用于定位单条用例（增删改与勾选用）。 */
   tempId?: string;
   /** 审核状态，由审核界面驱动。 */

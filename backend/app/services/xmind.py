@@ -346,6 +346,7 @@ def confirm_generated_cases(session: Session, payload: XMindConfirmRequest) -> d
                         test_steps=normalized["用例步骤"],
                         expected_result=normalized["预期结果"],
                         iteration=normalized["归属迭代"],
+                        is_smoke=normalized["是否冒烟"] == "是",
                     ),
                 )
             )
@@ -687,7 +688,7 @@ def confirm_generated_task(
     try:
         for raw_case in approved_cases:
             # 预览用例 JSON 含 tempId / reviewStatus 等审核字段，而 GeneratedFunctionalCase
-            # 关闭了 extra，必须先用标准 11 列重建干净用例再交给对齐逻辑，否则会校验失败。
+            # 关闭了 extra，必须先用标准模板字段重建干净用例再交给对齐逻辑，否则会校验失败。
             clean_case = {header: raw_case.get(header, "") for header in STANDARD_HEADERS}
             normalized = align_generated_cases(
                 [clean_case],
@@ -709,6 +710,7 @@ def confirm_generated_task(
                         test_steps=normalized["用例步骤"],
                         expected_result=normalized["预期结果"],
                         iteration=normalized["归属迭代"],
+                        is_smoke=normalized["是否冒烟"] == "是",
                     ),
                 )
             )
