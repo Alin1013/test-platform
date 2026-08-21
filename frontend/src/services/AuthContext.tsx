@@ -1,7 +1,7 @@
 /**
  * 认证上下文：管理登录用户状态、令牌与登录/注册/登出/资料更新。
  */
-import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import {
   createConfiguredAuthClient,
   AuthClientError,
@@ -10,6 +10,7 @@ import {
   type RegisterInput,
   type UpdateProfileInput,
 } from './authClient';
+import { clearCurrentAuthSession, setCurrentAuthSession } from './authSession';
 
 export { AuthClientError } from './authClient';
 export type { AuthUser, RegisterInput, UpdateProfileInput } from './authClient';
@@ -42,6 +43,12 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
   const [authClient] = useState(() => client ?? createDefaultClient());
   const [user, setUser] = useState<AuthUser | null>(authClient.initialUser);
   const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 平台服务不在 React 组件内，请求层通过共享快照读取当前用户身份。
+    setCurrentAuthSession(token, user?.id ?? null);
+    return () => clearCurrentAuthSession();
+  }, [token, user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

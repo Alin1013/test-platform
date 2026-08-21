@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..case_file_schemas import TestCaseExportRequest
-from ..dependencies import get_session
+from ..dependencies import get_current_user, get_session
 from ..schemas import (
     CaseStatus,
     CaseType,
@@ -27,6 +27,7 @@ from ..schemas import (
     TestModuleCreate,
     TestModuleUpdate,
 )
+from ..models import User
 from ..services import case_files, debug_runner, test_cases
 
 router = APIRouter(prefix="/api/v1", tags=["test cases"])
@@ -112,18 +113,24 @@ def list_test_cases(
 
 @router.post("/test-cases", status_code=status.HTTP_201_CREATED)
 def create_test_case(
-    payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
+    payload: TestCaseCreate,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """POST /test-cases：创建功能用例。"""
-    return test_cases.create_case(session, payload)
+    return test_cases.create_case(session, test_cases.as_current_user(payload, current_user))
 
 
 @router.post("/api-cases", status_code=status.HTTP_201_CREATED)
 def create_api_case(
-    payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
+    payload: TestCaseCreate,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """POST /api-cases：创建 API 自动化用例。"""
-    return test_cases.create_automation_case(session, payload, "api")
+    return test_cases.create_automation_case(
+        session, test_cases.as_current_user(payload, current_user), "api"
+    )
 
 
 @router.post("/api-cases/debug")
@@ -146,10 +153,14 @@ def debug_api_case(
 
 @router.post("/ui-cases", status_code=status.HTTP_201_CREATED)
 def create_ui_case(
-    payload: TestCaseCreate, session: Annotated[Session, Depends(get_session)]
+    payload: TestCaseCreate,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """POST /ui-cases：创建 UI 自动化用例。"""
-    return test_cases.create_automation_case(session, payload, "ui")
+    return test_cases.create_automation_case(
+        session, test_cases.as_current_user(payload, current_user), "ui"
+    )
 
 
 @router.put("/api-cases/{case_id}")
@@ -157,9 +168,12 @@ def update_api_case(
     case_id: int,
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """PUT /api-cases/{id}：更新 API 自动化用例。"""
-    return test_cases.update_automation_case(session, case_id, payload, "api")
+    return test_cases.update_automation_case(
+        session, case_id, test_cases.as_current_user(payload, current_user), "api"
+    )
 
 
 @router.put("/ui-cases/{case_id}")
@@ -167,9 +181,12 @@ def update_ui_case(
     case_id: int,
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """PUT /ui-cases/{id}：更新 UI 自动化用例。"""
-    return test_cases.update_automation_case(session, case_id, payload, "ui")
+    return test_cases.update_automation_case(
+        session, case_id, test_cases.as_current_user(payload, current_user), "ui"
+    )
 
 
 @router.post("/test-cases/export")
@@ -190,11 +207,18 @@ def export_test_cases(
 async def import_test_cases(
     file: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
     module_id: str | None = Query(default=None),
 ) -> dict:
     """POST /test-cases/import：从 CSV/XLSX 文件导入用例。"""
     content = await file.read(case_files.MAX_IMPORT_BYTES + 1)
-    return case_files.import_cases(session, file.filename or "upload", content, module_id=module_id)
+    return case_files.import_cases(
+        session,
+        file.filename or "upload",
+        content,
+        module_id=module_id,
+        author_id=current_user.id,
+    )
 
 
 @router.put("/test-cases/{case_id}")
@@ -202,9 +226,12 @@ def update_test_case(
     case_id: int,
     payload: TestCaseUpdate,
     session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """PUT /test-cases/{id}：更新功能用例。"""
-    return test_cases.update_case(session, case_id, payload)
+    return test_cases.update_case(
+        session, case_id, test_cases.as_current_user(payload, current_user)
+    )
 
 
 @router.delete("/test-cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -43,6 +43,7 @@ import type {
   XMindTaskStatus,
   PaginatedResult,
 } from './contracts';
+import { getCurrentUserId } from './authSession';
 
 interface MockServiceOptions {
   delay?: number;
@@ -369,9 +370,10 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     },
 
     async createTestCase(input: CreateTestCaseInput) {
+      const authorId = getCurrentUserId() ?? input.authorId ?? 1;
       const author = users.find((item, index) => {
         const numericId = Number.isFinite(Number(item.id)) ? Number(item.id) : index + 1;
-        return numericId === (input.authorId ?? 1);
+        return numericId === authorId;
       });
       const created: TestCaseRecord = {
         ...input,

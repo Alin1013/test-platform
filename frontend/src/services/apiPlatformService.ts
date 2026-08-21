@@ -40,6 +40,7 @@ import type {
   XMindTaskRecord,
   XMindTaskStatus,
 } from './contracts';
+import { getCurrentAuthToken, getCurrentUserId } from './authSession';
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -376,6 +377,8 @@ export function createApiPlatformService({
   const request = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     // 统一 JSON 请求封装：自动设置 Content-Type、解析错误并抛出异常。
     const headers = new Headers(init.headers);
+    const authToken = getCurrentAuthToken();
+    if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
     if (init.body && !(init.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
     }
@@ -528,7 +531,8 @@ export function createApiPlatformService({
           module_id: input.moduleId,
           priority: input.priority,
           status: input.status,
-          author_id: input.authorId ?? 1,
+          // 服务层带上当前用户，后端仍会以令牌身份做最终校验。
+          author_id: getCurrentUserId() ?? input.authorId ?? 1,
           requirement_id: input.requirementId,
           precondition: input.precondition ?? '',
           test_steps: input.steps ?? '',
@@ -556,7 +560,7 @@ export function createApiPlatformService({
           module_id: input.moduleId,
           priority: input.priority,
           status: input.status,
-          author_id: input.authorId,
+          author_id: getCurrentUserId() ?? input.authorId,
           requirement_id: input.requirementId,
           precondition: input.precondition,
           test_steps: input.steps,

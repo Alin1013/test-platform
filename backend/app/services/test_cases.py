@@ -359,6 +359,14 @@ def add_case(session: Session, payload: TestCaseCreate) -> TestCase:
     return test_case
 
 
+def as_current_user(
+    payload: TestCaseCreate | TestCaseUpdate,
+    user: User,
+) -> TestCaseCreate | TestCaseUpdate:
+    """把创建/编辑载荷的作者统一替换为当前登录用户，供所有导入入口复用。"""
+    return payload.model_copy(update={"author_id": user.id})
+
+
 def create_case(session: Session, payload: TestCaseCreate) -> dict:
     """创建用例并提交事务。"""
     test_case = add_case(session, payload)

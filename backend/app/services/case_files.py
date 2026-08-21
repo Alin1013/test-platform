@@ -383,8 +383,14 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
     return TestCaseCreate.model_validate(common)
 
 
-def import_cases(session: Session, filename: str, content: bytes, module_id: str | None = None) -> dict:
-    """批量导入用例：整批单事务，任一行失败即整体回滚并定位行号。"""
+def import_cases(
+    session: Session,
+    filename: str,
+    content: bytes,
+    module_id: str | None = None,
+    author_id: int | None = None,
+) -> dict:
+    """批量导入用例：整批单事务，并可统一使用当前登录用户作为作者。"""
     if len(content) > MAX_IMPORT_BYTES:
         raise HTTPException(status_code=413, detail="Import file exceeds the 10 MB limit")
     lower_name = filename.lower()
@@ -423,12 +429,16 @@ def import_cases(session: Session, filename: str, content: bytes, module_id: str
                     module = session.scalar(select(Module).where(Module.name == normalized_module))
                 if module is not None:
                     row = {**row, "module_id": module.id}
-            author_value = row.get("创建人") or row.get("author_id")
-            if author_value and not str(author_value).strip().isdigit():
-                author = session.scalar(select(User).where(User.name == str(author_value).strip()))
-                if author is None:
-                    raise ValueError(f"创建人不存在: {author_value}")
-                row = {**row, "author_id": author.id}
+            if author_id is not None:
+                # 当前用户优先于文件中的创建人，防止导入沿用模板作者。
+                row = {**row, "author_id": author_id}
+            else:
+                author_value = row.get("创建人") or row.get("author_id")
+                if author_value and not str(author_value).strip().isdigit():
+                    author = session.scalar(select(User).where(User.name == str(author_value).strip()))
+                    if author is None:
+                        raise ValueError(f"创建人不存在: {author_value}")
+                    row = {**row, "author_id": author.id}
             payload = _case_payload(row)
             created.append(test_cases.add_case(session, payload))
         except (ValueError, ValidationError, HTTPException, IntegrityError) as error:
