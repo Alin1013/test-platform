@@ -107,8 +107,9 @@ export function ApiTestExecutionPage() {
   }, [service]);
 
   useEffect(() => {
-    // 仅 RUNNING 状态轮询报告，终态后停止请求。
-    if (!executionId || report?.status !== 'RUNNING') return;
+    // PENDING 表示等待 Worker 领取，RUNNING 表示已开始执行；两种活动状态都要持续刷新。
+    const isActiveExecution = report?.status === 'PENDING' || report?.status === 'RUNNING';
+    if (!executionId || !isActiveExecution) return;
     const timer = window.setInterval(() => {
       void service.getApiExecutionReport(executionId).then(setReport).catch(() => undefined);
     }, 2000);
@@ -210,6 +211,8 @@ export function ApiTestExecutionPage() {
   const total = report?.summary.totalApi ?? 0;
   const passed = report?.summary.passedApi ?? 0;
   const passRate = total ? Math.round((passed / total) * 100) : 0;
+  // 排队和执行中都属于活动状态，避免重复提交并允许用户取消等待中的任务。
+  const isActiveExecution = report?.status === 'PENDING' || report?.status === 'RUNNING';
 
   return (
     <section className="page-section execution-page">
@@ -252,10 +255,10 @@ export function ApiTestExecutionPage() {
             />
           </label>
           <div className="execution-actions">
-            <Button type="primary" icon={<PlayCircleOutlined />} aria-label="开始执行" loading={submitting} disabled={report?.status === 'RUNNING'} onClick={() => void run()}>
+            <Button type="primary" icon={<PlayCircleOutlined />} aria-label="开始执行" loading={submitting} disabled={isActiveExecution} onClick={() => void run()}>
               开始执行
             </Button>
-            <Button danger icon={<CloseCircleOutlined />} disabled={report?.status !== 'RUNNING'} onClick={() => void stop()}>
+            <Button danger icon={<CloseCircleOutlined />} disabled={!isActiveExecution} onClick={() => void stop()}>
               中断
             </Button>
             <Button icon={<DownloadOutlined />} aria-label="导出报告" disabled={!report} onClick={exportReport}>

@@ -145,7 +145,11 @@ def start_ui_execution(
 
 
 def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
-    """创建 API 执行（单并发入口），并校验环境可供 Worker 解析。"""
+    """创建 API 执行（单并发入口），并校验环境可供 Worker 解析。
+
+    直连接口与通用执行入口都使用队列语义，先创建 PENDING 任务，再由
+    Worker 统一负责请求发送和响应结果回写，避免主记录进入 RUNNING 后却没有任务可消费。
+    """
     get_environment(session, payload.environment)
     return _start_api_execution(
         session,
@@ -157,6 +161,8 @@ def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
         ramp_up_time=payload.rampUpTime,
         variables={},
         concurrency=1,
+        # 接口请求必须进入任务队列，由 Worker 领取后再切换为 RUNNING。
+        initial_status="PENDING",
     )
 
 
@@ -421,14 +427,15 @@ def api_execution_report(session: Session, execution_code: str) -> dict:
                 "name": detail.target_name,
                 "method": (detail.request_payload or {}).get("method"),
                 "url": (detail.request_payload or {}).get("url"),
-                "responseCode": (detail.response_payload or {}).get("responseCode"),
+                # API runner 持久化使用 statusCode/responseBody，报告统一转换为前端契约字段。
+                "responseCode": (detail.response_payload or {}).get("statusCode"),
                 "responseTimeMs": detail.duration_ms,
                 "status": detail.status,
                 "requestData": {
                     "headers": (detail.request_payload or {}).get("headers", {}),
                     "body": (detail.request_payload or {}).get("body"),
                 },
-                "responseData": (detail.response_payload or {}).get("body"),
+                "responseData": (detail.response_payload or {}).get("responseBody"),
                 "assertions": detail.assertion_results,
             }
             for detail in execution.details
