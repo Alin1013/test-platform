@@ -43,6 +43,14 @@ interface HeaderOverride {
   value: string;
 }
 
+const defaultHeaderOverrides: HeaderOverride[] = [
+  // 与当前 Apifox 项目的公共请求头保持一致；空值项仅作为可编辑提示，不会发送。
+  { id: 1, key: 'Content-Type', value: 'application/json' },
+  { id: 2, key: 'app-id', value: '' },
+  { id: 3, key: 'signature', value: '' },
+  { id: 4, key: 'timestamp', value: '' },
+];
+
 const methodColors: Record<string, string> = {
   GET: 'green',
   POST: 'blue',
@@ -69,8 +77,8 @@ export function ApiTestExecutionPage() {
   const [environment, setEnvironment] = useState<ApiExecutionInput['environment']>('');
   const [iterations, setIterations] = useState(1);
   const [rampUpTime, setRampUpTime] = useState(0);
-  const [headers, setHeaders] = useState<HeaderOverride[]>([]);
-  const [headerSequence, setHeaderSequence] = useState(1);
+  const [headers, setHeaders] = useState<HeaderOverride[]>(defaultHeaderOverrides);
+  const [headerSequence, setHeaderSequence] = useState(defaultHeaderOverrides.length + 1);
   const [executionId, setExecutionId] = useState<string>();
   const [report, setReport] = useState<ApiExecutionReport | null>(null);
   const [selectedResult, setSelectedResult] = useState<ApiExecutionResult>();
@@ -108,8 +116,12 @@ export function ApiTestExecutionPage() {
   }, [executionId, report?.status, service]);
 
   const globalHeaders = useMemo(
-    // 过滤空 key 的覆盖头，转为对象传给后端。
-    () => Object.fromEntries(headers.filter((item) => item.key.trim()).map((item) => [item.key.trim(), item.value])),
+    // 过滤空 key/value，避免默认的签名占位项以空请求头发给目标接口。
+    () => Object.fromEntries(
+      headers
+        .filter((item) => item.key.trim() && item.value.trim())
+        .map((item) => [item.key.trim(), item.value]),
+    ),
     [headers],
   );
 
