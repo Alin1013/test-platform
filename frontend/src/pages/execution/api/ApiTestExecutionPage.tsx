@@ -32,6 +32,7 @@ import type {
   ApiExecutionResult,
   ApiExecutionInput,
   ExecutionDetailStatus,
+  SystemSettings,
   TestModule,
   TestEnvironment,
   TestCaseRecord,
@@ -79,6 +80,20 @@ const resultStatusLabels: Record<ExecutionDetailStatus, string> = {
 // 报告只用于进度刷新，降低轮询频率避免开发控制台被重复响应淹没。
 const API_REPORT_POLL_INTERVAL_MS = 10_000;
 
+const headersToRecord = (items: HeaderOverride[]): Record<string, string> => Object.fromEntries(
+  // 空值只保留在编辑器中作为提示，持久化和执行时都不发送占位请求头。
+  items
+    .filter((item) => item.key.trim() && item.value.trim())
+    .map((item) => [item.key.trim(), item.value]),
+);
+
+const settingsHeadersToOverrides = (globalHeaders: Record<string, string>): HeaderOverride[] => {
+  const entries = Object.entries(globalHeaders);
+  // 首次升级旧配置时保留页面已有的四个常用请求头编辑项。
+  if (!entries.length) return defaultHeaderOverrides.map((header) => ({ ...header }));
+  return entries.map(([key, value], index) => ({ id: index + 1, key, value }));
+};
+
 export function ApiTestExecutionPage() {
   // 初次加载拉取接口用例与环境；执行中按低频间隔轮询报告。
   const service = usePlatformService();
@@ -97,8 +112,10 @@ export function ApiTestExecutionPage() {
   const [selectedResult, setSelectedResult] = useState<ApiExecutionResult>();
   const [submitting, setSubmitting] = useState(false);
   const [projectId] = useState(1);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>();
   const [globalConfigOpen, setGlobalConfigOpen] = useState(false);
   const [globalConfigDraft, setGlobalConfigDraft] = useState<GlobalConfigDraft>();
+  const [savingGlobalConfig, setSavingGlobalConfig] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +125,7 @@ export function ApiTestExecutionPage() {
       service.listTestModules(),
     ]).then(([rows, settings, testModules]) => {
       if (!active) return;
+      setSystemSettings(settings);
       setCases(rows);
       setEnvironments(settings.execution.environments);
       setModules(testModules);
@@ -115,6 +133,11 @@ export function ApiTestExecutionPage() {
         (item) => item.id === settings.execution.defaultEnvironmentId,
       );
       setEnvironment(defaultEnvironment?.id ?? settings.execution.environments[0]?.id ?? '');
+      setIterations(settings.execution.defaultIterations);
+      setRampUpTime(settings.execution.defaultRampUpTime);
+      const configuredHeaders = settingsHeadersToOverrides(settings.execution.globalHeaders);
+      setHeaders(configuredHeaders);
+      setHeaderSequence(configuredHeaders.length + 1);
     });
     return () => {
       active = false;
@@ -134,12 +157,7 @@ export function ApiTestExecutionPage() {
   }, [executionId, report?.status, service]);
 
   const globalHeaders = useMemo(
-    // 过滤空 key/value，避免默认的签名占位项以空请求头发给目标接口。
-    () => Object.fromEntries(
-      headers
-        .filter((item) => item.key.trim() && item.value.trim())
-        .map((item) => [item.key.trim(), item.value]),
-    ),
+    () => headersToRecord(headers),
     [headers],
   );
 
@@ -192,14 +210,33 @@ export function ApiTestExecutionPage() {
     setGlobalConfigOpen(true);
   };
 
-  const saveGlobalConfig = () => {
-    if (!globalConfigDraft) return;
-    setEnvironment(globalConfigDraft.environment);
-    setIterations(globalConfigDraft.iterations);
-    setRampUpTime(globalConfigDraft.rampUpTime);
-    setHeaders(globalConfigDraft.headers);
-    setGlobalConfigOpen(false);
-    message.success('全局配置已应用');
+  const saveGlobalConfig = async () => {
+    if (!globalConfigDraft || !systemSettings) return;
+    setSavingGlobalConfig(true);
+    try {
+      const savedSettings = await service.updateSystemSettings({
+        ...systemSettings,
+        execution: {
+          ...systemSettings.execution,
+          defaultEnvironmentId: globalConfigDraft.environment,
+          globalHeaders: headersToRecord(globalConfigDraft.headers),
+          defaultIterations: globalConfigDraft.iterations,
+          defaultRampUpTime: globalConfigDraft.rampUpTime,
+        },
+      });
+      setSystemSettings(savedSettings);
+      setEnvironment(savedSettings.execution.defaultEnvironmentId);
+      setIterations(savedSettings.execution.defaultIterations);
+      setRampUpTime(savedSettings.execution.defaultRampUpTime);
+      setHeaders(settingsHeadersToOverrides(savedSettings.execution.globalHeaders));
+      setHeaderSequence(Object.keys(savedSettings.execution.globalHeaders).length + 1);
+      setGlobalConfigOpen(false);
+      message.success('全局配置已保存');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '全局配置保存失败');
+    } finally {
+      setSavingGlobalConfig(false);
+    }
   };
 
   const exportReport = () => {
@@ -353,7 +390,8 @@ export function ApiTestExecutionPage() {
         cancelText="取消"
         okButtonProps={{ 'aria-label': '保存全局配置' }}
         cancelButtonProps={{ 'aria-label': '取消全局配置' }}
-        onOk={saveGlobalConfig}
+        confirmLoading={savingGlobalConfig}
+        onOk={() => void saveGlobalConfig()}
         onCancel={() => setGlobalConfigOpen(false)}
       >
         {globalConfigDraft ? (

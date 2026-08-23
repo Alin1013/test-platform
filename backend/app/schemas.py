@@ -481,10 +481,13 @@ class TestEnvironment(SettingsModel):
 
 
 class ExecutionSettings(SettingsModel):
-    """执行设置：环境列表、默认环境、重试与超时。"""
+    """执行设置：环境列表、默认环境、全局请求头、执行默认值与超时。"""
 
     environments: list[TestEnvironment] = Field(min_length=1, max_length=32)
     defaultEnvironmentId: str = Field(min_length=1, max_length=64)
+    globalHeaders: dict[str, str] = Field(default_factory=dict, max_length=100)
+    defaultIterations: int = Field(default=1, ge=1, le=100)
+    defaultRampUpTime: int = Field(default=0, ge=0, le=60000)
     retryCount: int = Field(ge=0, le=3)
     apiTimeoutMs: int = Field(ge=1000, le=300000)
 

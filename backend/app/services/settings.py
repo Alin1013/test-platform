@@ -19,6 +19,12 @@ def get_settings(session: Session) -> dict:
     value = dict(config.value)
     # 兼容升级前保存的 JSON，避免旧字段被响应模型的 extra=forbid 拒绝。
     value.pop("caseManagement", None)
+    execution = dict(value.get("execution", {}))
+    # 旧版本没有接口执行全局配置，读取时补默认值并避免要求用户先手动迁移数据库。
+    execution.setdefault("globalHeaders", {})
+    execution.setdefault("defaultIterations", 1)
+    execution.setdefault("defaultRampUpTime", 0)
+    value["execution"] = execution
     return value
 
 

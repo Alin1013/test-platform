@@ -324,6 +324,9 @@ export interface SystemSettings {
   execution: {
     environments: TestEnvironment[];
     defaultEnvironmentId: string;
+    globalHeaders: Record<string, string>;
+    defaultIterations: number;
+    defaultRampUpTime: number;
     retryCount: number;
     apiTimeoutMs: number;
   };

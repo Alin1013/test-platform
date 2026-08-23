@@ -46,6 +46,10 @@ DEFAULT_SETTINGS = {
             {"id": "test", "name": "TEST", "baseUrl": "https://test-api.example.com"},
         ],
         "defaultEnvironmentId": "test",
+        # 接口执行弹窗保存的全局请求头与默认运行参数。
+        "globalHeaders": {},
+        "defaultIterations": 1,
+        "defaultRampUpTime": 0,
         "retryCount": 1,
         "apiTimeoutMs": 30000,
     },
