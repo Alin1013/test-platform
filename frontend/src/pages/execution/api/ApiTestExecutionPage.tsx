@@ -26,6 +26,7 @@ import {
 import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../../components/PageHeader';
+import { AppPagination } from '../../../components/common';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
 import type {
   ApiExecutionReport,
@@ -116,6 +117,8 @@ export function ApiTestExecutionPage() {
   const [globalConfigOpen, setGlobalConfigOpen] = useState(false);
   const [globalConfigDraft, setGlobalConfigDraft] = useState<GlobalConfigDraft>();
   const [savingGlobalConfig, setSavingGlobalConfig] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +130,7 @@ export function ApiTestExecutionPage() {
       if (!active) return;
       setSystemSettings(settings);
       setCases(rows);
+      setPage(1);
       setEnvironments(settings.execution.environments);
       setModules(testModules);
       const defaultEnvironment = settings.execution.environments.find(
@@ -282,6 +286,18 @@ export function ApiTestExecutionPage() {
     { title: '接口地址', dataIndex: 'endpoint', ellipsis: true },
     { title: '预期状态', dataIndex: 'expectedStatus', width: 96 },
   ];
+
+  const paginatedCases = useMemo(() => {
+    // 表格只渲染当前页，选择状态仍由 selectedIds 保存，因此翻页不会丢失已选接口。
+    const start = (page - 1) * pageSize;
+    return (cases ?? []).slice(start, start + pageSize);
+  }, [cases, page, pageSize]);
+
+  useEffect(() => {
+    // 用例数量变化后收敛页码，避免删除或刷新导致当前页为空。
+    const totalPages = Math.max(1, Math.ceil((cases?.length ?? 0) / pageSize));
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [cases, pageSize]);
 
   const total = report?.summary.totalApi ?? 0;
   const passed = report?.summary.passedApi ?? 0;
@@ -500,12 +516,23 @@ export function ApiTestExecutionPage() {
             rowKey={(record) => record.storageId ?? record.id}
             rowSelection={report ? undefined : rowSelection}
             columns={columns}
-            dataSource={cases}
+            dataSource={paginatedCases}
             pagination={false}
             size="small"
             scroll={{ x: 760 }}
           />
         ) : <Skeleton active paragraph={{ rows: 4 }} />}
+        {cases ? (
+          <AppPagination
+            current={page}
+            pageSize={pageSize}
+            total={cases.length}
+            onChange={(nextPage, nextPageSize) => {
+              setPageSize(nextPageSize);
+              setPage(nextPageSize === pageSize ? nextPage : 1);
+            }}
+          />
+        ) : null}
       </section>
 
       <section className="api-analysis" role="region" aria-label="接口结果分析">
