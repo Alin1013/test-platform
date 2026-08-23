@@ -137,6 +137,30 @@ const nativeKeyValues = (
     .filter((item) => item.key);
 };
 
+const mergeNativeHeaders = (
+  commonHeaders: ApiKeyValueItem[],
+  caseHeaders: ApiKeyValueItem[],
+): ApiKeyValueItem[] => {
+  // 公共请求头作为默认值，接口级同名请求头覆盖公共值，保持 Apifox 的继承语义。
+  const merged = new Map(commonHeaders.map((item) => [item.key.toLowerCase(), item]));
+  caseHeaders.forEach((item) => merged.set(item.key.toLowerCase(), item));
+  return Array.from(merged.values());
+};
+
+const replaceNativePathParameters = (path: string, parameters: unknown): string => {
+  // 导入时优先使用路径参数 example/default，避免把 `{project_id}` 原样发送给目标服务。
+  const values = new Map(
+    (Array.isArray(parameters) ? parameters : [])
+      .map(asRecord)
+      .filter((parameter): parameter is JsonRecord => Boolean(parameter?.name))
+      .map((parameter) => [String(parameter.name), nativeParameterValue(parameter)]),
+  );
+  return path.replace(/\{([^}]+)\}/g, (placeholder, name: string) => {
+    const value = values.get(name);
+    return value?.trim() ? value : placeholder;
+  });
+};
+
 const nativeRequestBody = (value: unknown): Pick<ApiAutomationCaseDetails, 'bodyType' | 'bodyContent'> => {
   // 原生导出的 JSON 示例可能是字符串，也可能已经是对象；统一成表单可编辑的 JSON 文本。
   const body = asRecord(value);
@@ -207,6 +231,8 @@ const createApiCase = (
 const parseNativeApifox = (document: JsonRecord, moduleId: string): CreateTestCaseInput[] => {
   // 递归遍历原生项目导出的目录树，收集每个目录项中的 `api` 定义。
   const cases: CreateTestCaseInput[] = [];
+  const commonParameters = asRecord(asRecord(document.commonParameters)?.parameters);
+  const commonHeaders = nativeKeyValues(commonParameters, 'header');
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       value.forEach(visit);
@@ -225,9 +251,12 @@ const parseNativeApifox = (document: JsonRecord, moduleId: string): CreateTestCa
         createApiCase(
           moduleId,
           name,
-          endpoint.startsWith('/') ? endpoint : `/${endpoint}`,
+          replaceNativePathParameters(
+            endpoint.startsWith('/') ? endpoint : `/${endpoint}`,
+            api.parameters && asRecord(api.parameters)?.path,
+          ),
           method,
-          nativeKeyValues(parameters, 'header'),
+          mergeNativeHeaders(commonHeaders, nativeKeyValues(parameters, 'header')),
           nativeKeyValues(parameters, 'query'),
           body,
           nativeExpectedStatus(api.responses),
