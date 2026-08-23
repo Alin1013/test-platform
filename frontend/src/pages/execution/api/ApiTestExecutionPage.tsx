@@ -8,6 +8,7 @@ import {
   EyeOutlined,
   PlayCircleOutlined,
   PlusOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import {
   App as AntdApp,
@@ -15,6 +16,7 @@ import {
   Empty,
   Input,
   InputNumber,
+  Modal,
   Select,
   Skeleton,
   Table,
@@ -41,6 +43,14 @@ interface HeaderOverride {
   id: number;
   key: string;
   value: string;
+}
+
+interface GlobalConfigDraft {
+  // 弹窗暂存的执行配置；点击保存后才覆盖页面当前值。
+  environment: ApiExecutionInput['environment'];
+  iterations: number;
+  rampUpTime: number;
+  headers: HeaderOverride[];
 }
 
 const defaultHeaderOverrides: HeaderOverride[] = [
@@ -87,6 +97,8 @@ export function ApiTestExecutionPage() {
   const [selectedResult, setSelectedResult] = useState<ApiExecutionResult>();
   const [submitting, setSubmitting] = useState(false);
   const [projectId] = useState(1);
+  const [globalConfigOpen, setGlobalConfigOpen] = useState(false);
+  const [globalConfigDraft, setGlobalConfigDraft] = useState<GlobalConfigDraft>();
 
   useEffect(() => {
     let active = true;
@@ -167,6 +179,27 @@ export function ApiTestExecutionPage() {
     if (!executionId) return;
     await service.stopApiExecution(executionId);
     setReport(await service.getApiExecutionReport(executionId));
+  };
+
+  const openGlobalConfig = () => {
+    // 使用副本编辑，避免用户取消弹窗时意外改变正在使用的执行配置。
+    setGlobalConfigDraft({
+      environment,
+      iterations,
+      rampUpTime,
+      headers: headers.map((header) => ({ ...header })),
+    });
+    setGlobalConfigOpen(true);
+  };
+
+  const saveGlobalConfig = () => {
+    if (!globalConfigDraft) return;
+    setEnvironment(globalConfigDraft.environment);
+    setIterations(globalConfigDraft.iterations);
+    setRampUpTime(globalConfigDraft.rampUpTime);
+    setHeaders(globalConfigDraft.headers);
+    setGlobalConfigOpen(false);
+    message.success('全局配置已应用');
   };
 
   const exportReport = () => {
@@ -260,6 +293,9 @@ export function ApiTestExecutionPage() {
             />
           </label>
           <div className="execution-actions">
+            <Button icon={<SettingOutlined />} aria-label="全局配置" onClick={openGlobalConfig}>
+              全局配置
+            </Button>
             <Button type="primary" icon={<PlayCircleOutlined />} aria-label="开始执行" loading={submitting} disabled={isActiveExecution} onClick={() => void run()}>
               开始执行
             </Button>
@@ -307,6 +343,108 @@ export function ApiTestExecutionPage() {
           ))}
         </div>
       </section>
+
+      <Modal
+        title="全局配置"
+        open={globalConfigOpen}
+        width={720}
+        destroyOnHidden
+        okText="保存配置"
+        cancelText="取消"
+        okButtonProps={{ 'aria-label': '保存全局配置' }}
+        cancelButtonProps={{ 'aria-label': '取消全局配置' }}
+        onOk={saveGlobalConfig}
+        onCancel={() => setGlobalConfigOpen(false)}
+      >
+        {globalConfigDraft ? (
+          <div className="global-config-form">
+            <div className="global-config-form__grid">
+              <label>
+                <span>运行环境</span>
+                <Select
+                  aria-label="全局配置运行环境"
+                  value={globalConfigDraft.environment}
+                  options={environments.map((item) => ({ value: item.id, label: item.name }))}
+                  onChange={(value) => setGlobalConfigDraft((current) => current ? { ...current, environment: value } : current)}
+                />
+              </label>
+              <label>
+                <span>循环次数</span>
+                <InputNumber
+                  aria-label="全局配置循环次数"
+                  min={1}
+                  max={100}
+                  value={globalConfigDraft.iterations}
+                  onChange={(value) => setGlobalConfigDraft((current) => current ? { ...current, iterations: value ?? 1 } : current)}
+                />
+              </label>
+              <label>
+                <span>并发间隔 (ms)</span>
+                <InputNumber
+                  aria-label="全局配置并发间隔"
+                  min={0}
+                  max={60000}
+                  step={100}
+                  value={globalConfigDraft.rampUpTime}
+                  onChange={(value) => setGlobalConfigDraft((current) => current ? { ...current, rampUpTime: value ?? 0 } : current)}
+                />
+              </label>
+            </div>
+            <div className="global-config-headers">
+              <div className="global-config-headers__heading">
+                <span>全局请求头</span>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  aria-label="添加全局请求头"
+                  onClick={() => {
+                    setGlobalConfigDraft((current) => current ? {
+                      ...current,
+                      headers: [...current.headers, { id: headerSequence, key: '', value: '' }],
+                    } : current);
+                    setHeaderSequence((value) => value + 1);
+                  }}
+                >
+                  添加请求头
+                </Button>
+              </div>
+              {globalConfigDraft.headers.map((item) => (
+                <div className="header-override-row" key={item.id}>
+                  <Input
+                    aria-label={`全局请求头名称 ${item.id}`}
+                    placeholder="Header"
+                    value={item.key}
+                    onChange={(event) => setGlobalConfigDraft((current) => current ? {
+                      ...current,
+                      headers: current.headers.map((header) => header.id === item.id ? { ...header, key: event.target.value } : header),
+                    } : current)}
+                  />
+                  <Input
+                    aria-label={`全局请求头值 ${item.id}`}
+                    placeholder="Value"
+                    value={item.value}
+                    onChange={(event) => setGlobalConfigDraft((current) => current ? {
+                      ...current,
+                      headers: current.headers.map((header) => header.id === item.id ? { ...header, value: event.target.value } : header),
+                    } : current)}
+                  />
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    aria-label={`删除全局请求头 ${item.id}`}
+                    onClick={() => setGlobalConfigDraft((current) => current ? {
+                      ...current,
+                      headers: current.headers.filter((header) => header.id !== item.id),
+                    } : current)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <section className="api-metrics" role="region" aria-label="接口执行指标">
         <div><span>总请求数</span><strong>{total}</strong></div>
