@@ -343,13 +343,17 @@ class UiExecutionCreate(BaseModel):
 
 
 class ApiExecutionCreate(BaseModel):
-    """API 执行创建：项目、套件、环境、全局头、迭代与压测参数。"""
+    """API 执行创建：项目、套件、环境标识、全局头、迭代与压测参数。"""
 
     model_config = ConfigDict(extra="forbid")
 
     projectId: int = Field(gt=0)
     suiteIds: list[int] = Field(min_length=1, max_length=100)
-    envId: int = Field(gt=0)
+    environment: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
     globalHeaders: dict[str, str] = Field(default_factory=dict)
     iterations: int = Field(default=1, ge=1, le=100)
     rampUpTime: int = Field(default=0, ge=0, le=60000)

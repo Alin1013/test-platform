@@ -133,7 +133,6 @@ export function ApiTestExecutionPage() {
         globalHeaders,
         iterations,
         rampUpTime,
-        envId: 0
       });
       setExecutionId(started.executionId);
       const nextReport = await service.getApiExecutionReport(started.executionId);

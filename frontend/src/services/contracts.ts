@@ -395,8 +395,8 @@ export interface UiExecutionResult {
 export interface ApiExecutionInput {
   projectId: number;
   suiteIds: number[];
+  /** 系统设置中的环境标识，例如 dev/test；执行器据此解析 Base URL。 */
   environment: string;
-  envId: number;
   globalHeaders: Record<string, string>;
   iterations: number;
   rampUpTime: number;

@@ -145,12 +145,13 @@ def start_ui_execution(
 
 
 def start_api_execution(session: Session, payload: ApiExecutionCreate) -> dict:
-    """创建 API 执行（单并发入口，来自外部压测视图）。"""
+    """创建 API 执行（单并发入口），并校验环境可供 Worker 解析。"""
+    get_environment(session, payload.environment)
     return _start_api_execution(
         session,
         project_id=payload.projectId,
         case_ids=payload.suiteIds,
-        env_name=str(payload.envId),
+        env_name=payload.environment,
         global_headers=payload.globalHeaders,
         iterations=payload.iterations,
         ramp_up_time=payload.rampUpTime,
