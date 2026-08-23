@@ -66,8 +66,11 @@ const resultStatusLabels: Record<ExecutionDetailStatus, string> = {
   SKIPPED: '已跳过',
 };
 
+// 报告只用于进度刷新，降低轮询频率避免开发控制台被重复响应淹没。
+const API_REPORT_POLL_INTERVAL_MS = 10_000;
+
 export function ApiTestExecutionPage() {
-  // 初次加载拉取接口用例与环境；执行中每 2 秒轮询报告。
+  // 初次加载拉取接口用例与环境；执行中按低频间隔轮询报告。
   const service = usePlatformService();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
@@ -111,8 +114,10 @@ export function ApiTestExecutionPage() {
     const isActiveExecution = report?.status === 'PENDING' || report?.status === 'RUNNING';
     if (!executionId || !isActiveExecution) return;
     const timer = window.setInterval(() => {
+      // 页面切到后台时暂停请求，回到前台后由下一轮轮询恢复进度。
+      if (document.hidden) return;
       void service.getApiExecutionReport(executionId).then(setReport).catch(() => undefined);
-    }, 2000);
+    }, API_REPORT_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [executionId, report?.status, service]);
 
