@@ -43,6 +43,7 @@ SYSTEM_PROMPT = """你是一名资深软件测试专家，负责把 XMind 功能
 
 MAX_ATTEMPTS = 3
 MAX_GENERATED_CASES = 5000
+MAX_NODES_PER_GENERATION_GROUP = 16
 DEFAULT_MAX_CONCURRENCY = 4
 DEFAULT_RETRY_DELAY_SECONDS = 0.2
 
@@ -207,7 +208,8 @@ class OpenAICompatibleClient:
                 response = await client.post(endpoint, headers=headers, json=payload)
         except httpx.HTTPError as error:
             # 保留底层异常原文，便于区分超时/断连等具体网络错误。
-            raise XMindSkillError(f"LLM 请求失败：{error}") from error
+            detail = str(error).strip() or error.__class__.__name__
+            raise XMindSkillError(f"LLM 请求失败：{detail}") from error
         if response.status_code >= 400:
             # 携带状态码与响应体片段，让 401/400/429 等失败可直接定位配置问题。
             raise XMindSkillError(
@@ -247,8 +249,77 @@ class LLMConfig:
     model: str
 
 
+def _tree_node_count(node: dict[str, Any]) -> int:
+    """统计单棵子树节点数，作为模型单次输入规模的稳定代理指标。"""
+    return 1 + sum(
+        _tree_node_count(child)
+        for child in node.get("children") or []
+        if isinstance(child, dict)
+    )
+
+
+def _flatten_leaf_context(
+    node: dict[str, Any],
+    *,
+    prefix: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    """把超深分支压成叶子路径，确保硬上限成立且不丢失层级语义。"""
+    path = (*prefix, str(node.get("title") or "未命名节点"))
+    children = [
+        child for child in node.get("children") or [] if isinstance(child, dict)
+    ]
+    if not children:
+        return [{"title": " / ".join(path), "children": []}]
+    return [
+        leaf
+        for child in children
+        for leaf in _flatten_leaf_context(child, prefix=path)
+    ]
+
+
+def _partition_tree(
+    node: dict[str, Any],
+    *,
+    max_nodes: int,
+) -> list[dict[str, Any]]:
+    """按节点上限切分子树，并在每个片段中保留当前节点的上下文。"""
+    if max_nodes <= 1:
+        # 深度超过预算时把剩余路径压进标题，避免单链结构突破单请求硬上限。
+        return _flatten_leaf_context(node)
+    if _tree_node_count(node) <= max_nodes:
+        return [node]
+
+    children = [
+        child for child in node.get("children") or [] if isinstance(child, dict)
+    ]
+    if not children:
+        return [node]
+
+    child_fragments: list[dict[str, Any]] = []
+    for child in children:
+        child_fragments.extend(_partition_tree(child, max_nodes=max_nodes - 1))
+
+    partitions: list[dict[str, Any]] = []
+    partition_children: list[dict[str, Any]] = []
+    partition_size = 1
+    node_context = {key: value for key, value in node.items() if key != "children"}
+
+    for fragment in child_fragments:
+        fragment_size = _tree_node_count(fragment)
+        if partition_children and partition_size + fragment_size > max_nodes:
+            partitions.append({**node_context, "children": partition_children})
+            partition_children = []
+            partition_size = 1
+        partition_children.append(fragment)
+        partition_size += fragment_size
+
+    if partition_children:
+        partitions.append({**node_context, "children": partition_children})
+    return partitions
+
+
 def generation_groups(tree: list[dict[str, Any]]) -> list[GenerationGroup]:
-    """把根节点/一级子节点拆分为独立生成分组，目录名含完整路径。"""
+    """把根/一级子树切成有输入上限的生成分组，目录名保留原完整路径。"""
     groups: list[GenerationGroup] = []
     for root in tree:
         root_title = str(root.get("title") or "未命名节点")
@@ -258,10 +329,13 @@ def generation_groups(tree: list[dict[str, Any]]) -> list[GenerationGroup]:
             continue
         for child in children:
             child_title = str(child.get("title") or "未命名节点")
-            groups.append(
-                GenerationGroup(
-                    directory=f"{root_title}/{child_title}",
-                    tree=child,
+            directory = f"{root_title}/{child_title}"
+            # 大一级分支继续按子节点边界分片，避免单次请求因输入/输出过大超时。
+            groups.extend(
+                GenerationGroup(directory=directory, tree=partition)
+                for partition in _partition_tree(
+                    child,
+                    max_nodes=MAX_NODES_PER_GENERATION_GROUP,
                 )
             )
     return groups

@@ -385,12 +385,15 @@ def _task_upload_path(upload_dir: Path, record: XMindRecord) -> Path:
 
 def _root_cause_text(error: Exception) -> str:
     """拼接最底层失败原因，避免任务详情只剩通用提示。"""
+    error_text = str(error).strip() or error.__class__.__name__
     cause = error.__cause__
     if cause is None:
-        return str(error)
+        return error_text
     while cause.__cause__ is not None:
         cause = cause.__cause__
-    return f"{error}：{cause}"
+    # httpx.ReadTimeout 等异常可能没有消息，至少保留类型名供任务日志定位。
+    cause_text = str(cause).strip() or cause.__class__.__name__
+    return f"{error_text}：{cause_text}"
 
 
 def _append_generation_log(record: XMindRecord, level: str, message: str) -> None:
