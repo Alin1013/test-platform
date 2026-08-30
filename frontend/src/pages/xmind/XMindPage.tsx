@@ -42,6 +42,14 @@ import type {
 } from '../../services/contracts';
 import './xmind.css';
 
+/** 将 API 时间转换为用户本地时间；历史无偏移值按 UTC 兼容解析。 */
+export function formatTaskTimestamp(value: string): string {
+  // SQLite 旧接口可能返回无偏移时间，按后端 UTC 约定补齐后再交给浏览器换算本地时区。
+  const normalizedValue = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`;
+  const date = new Date(normalizedValue);
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString('zh-CN');
+}
+
 type UploadState =
   // 上传阶段状态机：idle 可上传，uploading 展示模拟进度。
   | { status: 'idle'; error?: string }
@@ -345,7 +353,7 @@ export function XMindPage() {
     { title: '状态', dataIndex: 'status', width: 100, render: renderTaskStatus },
     { title: '用例数', dataIndex: 'parsedCasesCount', width: 82 },
     { title: '提交人', dataIndex: 'uploaderName', width: 100 },
-    { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+    { title: '更新时间', dataIndex: 'createdAt', width: 170, render: formatTaskTimestamp },
     {
       title: '操作',
       width: 200,
@@ -488,7 +496,7 @@ export function XMindPage() {
                 {
                   key: 'createdAt',
                   label: '任务时间',
-                  children: new Date(failureLogTask.createdAt).toLocaleString('zh-CN'),
+                  children: formatTaskTimestamp(failureLogTask.createdAt),
                 },
               ]}
             />

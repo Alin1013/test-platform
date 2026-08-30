@@ -13,7 +13,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type { TestModule, XMindTaskDetail, XMindTaskRecord } from '../../services/contracts';
 import { XMindReviewView } from './XMindReviewView';
-import { flattenModules, taskStatus, type FlatModule } from './XMindPage';
+import { flattenModules, formatTaskTimestamp, taskStatus, type FlatModule } from './XMindPage';
 import './xmind.css';
 
 export function XMindCasesPage() {
@@ -117,7 +117,7 @@ export function XMindCasesPage() {
     { title: '状态', dataIndex: 'status', width: 100, render: taskStatus },
     { title: '用例数', dataIndex: 'parsedCasesCount', width: 82 },
     { title: '提交人', dataIndex: 'uploaderName', width: 100 },
-    { title: '更新时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+    { title: '更新时间', dataIndex: 'createdAt', width: 170, render: formatTaskTimestamp },
     {
       title: '操作',
       width: 100,

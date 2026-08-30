@@ -36,6 +36,16 @@ class XMindParseError(ValueError):
     pass
 
 
+def _serialize_timestamp(value: datetime | None) -> datetime | None:
+    """将数据库时间标记为 UTC，避免 SQLite 丢失时区后被浏览器误当成本地时间。"""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        # SQLite 的 DateTime(timezone=True) 读取结果可能没有 tzinfo，但写入值始终按 UTC 约定。
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _json_node(topic: dict[str, Any]) -> dict:
     """递归转换 JSON 版 XMind 节点（新版格式）。"""
     children_value = topic.get("children", {})
@@ -412,11 +422,11 @@ def _serialize_task_record(record: XMindRecord) -> dict[str, Any]:
         "status": record.status,
         "parsed_cases_count": record.parsed_cases_count,
         "attempts": record.attempts,
-        "available_at": record.available_at,
-        "locked_at": record.locked_at,
+        "available_at": _serialize_timestamp(record.available_at),
+        "locked_at": _serialize_timestamp(record.locked_at),
         "last_error": record.last_error,
         "generation_log": record.generation_log,
-        "created_at": record.created_at,
+        "created_at": _serialize_timestamp(record.created_at),
     }
 
 
