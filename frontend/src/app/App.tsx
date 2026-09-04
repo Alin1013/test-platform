@@ -15,6 +15,7 @@ import { XMindCasesPage } from '../pages/xmind/XMindCasesPage';
 import { LoginPage } from '../pages/login/LoginPage';
 import { UiTestExecutionPage } from '../pages/execution/ui/UiTestExecutionPage';
 import { ApiTestExecutionPage } from '../pages/execution/api/ApiTestExecutionPage';
+import { ExceptionAnalysisPage } from '../pages/exception-analysis/ExceptionAnalysisPage';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 
 interface AppProps {
@@ -35,6 +36,8 @@ function AppRoutes() {
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
         <Route path="/execution/ui-test" element={<UiTestExecutionPage />} />
         <Route path="/execution/api-test" element={<ApiTestExecutionPage />} />
+        {/* 异常分析先以独立空态承载入口，后续可在同一路由接入执行失败数据。 */}
+        <Route path="/exception-analysis" element={<ExceptionAnalysisPage />} />
         <Route path="/xmind" element={<XMindPage />} />
         <Route path="/xmind-cases" element={<XMindCasesPage />} />
         <Route path="/personnel" element={<PersonnelPage />} />
