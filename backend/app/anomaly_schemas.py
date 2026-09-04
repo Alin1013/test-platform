@@ -14,7 +14,9 @@ CONTEXT_MAX_CHARS = 20_000
 
 
 def _normalize_label(value: object, aliases: dict[str, str]) -> object:
-    """仅对字符串标签做别名转换，避免模型误传数组/对象时触发二次 TypeError。"""
+    """兼容模型返回的单元素标签数组，再对字符串做别名转换。"""
+    if isinstance(value, list) and len(value) == 1:
+        value = value[0]
     return aliases.get(value, value) if isinstance(value, str) else value
 
 
@@ -107,6 +109,9 @@ class AnomalyResult(BaseModel):
     @classmethod
     def normalize_risk(cls, value: object) -> object:
         """将模型可能输出的中文风险等级转换为稳定枚举。"""
+        # 部分视觉模型会把“无风险”输出成空数组；空数组没有风险项，按 NONE 兼容处理。
+        if isinstance(value, list) and not value:
+            return "NONE"
         return _normalize_label(value, {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "无": "NONE"})
 
 
