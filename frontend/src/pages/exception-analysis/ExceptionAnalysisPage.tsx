@@ -3,6 +3,7 @@
  * 页面只负责交互和结构化展示，内容截取、脱敏、模型调用与历史隔离由后端完成。
  */
 import {
+  CloseOutlined,
   CopyOutlined,
   DislikeOutlined,
   FileImageOutlined,
@@ -30,6 +31,7 @@ import {
 import type { UploadFile } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ClipboardEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { usePlatformService } from '../../services/PlatformServiceContext';
@@ -42,6 +44,8 @@ import './exception-analysis.css';
 
 const { Text, Title } = Typography;
 const MAX_TEXT_LENGTH = 100_000;
+const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024;
+const PASTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
 type InputMode = 'TEXT' | 'SCREENSHOT' | 'FILE';
 
@@ -246,6 +250,8 @@ export function ExceptionAnalysisPage() {
   const [description, setDescription] = useState('');
   const [context, setContext] = useState<AnomalyContext | undefined>(navigationState.context);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [pastedImage, setPastedImage] = useState<File>();
+  const [pastedImagePreview, setPastedImagePreview] = useState<string>();
   const [result, setResult] = useState<AnomalyAnalysisResult>();
   const [history, setHistory] = useState<AnomalyAnalysisResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -266,7 +272,41 @@ export function ExceptionAnalysisPage() {
     }
   }, [navigationState]);
 
-  const canAnalyze = mode === 'TEXT' ? Boolean(content.trim() || context) : fileList.length > 0;
+  useEffect(() => {
+    // 剪贴板截图使用 object URL 预览；每次替换或离开页面都要释放，避免长时间操作累积内存。
+    if (!pastedImage) {
+      setPastedImagePreview(undefined);
+      return undefined;
+    }
+    const previewUrl = URL.createObjectURL(pastedImage);
+    setPastedImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [pastedImage]);
+
+  const canAnalyze = mode === 'TEXT'
+    ? Boolean(content.trim() || context || pastedImage)
+    : fileList.length > 0;
+
+  const handleTextPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    // 微信/钉钉截图会以 image/* 剪贴板条目提供；只拦截图片，普通文字仍走浏览器默认粘贴。
+    const imageItem = Array.from(event.clipboardData.items).find(
+      (item) => item.kind === 'file' && PASTED_IMAGE_TYPES.has(item.type),
+    );
+    if (!imageItem) return;
+    const image = imageItem.getAsFile();
+    if (!image) return;
+    event.preventDefault();
+    if (image.size > MAX_PASTED_IMAGE_BYTES) {
+      message.warning('粘贴的截图超过 10 MB 限制，请压缩后重试');
+      return;
+    }
+    const file = image.name
+      ? image
+      : new File([image], `pasted-screenshot-${Date.now()}.png`, { type: image.type });
+    setPastedImage(file);
+    setFileList([]);
+    message.success('截图已粘贴，可与文本一起分析');
+  };
 
   const resetInput = () => {
     // 清空证据但保留执行上下文，方便用户在同一失败记录上重新补充分析。
@@ -274,13 +314,18 @@ export function ExceptionAnalysisPage() {
     setContent('');
     setDescription('');
     setFileList([]);
+    setPastedImage(undefined);
   };
 
   const analyze = async () => {
     if (!canAnalyze || loading) return;
     setLoading(true);
     try {
-      const next = mode === 'TEXT'
+      // 图片粘贴时沿用上传接口，并把文本框内容压缩到补充说明上限内一起提交。
+      const pastedText = pastedImage && content.trim()
+        ? `粘贴文本：\n${content.trim().slice(0, 4_000)}`
+        : '';
+      const next = mode === 'TEXT' && !pastedImage
         ? await service.analyzeAnomaly({
             sourceType: navigationState.sourceType ?? 'TEXT',
             content: content.slice(0, MAX_TEXT_LENGTH),
@@ -288,10 +333,10 @@ export function ExceptionAnalysisPage() {
             additionalDescription: description,
           })
         : await service.analyzeAnomalyFile({
-            file: fileList[0].originFileObj as File,
-            sourceType: mode,
+            file: pastedImage ?? fileList[0].originFileObj as File,
+            sourceType: pastedImage || mode === 'SCREENSHOT' ? 'SCREENSHOT' : 'FILE',
             context,
-            additionalDescription: description,
+            additionalDescription: [description.trim(), pastedText].filter(Boolean).join('\n\n'),
           } satisfies AnomalyFileAnalysisInput);
       setResult(next);
       setHistory((current) => [next, ...current.filter((item) => item.analysisId !== next.analysisId)]);
@@ -345,6 +390,7 @@ export function ExceptionAnalysisPage() {
           onChange={(value) => {
             setMode(value as InputMode);
             setFileList([]);
+            setPastedImage(undefined);
           }}
           options={[
             { label: '粘贴文本', value: 'TEXT', icon: <FileTextOutlined /> },
@@ -354,16 +400,34 @@ export function ExceptionAnalysisPage() {
         />
 
         {mode === 'TEXT' ? (
-          <Input.TextArea
-            className="anomaly-content-input"
-            aria-label="异常内容"
-            value={content}
-            onChange={(event) => setContent(event.target.value.slice(0, MAX_TEXT_LENGTH))}
-            placeholder="请粘贴日志、报错信息、接口请求或响应内容"
-            autoSize={{ minRows: 9, maxRows: 18 }}
-            showCount
-            maxLength={MAX_TEXT_LENGTH}
-          />
+          <>
+            <Input.TextArea
+              className="anomaly-content-input"
+              aria-label="异常内容"
+              value={content}
+              onChange={(event) => setContent(event.target.value.slice(0, MAX_TEXT_LENGTH))}
+              placeholder="请粘贴日志、报错信息、接口请求或响应内容"
+              autoSize={{ minRows: 9, maxRows: 18 }}
+              showCount
+              maxLength={MAX_TEXT_LENGTH}
+              onPaste={handleTextPaste}
+            />
+            {pastedImage ? (
+              <div className="anomaly-pasted-image" aria-label="已粘贴截图预览">
+                {pastedImagePreview ? <img src={pastedImagePreview} alt="已粘贴截图预览" /> : null}
+                <div className="anomaly-pasted-image__meta">
+                  <Text>截图已粘贴{content.trim() ? '，文本会作为补充说明' : ''}</Text>
+                  <Button
+                    type="text"
+                    icon={<CloseOutlined />}
+                    aria-label="移除已粘贴截图"
+                    title="移除截图"
+                    onClick={() => setPastedImage(undefined)}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : (
           <Upload.Dragger
             className="anomaly-upload"

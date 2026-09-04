@@ -47,6 +47,34 @@
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
+.anomaly-pasted-image {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-subtle, #f7f9fc);
+}
+
+.anomaly-pasted-image img {
+  display: block;
+  width: 72px;
+  height: 54px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.anomaly-pasted-image__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  flex: 1;
+  gap: 8px;
+}
+
 .anomaly-upload {
   min-height: 220px;
 }
