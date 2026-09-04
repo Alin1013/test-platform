@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..anomaly_schemas import (
@@ -53,6 +54,16 @@ SYSTEM_PROMPT = """你是一名资深软件测试和故障分析专家。
 
 class AnomalyAnalysisError(ValueError):
     """异常分析无法完成或模型输出不符合结构约束。"""
+
+
+def _persist_failure(session: Session, record: AnomalyAnalysisRecord, message: str) -> None:
+    """尽力保存失败记录；数据库未迁移或暂时不可用时不能覆盖原始 502。"""
+    record.error_message = message[:1000]
+    try:
+        session.commit()
+    except SQLAlchemyError:
+        # 例如旧数据库尚未执行异常分析迁移；回滚后由上层返回模型错误，而不是 500。
+        session.rollback()
 
 
 @dataclass(frozen=True)
@@ -323,6 +334,8 @@ async def analyze(
             if not isinstance(parsed, dict) or not required_fields.issubset(parsed):
                 raise AnomalyAnalysisError("AI 返回结果缺少必需的结构化字段")
             result = _dangerous_risk(AnomalyResult.model_validate(parsed))
+        except AnomalyAnalysisError:
+            raise
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             raise AnomalyAnalysisError("AI 返回结果不是合法的结构化 JSON") from error
         record.result_json = json.dumps(result.model_dump(), ensure_ascii=False)
@@ -338,12 +351,10 @@ async def analyze(
         # 配置缺失等可预期 HTTP 错误不写入无效的持久化记录。
         raise
     except (XMindSkillError, AnomalyAnalysisError) as error:
-        record.error_message = str(error)[:1000]
-        session.commit()
+        _persist_failure(session, record, str(error))
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
     except Exception as error:
-        record.error_message = "AI分析服务暂时不可用"
-        session.commit()
+        _persist_failure(session, record, "AI分析服务暂时不可用")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=record.error_message) from error
 
 

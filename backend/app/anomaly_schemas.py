@@ -13,6 +13,11 @@ Severity = Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 CONTEXT_MAX_CHARS = 20_000
 
 
+def _normalize_label(value: object, aliases: dict[str, str]) -> object:
+    """仅对字符串标签做别名转换，避免模型误传数组/对象时触发二次 TypeError。"""
+    return aliases.get(value, value) if isinstance(value, str) else value
+
+
 class AnomalyAnalysisRequest(BaseModel):
     """文本/执行上下文分析请求；内容上限对应 MVP 的 100 KB 发送预算。"""
 
@@ -73,7 +78,7 @@ class PossibleCause(BaseModel):
     @classmethod
     def normalize_level(cls, value: object) -> object:
         """兼容模型返回的中文等级，统一为接口约定的英文枚举。"""
-        return {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "未知": "UNKNOWN"}.get(value, value)
+        return _normalize_label(value, {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "未知": "UNKNOWN"})
 
 
 class AnomalyResult(BaseModel):
@@ -96,13 +101,13 @@ class AnomalyResult(BaseModel):
     @classmethod
     def normalize_severity(cls, value: object) -> object:
         """将模型可能输出的中文严重程度转换为稳定枚举。"""
-        return {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "未知": "UNKNOWN"}.get(value, value)
+        return _normalize_label(value, {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "未知": "UNKNOWN"})
 
     @field_validator("risk", mode="before")
     @classmethod
     def normalize_risk(cls, value: object) -> object:
         """将模型可能输出的中文风险等级转换为稳定枚举。"""
-        return {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "无": "NONE"}.get(value, value)
+        return _normalize_label(value, {"高": "HIGH", "中": "MEDIUM", "低": "LOW", "无": "NONE"})
 
 
 class AnomalyAnalysisResponse(AnomalyResult):
