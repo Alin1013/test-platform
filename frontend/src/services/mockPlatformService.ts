@@ -9,6 +9,10 @@ import {
   initialUsers,
 } from '../mocks/fixtures';
 import type {
+  AnomalyAnalysisInput,
+  AnomalyAnalysisResult,
+  AnomalyFileAnalysisInput,
+  AnomalyHistoryResult,
   ApiExecutionInput,
   ApiExecutionReport,
   ApiDebugInput,
@@ -145,6 +149,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
   let executionSequence = 1;
   let xmindTaskSequence = 1;
   let xmindTasks: XMindTaskDetail[] = [];
+  let anomalySequence = 1;
+  let anomalyHistory: AnomalyAnalysisResult[] = [];
   const uiExecutions = new Map<string, UiExecutionResult>();
   const apiExecutions = new Map<string, ApiExecutionReport>();
 
@@ -1025,6 +1031,71 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         traceUrl: 'http://localhost:8000/uploads/executions/debug-demo.trace.zip',
         errorMessage: null,
       });
+    },
+
+    async analyzeAnomaly(input: AnomalyAnalysisInput) {
+      // Mock 模式提供稳定的结构化结果，让离线演示也能完整走通结果与反馈流程。
+      const content = input.content.trim();
+      const hasTimeout = /timeout|超时/i.test(content);
+      const result: AnomalyAnalysisResult = {
+        analysisId: anomalySequence++,
+        sourceType: input.sourceType ?? 'TEXT',
+        sourceId: input.sourceId ?? null,
+        status: 'COMPLETED',
+        createdAt: new Date().toISOString(),
+        helpful: null,
+        modelName: 'mock-anomaly-model',
+        summary: hasTimeout ? '请求或依赖服务响应超时，导致测试未按预期完成。' : '已识别到测试输入中的异常线索，建议结合上下文继续排查。',
+        category: hasTimeout ? 'NETWORK' : 'APPLICATION',
+        severity: hasTimeout ? 'HIGH' : 'MEDIUM',
+        possibleCauses: [
+          {
+            cause: hasTimeout ? '依赖服务响应时间超过客户端或网关限制' : '应用返回了与预期不一致的结果',
+            level: hasTimeout ? 'HIGH' : 'MEDIUM',
+            evidence: content.slice(0, 160) || '用户提供了测试上下文但没有粘贴原始异常文本',
+          },
+        ],
+        analysisBasis: ['已读取用户提交的异常内容和测试上下文'],
+        suggestions: ['检查异常发生前后的完整日志', '核对测试环境与依赖服务状态'],
+        solutions: ['修复配置或依赖服务后重新执行同一测试用例'],
+        verification: ['重新执行测试并确认响应恢复为预期结果'],
+        requiredInformation: content ? [] : ['请补充完整错误信息和异常发生时间'],
+        risk: 'NONE',
+      };
+      anomalyHistory = [result, ...anomalyHistory];
+      return respond(result);
+    },
+
+    async analyzeAnomalyFile(input: AnomalyFileAnalysisInput) {
+      // 文件内容只在 Mock 中读取首段作为证据，真实服务由后端完成格式校验和脱敏。
+      const content = input.file.type.startsWith('text/') || /\.(txt|log|json|xml|ya?ml)$/i.test(input.file.name)
+        ? await input.file.text()
+        : `截图文件：${input.file.name}`;
+      return this.analyzeAnomaly({
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        content,
+        context: input.context,
+        additionalDescription: input.additionalDescription,
+      });
+    },
+
+    async listAnomalyHistory(page = 1, pageSize = 20): Promise<AnomalyHistoryResult> {
+      // Mock 历史与真实接口保持相同分页字段，页面无需区分运行模式。
+      const start = (page - 1) * pageSize;
+      return respond({
+        items: anomalyHistory.slice(start, start + pageSize),
+        page,
+        pageSize,
+        total: anomalyHistory.length,
+      });
+    },
+
+    async feedbackAnomaly(analysisId: number, helpful: boolean) {
+      const target = anomalyHistory.find((item) => item.analysisId === analysisId);
+      if (!target) throw new Error('异常分析记录不存在');
+      target.helpful = helpful;
+      return respond(target);
     },
   };
 }

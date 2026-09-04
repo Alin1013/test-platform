@@ -25,6 +25,7 @@ import {
 } from 'antd';
 import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../../components/PageHeader';
 import { AppPagination } from '../../../components/common';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
@@ -98,6 +99,7 @@ const settingsHeadersToOverrides = (globalHeaders: Record<string, string>): Head
 export function ApiTestExecutionPage() {
   // 初次加载拉取接口用例与环境；执行中按低频间隔轮询报告。
   const service = usePlatformService();
+  const navigate = useNavigate();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -119,6 +121,38 @@ export function ApiTestExecutionPage() {
   const [savingGlobalConfig, setSavingGlobalConfig] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const openAnomalyAnalysis = (target: ApiExecutionResult) => {
+    // 将请求、响应和断言结果组成分析上下文，保留接口失败的完整证据链。
+    const failedAssertions = target.assertions.filter((assertion) => !assertion.passed);
+    const assertionEvidence = failedAssertions.map((assertion) => ({
+      expression: assertion.expression,
+      actual: assertion.actual,
+    }));
+    navigate('/exception-analysis', {
+      state: {
+        sourceType: 'EXECUTION',
+        content: JSON.stringify({
+          responseCode: target.responseCode,
+          response: target.responseData,
+          failedAssertions,
+        }, null, 2),
+        context: {
+          projectId,
+          testCaseId: target.apiId,
+          executionId,
+          testCase: target.name,
+          environment,
+          step: failedAssertions.map((assertion) => assertion.expression).join('\n') || '接口响应校验',
+          expected: failedAssertions.map((assertion) => `满足断言：${assertion.expression}`).join('\n') || '接口返回符合用例断言',
+          actual: target.responseCode == null ? target.status : `HTTP ${target.responseCode}`,
+          request: target.requestData,
+          response: target.responseData,
+          log: assertionEvidence.length ? JSON.stringify(assertionEvidence, null, 2) : undefined,
+        },
+      },
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -553,8 +587,21 @@ export function ApiTestExecutionPage() {
         </aside>
         <div className="api-result-detail">
           {selectedResult ? (
-            <Tabs
-              items={[
+            <>
+              {selectedResult.status === 'FAILED' ? (
+                <div className="api-result-detail__actions">
+                  <Button
+                    type="primary"
+                    ghost
+                    icon={<PlayCircleOutlined />}
+                    onClick={() => openAnomalyAnalysis(selectedResult)}
+                  >
+                    AI 分析异常
+                  </Button>
+                </div>
+              ) : null}
+              <Tabs
+                items={[
                 {
                   key: 'request',
                   label: 'Request',
@@ -575,8 +622,9 @@ export function ApiTestExecutionPage() {
                     </div>
                   )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无断言结果" />,
                 },
-              ]}
-            />
+                ]}
+              />
+            </>
           ) : <Empty description="选择一条请求查看分析" />}
         </div>
       </section>

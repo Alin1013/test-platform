@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM 模型：用户/角色、模块、用例、执行任务与 XMind 任务。"""
+"""SQLAlchemy ORM 模型：用户/角色、模块、用例、执行任务、异常分析与 XMind 任务。"""
 
 from __future__ import annotations
 
@@ -67,6 +67,9 @@ class User(Base, TimestampMixin):
         back_populates="user", cascade="all, delete-orphan"
     )
     test_executions: Mapped[list[TestExecution]] = relationship(back_populates="creator")
+    anomaly_analyses: Mapped[list[AnomalyAnalysisRecord]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AuthSession(Base):
@@ -377,6 +380,42 @@ class XMindRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     uploader: Mapped[User] = relationship(back_populates="xmind_records")
+
+
+class AnomalyAnalysisRecord(Base, TimestampMixin):
+    """异常分析记录：保存脱敏输入、结构化结果与用户反馈。"""
+
+    __tablename__ = "ai_anomaly_analysis"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('TEXT', 'LOG', 'SCREENSHOT', 'FILE', 'EXECUTION')",
+            name="ck_ai_anomaly_analysis_source_type",
+        ),
+        CheckConstraint(
+            "status IN ('COMPLETED', 'FAILED')",
+            name="ck_ai_anomaly_analysis_status",
+        ),
+        {"comment": "AI 异常分析输入、结构化结果与反馈"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(32), index=True)
+    source_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    input_summary: Mapped[str] = mapped_column(Text, default="")
+    # 只保存脱敏后的文本摘要，原始截图/文件内容不会进入数据库。
+    input_content: Mapped[str] = mapped_column(Text, default="")
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    token_usage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="COMPLETED", index=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    helpful: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="anomaly_analyses")
 
 
 class SystemConfig(Base):

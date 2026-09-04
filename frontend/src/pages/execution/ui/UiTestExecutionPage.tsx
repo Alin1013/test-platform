@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../../components/PageHeader';
 import { AppPagination } from '../../../components/common';
 import { usePlatformService } from '../../../services/PlatformServiceContext';
@@ -95,6 +96,7 @@ function isModuleVisible(moduleId: string, visibleModuleIds: Set<string> | null)
 export function UiTestExecutionPage() {
   // 初次加载拉取用例/环境/模块；执行中每 2 秒轮询一次进度。
   const service = usePlatformService();
+  const navigate = useNavigate();
   const { message } = AntdApp.useApp();
   const [cases, setCases] = useState<TestCaseRecord[] | null>(null);
   const [latestResults, setLatestResults] = useState<UiExecutionCase[]>([]);
@@ -112,6 +114,36 @@ export function UiTestExecutionPage() {
   const [detail, setDetail] = useState<UiCaseRow>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const openAnomalyAnalysis = (target: UiCaseRow) => {
+    // 把失败明细一次性带入分析页，用户无需在 Drawer 与分析页之间复制日志。
+    const stepText = (target.steps ?? [])
+      .map((step) => (typeof step === 'string' ? step : JSON.stringify(step)))
+      .join('\n');
+    const expectedText = (target.steps ?? [])
+      .filter((step): step is Record<string, unknown> => typeof step === 'object' && step !== null)
+      .map((step) => step.expected)
+      .filter((expected): expected is string => typeof expected === 'string' && expected.trim().length > 0)
+      .join('\n');
+    navigate('/exception-analysis', {
+      state: {
+        sourceType: 'EXECUTION',
+        content: [target.errorMessage, ...(target.logs ?? [])].filter(Boolean).join('\n'),
+        context: {
+          projectId: modules[0]?.projectId,
+          testCaseId: target.caseId,
+          executionId,
+          testCase: target.caseName,
+          environment,
+          step: stepText || 'UI 自动化步骤',
+          expected: expectedText || '步骤按用例预期完成',
+          actual: target.errorMessage ?? target.status,
+          screenshotUrl: target.screenshotUrl,
+          log: target.logs?.join('\n'),
+        },
+      },
+    });
+  };
 
   // 排队与运行中都属于可取消但不可重复提交的活动执行。
   const isExecutionActive = ['PENDING', 'RUNNING'].includes(execution?.status ?? '');
@@ -509,6 +541,18 @@ export function UiTestExecutionPage() {
                 ) : null}
               </div>
             </div>
+            {detail.status === 'FAILED' ? (
+              <div className="execution-detail-actions">
+                <Button
+                  type="primary"
+                  ghost
+                  icon={<PlayCircleOutlined />}
+                  onClick={() => openAnomalyAnalysis(detail)}
+                >
+                  AI 分析异常
+                </Button>
+              </div>
+            ) : null}
             <Tabs
               items={[
                 {

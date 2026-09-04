@@ -36,7 +36,7 @@ function AppRoutes() {
         <Route path="/test-cases/:type" element={<TestCasesPage />} />
         <Route path="/execution/ui-test" element={<UiTestExecutionPage />} />
         <Route path="/execution/api-test" element={<ApiTestExecutionPage />} />
-        {/* 异常分析先以独立空态承载入口，后续可在同一路由接入执行失败数据。 */}
+        {/* 异常分析独立承载手动输入与执行结果带入，避免改变现有页面层级。 */}
         <Route path="/exception-analysis" element={<ExceptionAnalysisPage />} />
         <Route path="/xmind" element={<XMindPage />} />
         <Route path="/xmind-cases" element={<XMindCasesPage />} />

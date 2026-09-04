@@ -440,6 +440,77 @@ export interface ApiExecutionReport {
   results: ApiExecutionResult[];
 }
 
+// ===== AI 异常分析 =====
+export type AnomalySourceType = 'TEXT' | 'LOG' | 'SCREENSHOT' | 'FILE' | 'EXECUTION';
+export type AnomalySeverity = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+export type AnomalyRisk = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+
+/** 测试执行上下文：从执行结果页带入分析页，避免用户重复复制证据。 */
+export interface AnomalyContext {
+  projectId?: number;
+  testCaseId?: number;
+  executionId?: string;
+  project?: string;
+  testCase?: string;
+  environment?: string;
+  step?: string;
+  expected?: string;
+  actual?: string;
+  request?: unknown;
+  response?: unknown;
+  log?: string;
+  screenshotUrl?: string | null;
+}
+
+export interface AnomalyAnalysisInput {
+  sourceType?: AnomalySourceType;
+  sourceId?: string;
+  content: string;
+  context?: AnomalyContext;
+  additionalDescription?: string;
+}
+
+export interface AnomalyFileAnalysisInput {
+  file: File;
+  sourceType: Extract<AnomalySourceType, 'SCREENSHOT' | 'FILE' | 'LOG'>;
+  sourceId?: string;
+  context?: AnomalyContext;
+  additionalDescription?: string;
+}
+
+export interface AnomalyPossibleCause {
+  cause: string;
+  level: AnomalySeverity;
+  evidence: string;
+}
+
+export interface AnomalyAnalysisResult {
+  analysisId: number;
+  sourceType: AnomalySourceType;
+  sourceId?: string | null;
+  status: 'COMPLETED' | 'FAILED';
+  createdAt: string;
+  helpful?: boolean | null;
+  modelName?: string | null;
+  summary: string;
+  category: string;
+  severity: AnomalySeverity;
+  possibleCauses: AnomalyPossibleCause[];
+  analysisBasis: string[];
+  suggestions: string[];
+  solutions: string[];
+  verification: string[];
+  requiredInformation: string[];
+  risk: AnomalyRisk;
+}
+
+export interface AnomalyHistoryResult {
+  items: AnomalyAnalysisResult[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 // ===== 调试 =====
 export interface ApiDebugInput {
   environment?: string;
@@ -555,6 +626,14 @@ export interface PlatformService {
   stopApiExecution(executionId: string): Promise<void>;
   debugApiCase(input: ApiDebugInput): Promise<ApiDebugResult>;
   debugUiCase(input: UiDebugInput): Promise<UiDebugResult>;
+  /** 分析粘贴文本或执行上下文。 */
+  analyzeAnomaly(input: AnomalyAnalysisInput): Promise<AnomalyAnalysisResult>;
+  /** 分析日志/文本文件或截图。 */
+  analyzeAnomalyFile(input: AnomalyFileAnalysisInput): Promise<AnomalyAnalysisResult>;
+  /** 分页读取当前用户的异常分析记录。 */
+  listAnomalyHistory(page?: number, pageSize?: number): Promise<AnomalyHistoryResult>;
+  /** 保存当前用户对分析结果的帮助反馈。 */
+  feedbackAnomaly(analysisId: number, helpful: boolean): Promise<AnomalyAnalysisResult>;
   generateXMind(
     file: File,
     uploaderId?: number,

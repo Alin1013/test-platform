@@ -10,6 +10,10 @@ import type {
   ApiDebugResult,
   ApiExecutionInput,
   ApiExecutionReport,
+  AnomalyAnalysisInput,
+  AnomalyAnalysisResult,
+  AnomalyFileAnalysisInput,
+  AnomalyHistoryResult,
   DashboardData,
   ExecutionStart,
   PermissionRole,
@@ -146,6 +150,13 @@ interface ApiPaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+}
+
+interface ApiAnomalyHistoryResponse {
+  items: AnomalyAnalysisResult[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 interface ApiXMindTaskRecord {
@@ -791,6 +802,51 @@ export function createApiPlatformService({
         videoUrl: resolveArtifactUrl(response.data.videoUrl),
         traceUrl: resolveArtifactUrl(response.data.traceUrl),
       };
+    },
+
+    async analyzeAnomaly(input: AnomalyAnalysisInput) {
+      // 文本与执行上下文走 JSON，服务端会在模型调用前统一截取和脱敏。
+      return request<AnomalyAnalysisResult>('/ai/anomaly/analyze', {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceType: input.sourceType ?? 'TEXT',
+          sourceId: input.sourceId,
+          content: input.content,
+          context: input.context ?? {},
+          additionalDescription: input.additionalDescription ?? '',
+        }),
+      });
+    },
+
+    async analyzeAnomalyFile(input: AnomalyFileAnalysisInput) {
+      // 文件使用 multipart，避免前端把大文件转成 base64 后再额外膨胀一次内存。
+      const body = new FormData();
+      body.append('file', input.file);
+      body.append('source_type', input.sourceType);
+      if (input.sourceId) body.append('source_id', input.sourceId);
+      body.append('context_json', JSON.stringify(input.context ?? {}));
+      body.append('additional_description', input.additionalDescription ?? '');
+      return request<AnomalyAnalysisResult>('/ai/anomaly/upload', {
+        method: 'POST',
+        body,
+      });
+    },
+
+    async listAnomalyHistory(page = 1, pageSize = 20) {
+      // 历史内容按当前登录用户隔离，前端只负责分页参数与字段透传。
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+      const response = await request<ApiAnomalyHistoryResponse>(`/ai/anomaly/history?${params}`);
+      return response as AnomalyHistoryResult;
+    },
+
+    async feedbackAnomaly(analysisId: number, helpful: boolean) {
+      return request<AnomalyAnalysisResult>(
+        `/ai/anomaly/history/${encodeURIComponent(analysisId)}/feedback`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ helpful }),
+        },
+      );
     },
 
     async generateXMind(

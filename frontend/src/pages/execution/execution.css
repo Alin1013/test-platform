@@ -19,6 +19,14 @@
   background: var(--surface);
 }
 
+/* 分析入口紧贴当前失败证据，避免用户在不同页面间丢失上下文。 */
+.execution-detail-actions,
+.api-result-detail__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 14px 0;
+}
+
 .execution-config,
 .execution-table-panel {
   padding: 18px;

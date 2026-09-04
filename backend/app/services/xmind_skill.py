@@ -147,7 +147,7 @@ class LLMClient(Protocol):
         self,
         *,
         system_prompt: str,
-        user_prompt: str,
+        user_prompt: str | list[dict[str, Any]],
         model: str,
         base_url: str,
         api_key: str,
@@ -178,12 +178,14 @@ class OpenAICompatibleClient:
         """记录传输层（测试注入用）与请求超时。"""
         self.transport = transport
         self.timeout_seconds = timeout_seconds
+        # 兼容 OpenAI 的 usage.total_tokens；调用方可按需落库，缺失时保持 None。
+        self.last_token_usage: int | None = None
 
     async def complete(
         self,
         *,
         system_prompt: str,
-        user_prompt: str,
+        user_prompt: str | list[dict[str, Any]],
         model: str,
         base_url: str,
         api_key: str,
@@ -233,6 +235,9 @@ class OpenAICompatibleClient:
             ) from error
         if not isinstance(content, str) or not content.strip():
             raise XMindSkillError("LLM 响应内容为空")
+        usage = data.get("usage")
+        if isinstance(usage, dict) and isinstance(usage.get("total_tokens"), int):
+            self.last_token_usage = usage["total_tokens"]
         return content
 
 

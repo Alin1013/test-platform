@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -31,6 +32,13 @@ SENSITIVE_KEYS = {
     "clientsecret",
     "apikey",
 }
+
+EMBEDDED_SECRET_PATTERN = re.compile(
+    r"(?i)(authorization\s*[\"']?\s*[:=]\s*[\"']?(?:bearer\s+)?|"
+    r"cookie\s*[\"']?\s*[:=]\s*[\"']?|"
+    r"(?:password|passwd|secret|access[_-]?key|api[_-]?key|token)\s*[\"']?\s*[:=]\s*[\"']?)"
+    r"[^\s,;&}\]\\\"']+"
+)
 
 
 def _header_value(headers: list[tuple[bytes, bytes]], name: bytes) -> str | None:
@@ -64,6 +72,8 @@ def _redact(value: Any) -> Any:
         fields = parse_qsl(value, keep_blank_values=True)
         if any(_normalized_key(key) in SENSITIVE_KEYS for key, _ in fields):
             return "***"
+        # 自由文本（例如异常日志字段）没有可依赖的 JSON 键名，仍需遮盖内嵌凭据。
+        return EMBEDDED_SECRET_PATTERN.sub(r"\1******", value)
     return value
 
 
