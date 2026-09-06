@@ -478,6 +478,15 @@ export interface AnomalyFileAnalysisInput {
   additionalDescription?: string;
 }
 
+/** 批量异常证据上传输入；文件会在后端合并成一次分析上下文。 */
+export interface AnomalyFilesAnalysisInput {
+  files: File[];
+  sourceType: Extract<AnomalySourceType, 'SCREENSHOT' | 'FILE' | 'LOG'>;
+  sourceId?: string;
+  context?: AnomalyContext;
+  additionalDescription?: string;
+}
+
 export interface AnomalyPossibleCause {
   cause: string;
   level: AnomalySeverity;
@@ -630,6 +639,8 @@ export interface PlatformService {
   analyzeAnomaly(input: AnomalyAnalysisInput): Promise<AnomalyAnalysisResult>;
   /** 分析日志/文本文件或截图。 */
   analyzeAnomalyFile(input: AnomalyFileAnalysisInput): Promise<AnomalyAnalysisResult>;
+  /** 批量分析日志、截图或 ZIP 归档；后端会自动解包并聚合证据。 */
+  analyzeAnomalyFiles(input: AnomalyFilesAnalysisInput): Promise<AnomalyAnalysisResult>;
   /** 分页读取当前用户的异常分析记录。 */
   listAnomalyHistory(page?: number, pageSize?: number): Promise<AnomalyHistoryResult>;
   /** 保存当前用户对分析结果的帮助反馈。 */

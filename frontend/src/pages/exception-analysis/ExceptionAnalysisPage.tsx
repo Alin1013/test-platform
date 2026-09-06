@@ -38,14 +38,16 @@ import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
   AnomalyAnalysisResult,
   AnomalyContext,
-  AnomalyFileAnalysisInput,
 } from '../../services/contracts';
 import './exception-analysis.css';
 
 const { Text, Title } = Typography;
 const MAX_TEXT_LENGTH = 100_000;
 const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_FILES = 20;
 const PASTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
+const FILE_ACCEPT = `${IMAGE_ACCEPT},.txt,.log,.json,.xml,.yaml,.yml,.zip`;
 
 type InputMode = 'TEXT' | 'SCREENSHOT' | 'FILE';
 
@@ -332,12 +334,14 @@ export function ExceptionAnalysisPage() {
             context,
             additionalDescription: description,
           })
-        : await service.analyzeAnomalyFile({
-            file: pastedImage ?? fileList[0].originFileObj as File,
+        : await service.analyzeAnomalyFiles({
+            files: pastedImage
+              ? [pastedImage]
+              : fileList.flatMap((item) => item.originFileObj ? [item.originFileObj] : []),
             sourceType: pastedImage || mode === 'SCREENSHOT' ? 'SCREENSHOT' : 'FILE',
             context,
             additionalDescription: [description.trim(), pastedText].filter(Boolean).join('\n\n'),
-          } satisfies AnomalyFileAnalysisInput);
+          });
       setResult(next);
       setHistory((current) => [next, ...current.filter((item) => item.analysisId !== next.analysisId)]);
       message.success('异常分析已完成');
@@ -431,16 +435,22 @@ export function ExceptionAnalysisPage() {
         ) : (
           <Upload.Dragger
             className="anomaly-upload"
-            accept={mode === 'SCREENSHOT' ? 'image/png,image/jpeg,image/webp,image/gif' : '.txt,.log,.json,.xml,.yaml,.yml'}
-            maxCount={1}
+            accept={mode === 'SCREENSHOT' ? IMAGE_ACCEPT : FILE_ACCEPT}
+            multiple
+            maxCount={MAX_UPLOAD_FILES}
             fileList={fileList}
             beforeUpload={() => false}
-            onChange={({ fileList: next }) => setFileList(next)}
-            onRemove={() => setFileList([])}
+            onChange={({ fileList: next }) => setFileList(next.slice(-MAX_UPLOAD_FILES))}
+            onRemove={(file) => {
+              // 批量选择时只移除用户点中的证据，避免误清空其余文件。
+              setFileList((current) => current.filter((item) => item.uid !== file.uid));
+            }}
           >
             <p className="ant-upload-drag-icon"><UploadOutlined /></p>
             <p className="ant-upload-text">点击或拖拽文件到这里</p>
-            <p className="ant-upload-hint">{mode === 'SCREENSHOT' ? '支持 PNG、JPEG、WebP、GIF，最大 10 MB' : '支持 txt、log、json、xml、yaml，最大 5 MB'}</p>
+            <p className="ant-upload-hint">{mode === 'SCREENSHOT'
+              ? '支持批量选择 PNG、JPEG、WebP、GIF，每张最大 10 MB'
+              : '支持批量选择文本、截图或 ZIP 压缩包，服务端会自动解压（文本 5 MB，图片/ZIP 10 MB）'}</p>
           </Upload.Dragger>
         )}
 
@@ -460,7 +470,7 @@ export function ExceptionAnalysisPage() {
         <div className="anomaly-input-footer">
           <Text type="secondary">发送前会自动遮盖 Token、Cookie、密码和常见个人敏感信息</Text>
           <Space>
-            <Button onClick={resetInput} disabled={!content && !fileList.length && !description}>清空</Button>
+            <Button onClick={resetInput} disabled={!content && !fileList.length && !pastedImage && !description}>清空</Button>
             <Button type="primary" icon={<RobotOutlined />} loading={loading} disabled={!canAnalyze} onClick={() => void analyze()}>开始分析</Button>
           </Space>
         </div>

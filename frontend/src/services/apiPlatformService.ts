@@ -13,6 +13,7 @@ import type {
   AnomalyAnalysisInput,
   AnomalyAnalysisResult,
   AnomalyFileAnalysisInput,
+  AnomalyFilesAnalysisInput,
   AnomalyHistoryResult,
   DashboardData,
   ExecutionStart,
@@ -819,9 +820,20 @@ export function createApiPlatformService({
     },
 
     async analyzeAnomalyFile(input: AnomalyFileAnalysisInput) {
-      // 文件使用 multipart，避免前端把大文件转成 base64 后再额外膨胀一次内存。
+      // 保留单文件方法给已有调用方，实际请求统一复用批量上传协议。
+      return this.analyzeAnomalyFiles({
+        files: [input.file],
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        context: input.context,
+        additionalDescription: input.additionalDescription,
+      });
+    },
+
+    async analyzeAnomalyFiles(input: AnomalyFilesAnalysisInput) {
+      // 文件使用 multipart，避免前端把大文件转成 base64 后再额外膨胀一次内存；重复 files 字段保留选择顺序。
       const body = new FormData();
-      body.append('file', input.file);
+      input.files.forEach((file) => body.append('files', file));
       body.append('source_type', input.sourceType);
       if (input.sourceId) body.append('source_id', input.sourceId);
       body.append('context_json', JSON.stringify(input.context ?? {}));

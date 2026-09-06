@@ -12,6 +12,7 @@ import type {
   AnomalyAnalysisInput,
   AnomalyAnalysisResult,
   AnomalyFileAnalysisInput,
+  AnomalyFilesAnalysisInput,
   AnomalyHistoryResult,
   ApiExecutionInput,
   ApiExecutionReport,
@@ -1067,10 +1068,26 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     },
 
     async analyzeAnomalyFile(input: AnomalyFileAnalysisInput) {
-      // 文件内容只在 Mock 中读取首段作为证据，真实服务由后端完成格式校验和脱敏。
-      const content = input.file.type.startsWith('text/') || /\.(txt|log|json|xml|ya?ml)$/i.test(input.file.name)
-        ? await input.file.text()
-        : `截图文件：${input.file.name}`;
+      // 保留单文件方法给已有调用方，实际读取逻辑统一复用批量 Mock。
+      return this.analyzeAnomalyFiles({
+        files: [input.file],
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        context: input.context,
+        additionalDescription: input.additionalDescription,
+      });
+    },
+
+    async analyzeAnomalyFiles(input: AnomalyFilesAnalysisInput) {
+      // Mock 同样按文件边界拼接内容，方便离线演示验证多选上传和 ZIP 文件名提示。
+      const content = (await Promise.all(input.files.map(async (file) => {
+        if (file.type.startsWith('text/') || /\.(txt|log|json|xml|ya?ml)$/i.test(file.name)) {
+          return `${file.name}\n${await file.text()}`;
+        }
+        // 浏览器 Mock 不引入额外解压依赖，只展示归档边界；真实 API 会解析其中的成员。
+        if (/\.zip$/i.test(file.name)) return `压缩包：${file.name}（提交到服务端后自动解压）`;
+        return `截图文件：${file.name}`;
+      }))).join('\n\n');
       return this.analyzeAnomaly({
         sourceType: input.sourceType,
         sourceId: input.sourceId,
