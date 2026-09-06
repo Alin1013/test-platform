@@ -46,13 +46,18 @@ async def analyze_upload(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
-    file: Annotated[UploadFile, File()],
+    files: Annotated[list[UploadFile] | None, File()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
     source_type: Annotated[str, Form()] = "FILE",
     source_id: Annotated[str | None, Form()] = None,
     context_json: Annotated[str, Form()] = "{}",
     additional_description: Annotated[str, Form()] = "",
 ) -> dict:
-    """POST /upload：分析日志/文本文件或多模态截图。"""
+    """POST /upload：批量分析日志、文本文件、ZIP 归档或多模态截图。"""
+    # 新客户端使用 files[]，旧客户端仍传 file；统一收敛后由服务层执行数量和大小校验。
+    uploads = [*(files or []), *([file] if file else [])]
+    if not uploads:
+        raise HTTPException(status_code=422, detail="请至少上传一个分析文件")
     try:
         context = json.loads(context_json or "{}")
     except json.JSONDecodeError as error:
@@ -68,7 +73,7 @@ async def analyze_upload(
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    prepared = await anomaly_analysis.prepare_upload(file, payload.sourceType)
+    prepared = await anomaly_analysis.prepare_uploads(uploads, payload.sourceType)
     return await anomaly_analysis.analyze(
         session,
         user=user,

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import mimetypes
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePath
@@ -35,8 +37,16 @@ MAX_CONTEXT_DEPTH = 6
 MAX_CONTEXT_ITEMS = 100
 MAX_LOG_FILE_BYTES = 5 * 1024 * 1024
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_BATCH_FILES = 20
+MAX_BATCH_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 10 * 1024 * 1024
+MAX_ARCHIVE_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 100
+MAX_SINGLE_UPLOAD_BYTES = max(MAX_LOG_FILE_BYTES, MAX_IMAGE_BYTES, MAX_ARCHIVE_BYTES)
 ALLOWED_TEXT_SUFFIXES = {".txt", ".log", ".json", ".xml", ".yaml", ".yml"}
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+ALLOWED_ARCHIVE_SUFFIXES = {".zip"}
+ALLOWED_ARCHIVE_TYPES = {"application/zip", "application/x-zip-compressed"}
 
 SYSTEM_PROMPT = """你是一名资深软件测试和故障分析专家。
 
@@ -72,6 +82,7 @@ class PreparedInput:
 
     text: str
     image_data_url: str | None = None
+    image_data_urls: tuple[str, ...] = ()
 
 
 def _compact_logs(content: str) -> str:
@@ -172,27 +183,134 @@ def prepare_text(content: str) -> PreparedInput:
 
 
 async def prepare_upload(file: UploadFile, source_type: str) -> PreparedInput:
-    """按文件类型读取文本或构造多模态 data URL；原始内容仅保留在内存。"""
-    original_name = PurePath(file.filename or "upload").name
-    suffix = PurePath(original_name).suffix.lower()
-    content = await file.read(MAX_IMAGE_BYTES + 1)
-    if source_type == "SCREENSHOT" or (file.content_type or "") in ALLOWED_IMAGE_TYPES:
-        if len(content) > MAX_IMAGE_BYTES:
-            raise HTTPException(status_code=413, detail="图片超过 10 MB 限制")
-        mime = file.content_type if file.content_type in ALLOWED_IMAGE_TYPES else mimetypes.guess_type(original_name)[0]
-        if mime not in ALLOWED_IMAGE_TYPES:
-            raise HTTPException(status_code=415, detail="仅支持 PNG、JPEG、WebP 或 GIF 截图")
-        encoded = base64.b64encode(content).decode("ascii")
-        return PreparedInput(text=f"截图文件：{original_name}", image_data_url=f"data:{mime};base64,{encoded}")
-    if suffix not in ALLOWED_TEXT_SUFFIXES:
-        raise HTTPException(status_code=415, detail="当前文件格式暂不支持，请使用 txt、log、json、xml 或 yaml")
+    """兼容旧的单文件调用，并复用批量上传的统一校验路径。"""
+    return await prepare_uploads([file], source_type)
+
+
+def _archive_member_name(name: str) -> str:
+    """规范化归档成员名，拒绝绝对路径和目录穿越，避免解包写入宿主文件系统。"""
+    normalized = name.replace("\\", "/")
+    path = PurePath(normalized)
+    if path.is_absolute() or ".." in path.parts:
+        raise HTTPException(status_code=422, detail="压缩包包含不安全的文件路径")
+    return "/".join(part for part in path.parts if part not in ("", "."))
+
+
+def _prepare_image(content: bytes, *, name: str, content_type: str | None) -> PreparedInput:
+    """将图片转换为模型可消费的 data URL，保留名称作为可读证据。"""
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="图片超过 10 MB 限制")
+    mime = content_type if content_type in ALLOWED_IMAGE_TYPES else mimetypes.guess_type(name)[0]
+    if mime not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="仅支持 PNG、JPEG、WebP 或 GIF 截图")
+    encoded = base64.b64encode(content).decode("ascii")
+    return PreparedInput(
+        text=f"图片文件：{name}",
+        image_data_url=f"data:{mime};base64,{encoded}",
+    )
+
+
+def _prepare_text_bytes(content: bytes, *, name: str) -> PreparedInput:
+    """解码单个 UTF-8 文本文件，并在模型输入中保留文件边界。"""
     if len(content) > MAX_LOG_FILE_BYTES:
         raise HTTPException(status_code=413, detail="日志文件超过 5 MB 限制，请截取关键片段后重试")
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise HTTPException(status_code=422, detail="文件必须使用 UTF-8 编码") from error
-    return prepare_text(text)
+        raise HTTPException(status_code=422, detail=f"文件 {name} 必须使用 UTF-8 编码") from error
+    prepared = prepare_text(text)
+    return PreparedInput(text=f"文件：{name}\n{prepared.text}")
+
+
+def _prepare_archive(content: bytes, *, name: str) -> list[PreparedInput]:
+    """在内存中读取 ZIP 的文本/图片成员，并限制成员数与解压总量以抵御压缩炸弹。"""
+    if len(content) > MAX_ARCHIVE_BYTES:
+        raise HTTPException(status_code=413, detail="压缩包超过 10 MB 限制")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile as error:
+        raise HTTPException(status_code=422, detail=f"压缩包 {name} 不是有效的 ZIP 文件") from error
+    with archive:
+        members = archive.infolist()
+        if len(members) > MAX_ARCHIVE_MEMBERS:
+            raise HTTPException(status_code=413, detail="压缩包文件数量超过 100 个限制")
+        uncompressed_size = sum(member.file_size for member in members)
+        if uncompressed_size > MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+            raise HTTPException(status_code=413, detail="压缩包解压后超过 25 MB 限制")
+        prepared: list[PreparedInput] = []
+        for member in members:
+            if member.is_dir() or member.flag_bits & 0x1:
+                # 目录没有分析价值；加密成员无法在服务端安全解包，直接拒绝而不是静默丢失证据。
+                if member.flag_bits & 0x1:
+                    raise HTTPException(status_code=422, detail="暂不支持加密压缩包")
+                continue
+            member_name = _archive_member_name(member.filename)
+            if not member_name:
+                continue
+            suffix = PurePath(member_name).suffix.lower()
+            member_content = archive.read(member)
+            display_name = f"{name}/{member_name}"
+            if suffix in ALLOWED_TEXT_SUFFIXES:
+                prepared.append(_prepare_text_bytes(member_content, name=display_name))
+            elif mimetypes.guess_type(member_name)[0] in ALLOWED_IMAGE_TYPES:
+                prepared.append(_prepare_image(member_content, name=display_name, content_type=None))
+        if not prepared:
+            raise HTTPException(status_code=415, detail="压缩包内没有可分析的 txt、log、json、xml、yaml 或图片文件")
+        return prepared
+
+
+def _prepare_upload_bytes(
+    content: bytes,
+    *,
+    name: str,
+    content_type: str | None,
+    source_type: str,
+) -> list[PreparedInput]:
+    """按文件名、MIME 和入口模式选择图片、文本或 ZIP 解析器。"""
+    suffix = PurePath(name).suffix.lower()
+    if suffix in ALLOWED_ARCHIVE_SUFFIXES or content_type in ALLOWED_ARCHIVE_TYPES:
+        if source_type == "SCREENSHOT":
+            raise HTTPException(status_code=415, detail="截图入口仅支持 PNG、JPEG、WebP 或 GIF")
+        return _prepare_archive(content, name=name)
+    if source_type == "SCREENSHOT" or content_type in ALLOWED_IMAGE_TYPES:
+        return [_prepare_image(content, name=name, content_type=content_type)]
+    if suffix not in ALLOWED_TEXT_SUFFIXES:
+        raise HTTPException(status_code=415, detail="当前文件格式暂不支持，请使用 txt、log、json、xml、yaml、图片或 zip")
+    return [_prepare_text_bytes(content, name=name)]
+
+
+async def prepare_uploads(files: list[UploadFile], source_type: str) -> PreparedInput:
+    """读取并聚合批量上传文件；原始字节只在内存中短暂存在，不落盘。"""
+    if not files:
+        raise HTTPException(status_code=422, detail="请至少上传一个分析文件")
+    if len(files) > MAX_BATCH_FILES:
+        raise HTTPException(status_code=413, detail="一次最多上传 20 个文件")
+
+    prepared: list[PreparedInput] = []
+    total_upload_bytes = 0
+    for file in files:
+        name = PurePath(file.filename or "upload").name
+        content = await file.read(MAX_SINGLE_UPLOAD_BYTES + 1)
+        total_upload_bytes += len(content)
+        if total_upload_bytes > MAX_BATCH_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="本次上传总大小超过 50 MB 限制")
+        prepared.extend(
+            _prepare_upload_bytes(
+                content,
+                name=name,
+                content_type=file.content_type,
+                source_type=source_type,
+            )
+        )
+
+    text_parts = [item.text for item in prepared if item.text.strip()]
+    images = [
+        item.image_data_url
+        for item in prepared
+        if item.image_data_url
+    ]
+    combined_text = mask_sensitive_data(_compact_logs("\n\n".join(text_parts))[:MAX_TEXT_CHARS])
+    return PreparedInput(text=combined_text, image_data_urls=tuple(images))
 
 
 def _context_text(context: dict[str, Any]) -> str:
@@ -304,10 +422,14 @@ async def analyze(
             additional_description=payload.additionalDescription,
         )
         user_prompt: str | list[dict[str, Any]] = prompt
-        if prepared.image_data_url:
+        image_urls = prepared.image_data_urls or (
+            (prepared.image_data_url,) if prepared.image_data_url else ()
+        )
+        if image_urls:
+            # 多个截图与文本共用一个 user message，避免批量上传被拆成互相无关的分析任务。
             user_prompt = [
                 {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": prepared.image_data_url}},
+                *({"type": "image_url", "image_url": {"url": url}} for url in image_urls),
             ]
         client = OpenAICompatibleClient(transport=llm_transport)
         raw = await client.complete(
