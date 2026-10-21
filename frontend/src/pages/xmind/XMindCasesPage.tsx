@@ -6,7 +6,7 @@
 import { ArrowLeftOutlined, AuditOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Skeleton, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common/AppPagination';
 import { PageHeader } from '../../components/PageHeader';
@@ -31,8 +31,6 @@ export function XMindCasesPage() {
   const [error, setError] = useState<string>();
   const [reloadToken, setReloadToken] = useState(0);
   const flatModules = useMemo<FlatModule[]>(() => flattenModules(modules), [modules]);
-  // 标记是否已根据首次加载的任务列表自动选中过任务，避免后续刷新重复覆盖用户选择。
-  const didAutoSelect = useRef(false);
   // 任务列表分页状态：分页重置回首页，避免刷新后停留在越界页码导致空列表。
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[0]);
@@ -44,7 +42,7 @@ export function XMindCasesPage() {
   }, [tasks, page, pageSize]);
 
   useEffect(() => {
-    // 加载审核任务列表与模块树；优先按 URL 的 taskId 深链选中对应任务。
+    // 一级页只读取任务列表；用户点击「审核」进入带 taskId 的二级页后才加载任务详情。
     let active = true;
     setTasks(null);
     const deepId = Number(searchParams.get('taskId'));
@@ -58,12 +56,7 @@ export function XMindCasesPage() {
         if (hasDeep) {
           // 深链任务可能不在当前分页，直接加载详情而不是依赖列表命中。
           setSelectedTaskId(deepId);
-        } else if (!didAutoSelect.current && taskPage.items[0]) {
-          // 未指定深链时默认选中首个待审核任务，便于直接开始审核。
-          const firstReview = taskPage.items.find((item) => item.status === 'WAITING_REVIEW');
-          setSelectedTaskId(firstReview ? firstReview.id : taskPage.items[0].id);
         }
-        didAutoSelect.current = true;
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : '审核任务加载失败');
@@ -176,8 +169,6 @@ export function XMindCasesPage() {
                   dataSource={pagedTasks}
                   pagination={false}
                   size="small"
-                  rowClassName={(record) => (record.id === selectedTaskId ? 'xmind-task-row--selected' : '')}
-                  onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
                 />
                 {totalTasks > pageSize ? (
                   <AppPagination
@@ -197,8 +188,8 @@ export function XMindCasesPage() {
         </div>
       ) : null}
 
-      {/* 只有待审核任务展示审核区；其它状态已由任务列表中的状态列完整表达。 */}
-      {detail && detail.status === 'WAITING_REVIEW' ? (
+      {/* 审核编辑区只属于带 taskId 的二级页面，一级页始终保持为任务列表。 */}
+      {hasDeepLink && detail && detail.status === 'WAITING_REVIEW' ? (
         <XMindReviewView task={detail} modules={modules} onTaskChange={handleTaskChange} />
       ) : null}
     </section>
