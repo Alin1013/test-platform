@@ -31,6 +31,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
+import { AppPagination, PAGINATION_PAGE_SIZE_OPTIONS } from '../../components/common';
 import { useAuth } from '../../services/AuthContext';
 import { usePlatformService } from '../../services/PlatformServiceContext';
 import type {
@@ -145,6 +146,10 @@ export function XMindPage() {
   const { user } = useAuth();
   const [upload, setUpload] = useState<UploadState>({ status: 'idle' });
   const [tasks, setTasks] = useState<XMindTaskRecord[] | null>(null);
+  // 服务端分页保留全量任务数，避免只对当前 20 条记录做前端切片。
+  const [taskTotal, setTaskTotal] = useState(0);
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskPageSize, setTaskPageSize] = useState<number>(PAGINATION_PAGE_SIZE_OPTIONS[1]);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [detail, setDetail] = useState<XMindTaskDetail | null>(null);
   const [failureLogTask, setFailureLogTask] = useState<XMindTaskRecord | null>(null);
@@ -161,19 +166,21 @@ export function XMindPage() {
   useEffect(() => () => clearUploadTimer(), [clearUploadTimer]);
 
   const loadTasks = useCallback(async () => {
-    const result = await service.listXMindTasks(1, 20);
+    const result = await service.listXMindTasks(taskPage, taskPageSize);
     setTasks(result.items);
+    setTaskTotal(result.total);
     if (selectedTaskId === null && result.items[0]) setSelectedTaskId(result.items[0].id);
-  }, [selectedTaskId, service]);
+  }, [selectedTaskId, service, taskPage, taskPageSize]);
 
   useEffect(() => {
     let active = true;
     setTasks(null);
-    void service.listXMindTasks(1, 20)
-      .then((taskPage) => {
+    void service.listXMindTasks(taskPage, taskPageSize)
+      .then((taskResult) => {
         if (!active) return;
-        setTasks(taskPage.items);
-        if (selectedTaskId === null && taskPage.items[0]) setSelectedTaskId(taskPage.items[0].id);
+        setTasks(taskResult.items);
+        setTaskTotal(taskResult.total);
+        if (selectedTaskId === null && taskResult.items[0]) setSelectedTaskId(taskResult.items[0].id);
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : '生成任务加载失败');
@@ -181,7 +188,13 @@ export function XMindPage() {
     return () => {
       active = false;
     };
-  }, [reloadToken, service]);
+  }, [reloadToken, service, taskPage, taskPageSize]);
+
+  useEffect(() => {
+    // 删除末页最后一项后收敛页码，避免停留在没有数据的越界页。
+    const lastPage = Math.max(1, Math.ceil(taskTotal / taskPageSize));
+    if (taskPage > lastPage) setTaskPage(lastPage);
+  }, [taskPage, taskPageSize, taskTotal]);
 
   useEffect(() => {
     // 选中任务变化时加载详情；PENDING/RUNNING 期间每 1.2 秒轮询。
@@ -229,6 +242,8 @@ export function XMindPage() {
       .then((created) => {
         clearUploadTimer();
         setUpload({ status: 'idle' });
+        // 新任务按创建时间排在最前，因此创建成功后回到第一页展示它。
+        setTaskPage(1);
         setSelectedTaskId(created.id);
         setDetail(created);
         setReloadToken((token) => token + 1);
@@ -287,6 +302,7 @@ export function XMindPage() {
         try {
           await service.deleteXMindTask(task.id);
           setTasks((current) => current?.filter((item) => item.id !== task.id) ?? current);
+          setTaskTotal((current) => Math.max(0, current - 1));
           if (selectedTaskId === task.id) {
             setSelectedTaskId(null);
             setDetail(null);
@@ -465,15 +481,29 @@ export function XMindPage() {
         </div>
         {tasks ? (
           tasks.length ? (
-            <Table<XMindTaskRecord>
-              rowKey="id"
-              columns={taskColumns}
-              dataSource={tasks}
-              pagination={false}
-              size="small"
-              rowClassName={(record) => record.id === selectedTaskId ? 'xmind-task-row--selected' : ''}
-              onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
-            />
+            <>
+              <Table<XMindTaskRecord>
+                rowKey="id"
+                columns={taskColumns}
+                dataSource={tasks}
+                pagination={false}
+                size="small"
+                rowClassName={(record) => record.id === selectedTaskId ? 'xmind-task-row--selected' : ''}
+                onRow={(record) => ({ onClick: () => setSelectedTaskId(record.id) })}
+              />
+              {taskTotal > 0 ? (
+                <AppPagination
+                  className="xmind-task-list__pagination"
+                  current={taskPage}
+                  pageSize={taskPageSize}
+                  total={taskTotal}
+                  onChange={(nextPage, nextPageSize) => {
+                    setTaskPageSize(nextPageSize);
+                    setTaskPage(nextPageSize === taskPageSize ? nextPage : 1);
+                  }}
+                />
+              ) : null}
+            </>
           ) : <Empty description="暂无生成任务" />
         ) : <Skeleton active paragraph={{ rows: 3 }} />}
       </div>
