@@ -50,6 +50,11 @@ function isTestCaseType(value: string | undefined): value is TestCaseType {
   return value === 'functional' || value === 'api' || value === 'ui';
 }
 
+function toSafeDownloadName(value: string): string {
+  // 模块名可能含文件系统保留字符，下载前替换并去除尾部空格/句点。
+  return value.replace(/[\\/:*?"<>|]/g, '_').trim().replace(/[. ]+$/g, '') || '功能用例';
+}
+
 const FUNCTIONAL_IMPORT_HEADERS = [
   '用例目录', '用例名称', '需求ID', '前置条件', '用例步骤', '预期结果',
   '用例类型', '用例状态', '用例等级', '创建人', '归属迭代', '是否冒烟',
@@ -484,7 +489,11 @@ export function TestCasesPage() {
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = '功能用例.xlsx';
+      // 仅导出单个模块时使用模块名；全部模块导出仍用通用名称，避免误标范围。
+      const selectedModuleName = selectedModule === 'all'
+        ? undefined
+        : rows?.items.find((item) => item.moduleId === selectedModule)?.moduleName;
+      anchor.download = `${toSafeDownloadName(selectedModuleName || '功能用例')}.xlsx`;
       anchor.click();
       window.URL.revokeObjectURL(url);
       void message.success(`已导出 ${rows?.total ?? 0} 条功能用例`);
