@@ -53,6 +53,7 @@ function buildDraft(caseItem: XMindGeneratedCase): CaseDraft {
   };
 }
 
+/** 用例详情编辑弹窗；双列字段并排展示，长文本字段占满整行以便录入。 */
 export function XMindCaseDetailModal({
   taskId,
   caseItem,
@@ -150,7 +151,7 @@ export function XMindCaseDetailModal({
     <Modal
       title={`用例详情：${caseItem.用例名称}`}
       open
-      width={720}
+      width={860}
       footer={[
         <Button key="close" disabled={saving} onClick={onClosed}>关闭</Button>,
         <Button
@@ -209,6 +210,10 @@ export function XMindCaseDetailModal({
               onChange={(value) => updateField('用例等级', value)}
             />
           </label>
+          <label className="xmind-case-detail__field">
+            <span>归属迭代</span>
+            <Input value={draft.归属迭代} onChange={(event) => updateField('归属迭代', event.target.value)} />
+          </label>
           <label className="xmind-case-detail__field xmind-case-detail__field--wide">
             <span>前置条件</span>
             <Input.TextArea
@@ -216,10 +221,6 @@ export function XMindCaseDetailModal({
               value={draft.前置条件}
               onChange={(event) => updateField('前置条件', event.target.value)}
             />
-          </label>
-          <label className="xmind-case-detail__field">
-            <span>归属迭代</span>
-            <Input value={draft.归属迭代} onChange={(event) => updateField('归属迭代', event.target.value)} />
           </label>
           <label className="xmind-case-detail__field xmind-case-detail__field--wide">
             <span>用例步骤</span>
