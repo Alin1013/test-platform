@@ -57,6 +57,11 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
   const pagedCases = currentCases.slice((safePage - 1) * pageSize, safePage * pageSize);
   const currentPageKeys = pagedCases.flatMap((item) => (item.tempId ? [item.tempId] : []));
   const passedCount = task.cases.filter((item) => item.reviewStatus === 'passed').length;
+  const modalCaseIndex = modalCase
+    ? currentCases.findIndex((item) => item.tempId === modalCase.tempId)
+    : -1;
+  const hasPreviousModalCase = modalCaseIndex > 0;
+  const hasNextModalCase = modalCaseIndex >= 0 && modalCaseIndex < currentCases.length - 1;
   // 删除后的用例不再参与审核；剩余用例必须全部通过，任务才具备一次性合并资格。
   const allCasesPassed = currentCases.length > 0 && passedCount === currentCases.length;
   const hasTargetModule = Boolean(targetModuleId);
@@ -196,6 +201,13 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
         }
       },
     });
+  };
+
+  const switchModalCase = (offset: -1 | 1) => {
+    if (modalCaseIndex < 0) return;
+    // 导航使用任务中的完整用例数组，而不是当前分页，确保弹窗可跨页连续审核。
+    const nextCase = currentCases[modalCaseIndex + offset];
+    if (nextCase) setModalCase(nextCase);
   };
 
   const merge = async () => {
@@ -364,6 +376,10 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
         <XMindCaseDetailModal
           taskId={task.id}
           caseItem={modalCase}
+          hasPrevious={hasPreviousModalCase}
+          hasNext={hasNextModalCase}
+          onPrevious={() => switchModalCase(-1)}
+          onNext={() => switchModalCase(1)}
           onUpdated={(detail) => {
             // 保存后同时刷新弹窗引用，避免继续展示更新前的字段和审核状态。
             onTaskChange(detail);

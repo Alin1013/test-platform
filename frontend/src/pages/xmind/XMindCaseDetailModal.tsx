@@ -1,5 +1,5 @@
 /**
- * 用例详情弹窗：展示并编辑单条用例的全部字段，并提供确认通过 / 取消确认 / 删除操作。
+ * 用例详情弹窗：展示并编辑单条用例的全部字段，并提供相邻用例切换与审核操作。
  * 底部按钮始终可点击：允许在已通过时再次确认（幂等）、在未通过时取消确认（回到待审核）。
  * 用例目录（XMind 解析时的归属目录）不在此处展示/编辑，由解析器与任务预览固化。
  */
@@ -37,6 +37,11 @@ interface XMindCaseDetailModalProps {
   caseItem: XMindGeneratedCase;
   /** 审核字段变更后回传刷新后的任务详情。 */
   onUpdated: (detail: XMindTaskDetail) => void;
+  /** 在同一个弹窗内切换到相邻用例，避免用户返回列表再重新打开。 */
+  onPrevious: () => void;
+  onNext: () => void;
+  hasPrevious: boolean;
+  hasNext: boolean;
   onClosed: () => void;
 }
 
@@ -58,6 +63,10 @@ export function XMindCaseDetailModal({
   taskId,
   caseItem,
   onUpdated,
+  onPrevious,
+  onNext,
+  hasPrevious,
+  hasNext,
   onClosed,
 }: XMindCaseDetailModalProps) {
   const service = usePlatformService();
@@ -105,7 +114,7 @@ export function XMindCaseDetailModal({
     try {
       await persistDraft('passed');
       message.success('已确认通过该用例');
-      onClosed();
+      // 确认只更新当前弹窗的数据，保留弹窗让审核者继续切换或编辑下一条用例。
     } catch (reason: unknown) {
       message.error(reason instanceof Error ? reason.message : '确认用例失败');
     }
@@ -153,6 +162,20 @@ export function XMindCaseDetailModal({
       open
       width={860}
       footer={[
+        <Button
+          key="previous"
+          disabled={saving || !hasPrevious}
+          onClick={onPrevious}
+        >
+          上一个
+        </Button>,
+        <Button
+          key="next"
+          disabled={saving || !hasNext}
+          onClick={onNext}
+        >
+          下一个
+        </Button>,
         <Button key="close" disabled={saving} onClick={onClosed}>关闭</Button>,
         <Button
           key="delete"
