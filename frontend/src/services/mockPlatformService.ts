@@ -204,29 +204,29 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
     UI测试用例: 'ui',
   };
   const priorityAliases: Record<string, TestCaseRecord['priority']> = {
-    高: 'P0',
-    最高: 'P0',
-    P0: 'P0',
-    中: 'P1',
-    P1: 'P1',
-    低: 'P2',
-    P2: 'P2',
-    很低: 'P3',
-    极低: 'P3',
-    最低: 'P3',
-    P3: 'P3',
+    高: '高',
+    最高: '高',
+    P0: '高',
+    中: '中',
+    P1: '中',
+    低: '低',
+    P2: '低',
+    很低: '低',
+    极低: '低',
+    最低: '低',
+    P3: '低',
   };
   const statusAliases: Record<string, TestCaseRecord['status']> = {
-    正常: '维护中',
-    启用: '维护中',
-    维护中: '维护中',
-    已通过: '已通过',
-    草稿: '草稿',
-    失败: '已失败',
-    已失败: '已失败',
-    停用: '已停用',
-    禁用: '已停用',
-    已停用: '已停用',
+    正常: '正常',
+    启用: '正常',
+    维护中: '正常',
+    已通过: '正常',
+    草稿: '正常',
+    失败: '正常',
+    已失败: '正常',
+    停用: '正常',
+    禁用: '正常',
+    已停用: '正常',
   };
   const normalizeValue = <T extends string>(value: string, aliases: Record<string, T>) =>
     // 未知值原样返回，仅命中别名时归一化。
@@ -458,8 +458,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           precondition: String(row[3] ?? '').trim(),
           steps: String(row[4] ?? '').trim(),
           expectedResult: String(row[5] ?? '').trim(),
-          status: normalizeValue(String(row[7] ?? '').trim() || '草稿', statusAliases),
-          priority: normalizeValue(String(row[8] ?? '').trim() || 'P1', priorityAliases),
+          status: '正常',
+          priority: normalizeValue(String(row[8] ?? '').trim() || '中', priorityAliases),
           creator: String(row[9] ?? '').trim() || '江珊',
           maintainer: String(row[9] ?? '').trim() || '江珊',
           iteration: String(row[10] ?? '').trim(),
@@ -746,8 +746,8 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
         需求ID: '',
         前置条件: '测试账号已准备',
         用例类型: '功能测试',
-        用例状态: '草稿',
-        用例等级: index === 0 ? 'P1' : 'P2',
+        用例状态: '正常',
+        用例等级: index === 0 ? '中' : '低',
         创建人: users.find((user) => Number(user.id) === uploaderId)?.name ?? '江珊',
         归属迭代: '',
         用例步骤: `1. 执行登录场景 ${index + 1}`,
@@ -836,7 +836,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
           moduleId,
           name: item.用例名称,
           priority: item.用例等级,
-          status: '草稿',
+          status: '正常',
           maintainer: author?.name ?? '江珊',
           creator: author?.name ?? '江珊',
           updatedAt: '刚刚',
@@ -898,7 +898,7 @@ export function createMockPlatformService({ delay = 120 }: MockServiceOptions = 
       ];
       const workbook = utils.book_new();
       // Mock 导出与后端一致：展示模板使用中文枚举，环境扩展列暂不填充。
-      const priorityLabels: Record<string, string> = { P0: '高', P1: '中', P2: '低', P3: '很低' };
+      const priorityLabels: Record<string, string> = { 高: '高', 中: '中', 低: '低', P0: '高', P1: '中', P2: '低', P3: '低' };
       const rows = cases.map((item) => [
         item.用例目录 ?? '',
         item.用例名称 ?? '',

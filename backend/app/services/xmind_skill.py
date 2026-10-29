@@ -352,18 +352,22 @@ def _as_non_empty(value: str, fallback: str) -> str:
 
 
 def _priority(value: str) -> str:
-    """把中文/英文优先级别名归一化为 P0–P3，未知值默认 P2。"""
+    """把历史英文等级和中文别名归一化为高/中/低，未知值默认中。"""
     aliases = {
-        "最高": "P0",
-        "高": "P0",
-        "较高": "P1",
-        "中": "P1",
-        "低": "P2",
-        "较低": "P2",
-        "很低": "P3",
+        "最高": "高",
+        "高": "高",
+        "P0": "高",
+        "较高": "中",
+        "中": "中",
+        "P1": "中",
+        "低": "低",
+        "较低": "低",
+        "很低": "低",
+        "P2": "低",
+        "P3": "低",
     }
     normalized = value.strip().upper()
-    return aliases.get(normalized, normalized if normalized in {"P0", "P1", "P2", "P3"} else "P2")
+    return aliases.get(normalized, normalized if normalized in {"高", "中", "低"} else "中")
 
 
 def _smoke(value: str) -> str:
@@ -427,7 +431,8 @@ def align_generated_cases(
         values["用例步骤"] = _as_non_empty(values["用例步骤"], "1. 执行默认测试操作")
         values["预期结果"] = _as_non_empty(values["预期结果"], "1. 系统表现正常")
         values["用例类型"] = "功能测试"
-        values["用例状态"] = "草稿"
+        # 生成结果是正式测试用例语义，审核状态由 reviewStatus 单独承载。
+        values["用例状态"] = "正常"
         values["用例等级"] = _priority(values["用例等级"])
         values["是否冒烟"] = _smoke(values["是否冒烟"])
         # 创建人属于任务审计元数据，必须由上传账号决定，不能采信模型可能臆造的字段。

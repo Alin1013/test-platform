@@ -109,8 +109,8 @@ function FunctionalCaseDrawer({
       steps: initialCase?.steps ?? '',
       expectedResult: initialCase?.expectedResult ?? '',
       caseType: 'functional',
-      status: initialCase?.status ?? '维护中',
-      priority: initialCase?.priority ?? 'P1',
+      status: '正常',
+      priority: initialCase?.priority ?? '中',
       authorId: user?.id ?? 1,
       iteration: initialCase?.iteration ?? '',
       isSmoke: initialCase?.isSmoke ?? false,
@@ -222,7 +222,7 @@ function FunctionalCaseDrawer({
               <Select aria-label="用例状态" options={testCaseStatusOptions.map((value) => ({ value, label: value }))} />
             </Form.Item>
             <Form.Item name="priority" label="用例等级" rules={[{ required: true, message: '请选择用例等级' }]}>
-              <Select aria-label="用例等级" options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))} />
+              <Select aria-label="用例等级" options={['高', '中', '低'].map((value) => ({ value, label: value }))} />
             </Form.Item>
             <Form.Item name="authorId" label="创建人" rules={[{ required: true, message: '请选择创建人' }]}>
               <Select

@@ -7,9 +7,10 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 CaseType = Literal["functional", "api", "ui"]
 # 用例类型：功能 / API / UI。
-Priority = Literal["P0", "P1", "P2", "P3"]
-# 优先级：P0 最高，P3 最低。
-CaseStatus = Literal["维护中", "已通过", "草稿", "已失败", "已停用"]
+# 用例等级直接使用产品中文枚举，避免页面、生成结果和接口契约出现两套标签。
+Priority = Literal["高", "中", "低"]
+# 所有测试用例统一使用“正常”状态；审核流程另由 XMind reviewStatus 表示。
+CaseStatus = Literal["正常"]
 # 用例状态。
 HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 # API 用例支持的 HTTP 方法。
@@ -279,7 +280,7 @@ class TestCaseCreate(BaseModel):
     type: CaseType
     module_id: str = Field(min_length=1, max_length=64)
     priority: Priority
-    status: CaseStatus = "草稿"
+    status: CaseStatus = "正常"
     author_id: int = 1
     requirement_id: str | None = Field(default=None, max_length=128)
     precondition: str = Field(default="", max_length=10000)

@@ -209,8 +209,8 @@ def save_upload(
                         title=preview["title"],
                         type="functional",
                         module_id=module_mapping[preview["module"]],
-                        priority="P1",
-                        status="草稿",
+                        priority="中",
+                        status="正常",
                         author_id=uploader_id,
                     ),
                 )
@@ -350,7 +350,7 @@ def confirm_generated_cases(session: Session, payload: XMindConfirmRequest) -> d
                         type="functional",
                         module_id=payload.module_mapping[normalized["用例目录"]],
                         priority=normalized["用例等级"],
-                        status="草稿",
+                        status="正常",
                         author_id=payload.uploader_id,
                         requirement_id=normalized["需求ID"] or None,
                         precondition=normalized["前置条件"],
@@ -449,7 +449,7 @@ def _serialize_task_detail(record: XMindRecord) -> dict[str, Any]:
 
 
 def _ensure_case_review_metadata(record: XMindRecord) -> bool:
-    """为历史预览用例补齐审核定位字段，返回本次是否修改了记录。"""
+    """为历史预览用例补齐审核字段并归一化等级/状态，返回是否修改了记录。"""
     cases = record.preview_cases_json or []
     changed = False
     enriched_cases: list[dict[str, Any]] = []
@@ -461,6 +461,17 @@ def _ensure_case_review_metadata(record: XMindRecord) -> bool:
             changed = True
         if enriched.get("reviewStatus") not in {"pending", "passed", "needs_modification"}:
             enriched["reviewStatus"] = "pending"
+            changed = True
+        # 生成任务 JSON 独立于 test_cases 表，迁移不会触达它，因此读取时也要升级历史值。
+        priority_aliases = {"P0": "高", "P1": "中", "P2": "低", "P3": "低"}
+        priority = priority_aliases.get(enriched.get("用例等级"), enriched.get("用例等级", "中"))
+        if priority not in {"高", "中", "低"}:
+            priority = "中"
+        if enriched.get("用例等级") != priority:
+            enriched["用例等级"] = priority
+            changed = True
+        if enriched.get("用例状态") != "正常":
+            enriched["用例状态"] = "正常"
             changed = True
         enriched_cases.append(enriched)
     if changed:
@@ -746,7 +757,7 @@ def confirm_generated_task(
                         type="functional",
                         module_id=payload.module_id,
                         priority=normalized["用例等级"],
-                        status="草稿",
+                        status="正常",
                         author_id=record.uploader_id,
                         requirement_id=normalized["需求ID"] or None,
                         precondition=normalized["前置条件"],

@@ -4,10 +4,6 @@
 import type { TestCaseStatus } from '../../services/contracts';
 
 export const testCaseStatusOptions = [
-  // 下拉框顺序：维护中 -> 已通过 -> 草稿 -> 已失败 -> 已停用。
-  '维护中',
-  '已通过',
-  '草稿',
-  '已失败',
-  '已停用',
+  // 所有测试用例状态统一为正常，审核结果由 XMind reviewStatus 单独展示。
+  '正常',
 ] satisfies TestCaseStatus[];

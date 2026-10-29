@@ -235,7 +235,7 @@ export function XMindReviewView({ task, modules, onTaskChange }: XMindReviewView
 
   const columns: ColumnsType<XMindGeneratedCase> = [
     { title: '用例名称', dataIndex: '用例名称', ellipsis: true },
-    { title: '用例等级', dataIndex: '用例等级', width: 90, render: (value: string) => <Tag>{value || 'P2'}</Tag> },
+    { title: '用例等级', dataIndex: '用例等级', width: 90, render: (value: string) => <Tag>{value || '中'}</Tag> },
     { title: '创建人', dataIndex: '创建人', width: 100 },
     {
       title: '审核状态',

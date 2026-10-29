@@ -5,12 +5,8 @@ import { Tag } from 'antd';
 import type { TestCaseStatus } from '../services/contracts';
 
 const statusColors: Record<TestCaseStatus, string> = {
-  // 维护中视为“处理中”进行中状态，失败/停用统一红色。
-  已通过: 'success',
-  维护中: 'processing',
-  草稿: 'default',
-  已失败: 'error',
-  已停用: 'error',
+  // 用例状态已收敛为“正常”，颜色保持稳定以兼容现有列表视觉。
+  正常: 'success',
 };
 
 export function StatusBadge({ status }: { status: TestCaseStatus }) {

@@ -129,13 +129,14 @@ def seed_database(session: Session) -> None:
     session.flush()
 
     cases = [
-        TestCase(code="FUN-12583", title="用户登录成功", type="functional", module_id="auth", priority="P0", status="维护中", author=lead),
-        TestCase(code="UI-13533", title="登录表单校验", type="ui", module_id="auth", priority="P1", status="已通过", author=engineer),
-        TestCase(code="API-253301", title="用户资料查询", type="api", module_id="auth", priority="P0", status="已通过", author=lead),
-        TestCase(code="API-253302", title="创建支付订单", type="api", module_id="payments", priority="P1", status="维护中", author=developer),
-        TestCase(code="API-253303", title="用户登录", type="api", module_id="auth", priority="P0", status="维护中", author=lead),
-        TestCase(code="FUN-12584", title="订单退款成功", type="functional", module_id="payments", priority="P1", status="已通过", author=developer),
-        TestCase(code="UI-13534", title="支付结果页展示", type="ui", module_id="payments", priority="P2", status="草稿", author=engineer),
+        # 演示数据也使用产品中文等级与统一“正常”状态，避免首次启动展示旧枚举。
+        TestCase(code="FUN-12583", title="用户登录成功", type="functional", module_id="auth", priority="高", status="正常", author=lead),
+        TestCase(code="UI-13533", title="登录表单校验", type="ui", module_id="auth", priority="中", status="正常", author=engineer),
+        TestCase(code="API-253301", title="用户资料查询", type="api", module_id="auth", priority="高", status="正常", author=lead),
+        TestCase(code="API-253302", title="创建支付订单", type="api", module_id="payments", priority="中", status="正常", author=developer),
+        TestCase(code="API-253303", title="用户登录", type="api", module_id="auth", priority="高", status="正常", author=lead),
+        TestCase(code="FUN-12584", title="订单退款成功", type="functional", module_id="payments", priority="中", status="正常", author=developer),
+        TestCase(code="UI-13534", title="支付结果页展示", type="ui", module_id="payments", priority="低", status="正常", author=engineer),
     ]
     session.add_all(cases)
     session.flush()

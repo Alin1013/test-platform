@@ -59,7 +59,7 @@ const columns: ColumnsType<TestCaseRecord> = [
     title: '优先级',
     dataIndex: 'priority',
     width: 88,
-    render: (priority: string) => <Tag color={priority === 'P0' ? 'error' : 'gold'}>{priority}</Tag>,
+    render: (priority: string) => <Tag color={priority === '高' ? 'error' : 'gold'}>{priority}</Tag>,
   },
   {
     title: '维护人',

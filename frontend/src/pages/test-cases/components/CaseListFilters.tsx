@@ -90,7 +90,7 @@ export function CaseListFilters({
         id="priority-filter"
         aria-label="筛选优先级"
         value={priority}
-        options={['P0', 'P1', 'P2', 'P3'].map((value) => ({ value, label: value }))}
+        options={['高', '中', '低'].map((value) => ({ value, label: value }))}
         onChange={onPriorityChange}
       />
     ) : field === 'status' ? (

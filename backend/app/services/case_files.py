@@ -64,7 +64,8 @@ XMIND_EXPORT_HEADERS = (
     "百丽环境",
     "sass环境",
 )
-XMIND_PRIORITY_LABELS = {"P0": "高", "P1": "中", "P2": "低", "P3": "很低"}
+# 导出层兼容历史任务中的英文等级；新数据本身已经直接使用中文等级。
+XMIND_PRIORITY_LABELS = {"高": "高", "中": "中", "低": "低", "P0": "高", "P1": "中", "P2": "低", "P3": "低"}
 HEADER_ALIASES = {
     "编号": "code",
     "用例名称": "title",
@@ -108,29 +109,32 @@ TYPE_ALIASES = {
     "UI测试用例": "ui",
 }
 PRIORITY_ALIASES = {
-    "高": "P0",
-    "最高": "P0",
-    "P0": "P0",
-    "中": "P1",
-    "P1": "P1",
-    "低": "P2",
-    "P2": "P2",
-    "很低": "P3",
-    "极低": "P3",
-    "最低": "P3",
-    "P3": "P3",
+    "高": "高",
+    "最高": "高",
+    "P0": "高",
+    "中": "中",
+    "较高": "中",
+    "P1": "中",
+    "低": "低",
+    "较低": "低",
+    "很低": "低",
+    "极低": "低",
+    "最低": "低",
+    "P2": "低",
+    "P3": "低",
 }
 STATUS_ALIASES = {
-    "正常": "维护中",
-    "启用": "维护中",
-    "维护中": "维护中",
-    "已通过": "已通过",
-    "草稿": "草稿",
-    "失败": "已失败",
-    "已失败": "已失败",
-    "停用": "已停用",
-    "禁用": "已停用",
-    "已停用": "已停用",
+    # 导入旧模板时仍接受历史状态，但落库统一归一化为“正常”。
+    "正常": "正常",
+    "启用": "正常",
+    "维护中": "正常",
+    "已通过": "正常",
+    "草稿": "正常",
+    "失败": "正常",
+    "已失败": "正常",
+    "停用": "正常",
+    "禁用": "正常",
+    "已停用": "正常",
 }
 
 
@@ -254,7 +258,7 @@ def export_generated_cases(cases: list[dict[str, Any]]) -> ExportedFile:
     sheet.title = "Sheet1"
     sheet.append(XMIND_EXPORT_HEADERS)
     for case in cases:
-        # 导出层只转换展示枚举，审核与入库仍使用平台内部的 P0/P1/草稿值。
+        # 导出层始终输出中文等级与统一状态，便于文件直接被业务人员阅读和回导。
         sheet.append(
             [
                 case.get("用例目录", ""),
@@ -357,8 +361,8 @@ def _case_payload(raw_row: dict[str, Any]) -> TestCaseCreate:
         "title": str(row.get("title") or "").strip(),
         "type": case_type,
         "module_id": str(row.get("module_id") or "").strip(),
-        "priority": _normalize_alias(row.get("priority"), PRIORITY_ALIASES, "P1"),
-        "status": _normalize_alias(row.get("status"), STATUS_ALIASES, "草稿"),
+        "priority": _normalize_alias(row.get("priority"), PRIORITY_ALIASES, "中"),
+        "status": _normalize_alias(row.get("status"), STATUS_ALIASES, "正常"),
         "author_id": int(row.get("author_id") or 1),
         "requirement_id": str(row.get("requirement_id") or "").strip() or None,
         "precondition": str(row.get("precondition") or "").strip(),

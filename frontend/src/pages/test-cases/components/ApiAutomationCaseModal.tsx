@@ -48,10 +48,9 @@ import { moduleSelectOptions } from '../moduleOptions';
 import { testCaseStatusOptions } from '../testCaseOptions';
 
 const priorityColors: Record<Priority, string | undefined> = {
-  P0: 'error',
-  P1: 'gold',
-  P2: 'processing',
-  P3: undefined,
+  高: 'error',
+  中: 'gold',
+  低: 'processing',
 };
 
 const methodColors: Record<HttpMethod, string> = {
@@ -496,8 +495,8 @@ export function ApiAutomationCaseModal({
     form.setFieldsValue({
       name: initialCase?.name,
       moduleId: initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule),
-      priority: initialCase?.priority ?? 'P1',
-      status: initialCase?.status ?? '维护中',
+      priority: initialCase?.priority ?? '中',
+      status: '正常',
       method: initialCase?.method ?? 'POST',
       endpoint: initialCase?.endpoint ?? '',
       headers:
@@ -570,7 +569,7 @@ export function ApiAutomationCaseModal({
       moduleId: values.moduleId,
       name: values.name,
       priority: values.priority,
-      status: values.status ?? '维护中',
+      status: '正常',
       endpoint: values.endpoint,
       method: values.method,
       expectedStatus: statusAssertion ? parsedStatus : 200,

@@ -124,13 +124,9 @@ class TestCase(Base, TimestampMixin):
         CheckConstraint(
             "type IN ('functional', 'api', 'ui')", name="ck_test_cases_type"
         ),
-        CheckConstraint(
-            "priority IN ('P0', 'P1', 'P2', 'P3')", name="ck_test_cases_priority"
-        ),
-        CheckConstraint(
-            "status IN ('维护中', '已通过', '草稿', '已失败', '已停用')",
-            name="ck_test_cases_status",
-        ),
+        # 数据库存储与 API 契约保持同一套中文枚举，历史 P0/P1/P2/P3 由迁移转换。
+        CheckConstraint("priority IN ('高', '中', '低')", name="ck_test_cases_priority"),
+        CheckConstraint("status = '正常'", name="ck_test_cases_status"),
         {"comment": "测试用例公共信息"},
     )
 

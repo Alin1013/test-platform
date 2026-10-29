@@ -4,8 +4,9 @@
 
 // ===== 基础枚举 =====
 export type TestCaseType = 'functional' | 'api' | 'ui';
-export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
-export type TestCaseStatus = '维护中' | '已通过' | '草稿' | '已失败' | '已停用';
+// 页面、生成、审核和后端接口共用产品中文等级；审核状态不再混入用例状态。
+export type Priority = '高' | '中' | '低';
+export type TestCaseStatus = '正常';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 export type ApiBodyType = 'none' | 'json' | 'form-data' | 'x-www-form-urlencoded';
 export type ApiAssertionType = 'statusCode' | 'jsonPath' | 'responseTime';

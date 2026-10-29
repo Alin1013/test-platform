@@ -1,5 +1,5 @@
 /**
- * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量通过/删除与导入（CSV/XLSX/Apifox）。
+ * 用例列表页：功能/接口/UI 三类用例的筛选、分页、批量设为正常/删除与导入（CSV/XLSX/Apifox）。
  */
 import {
   CheckOutlined,
@@ -316,7 +316,7 @@ export function TestCasesPage() {
     try {
       const results = await Promise.allSettled(
         cases.map((testCase) =>
-          service.updateTestCase(testCase.storageId, toStatusUpdateInput(testCase, '已通过')),
+          service.updateTestCase(testCase.storageId, toStatusUpdateInput(testCase, '正常')),
         ),
       );
       const nextRows = await refreshRowsAndFilterOptions();
@@ -330,14 +330,14 @@ export function TestCasesPage() {
         const passedCount = cases.length - failedStorageIds.length;
         void message.error(
           passedCount
-            ? `已通过 ${passedCount} 条，${failedStorageIds.length} 条更新失败`
-            : '批量通过失败，请重试',
+            ? `已更新 ${passedCount} 条，${failedStorageIds.length} 条更新失败`
+            : '批量更新失败，请重试',
         );
         return;
       }
-      void message.success(`已将 ${cases.length} 条用例标记为已通过`);
+      void message.success(`已将 ${cases.length} 条用例标记为正常`);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '批量通过失败');
+      void message.error(error instanceof Error ? error.message : '批量更新失败');
     } finally {
       setIsBulkUpdating(false);
     }
@@ -354,7 +354,7 @@ export function TestCasesPage() {
         { title: '预期结果', dataIndex: 'expectedResult', width: 200, ellipsis: true, render: (value) => value || '-' },
         { title: '用例类型', dataIndex: 'type', width: 100, render: () => '功能用例' },
         { title: '用例状态', dataIndex: 'status', width: 100, render: (value: TestCaseStatus) => <StatusBadge status={value} /> },
-        { title: '用例等级', dataIndex: 'priority', width: 90, render: (value: Priority) => <Tag color={value === 'P0' ? 'error' : 'gold'}>{value}</Tag> },
+        { title: '用例等级', dataIndex: 'priority', width: 90, render: (value: Priority) => <Tag color={value === '高' ? 'error' : 'gold'}>{value}</Tag> },
         {
           title: '创建人', dataIndex: 'creator', width: 112,
           render: (name: string) => <span className="case-person"><PersonAvatar name={name} size={22} />{name}</span>,
@@ -404,7 +404,7 @@ export function TestCasesPage() {
         title: '优先级',
         dataIndex: 'priority',
         width: 82,
-        render: (value: Priority) => <Tag color={value === 'P0' ? 'error' : 'gold'}>{value}</Tag>,
+        render: (value: Priority) => <Tag color={value === '高' ? 'error' : 'gold'}>{value}</Tag>,
       },
       {
         title: '状态',
@@ -701,10 +701,10 @@ export function TestCasesPage() {
                   icon={<CheckOutlined />}
                   loading={isBulkUpdating}
                   disabled={isBulkUpdating}
-                  aria-label={`通过已选 ${selectedStorageIds.length} 项`}
+                  aria-label={`将已选 ${selectedStorageIds.length} 项设为正常`}
                   onClick={() => void markCasesPassed(selectedCases)}
                 >
-                  批量通过
+                  批量设为正常
                 </Button>
                 <Button
                   danger

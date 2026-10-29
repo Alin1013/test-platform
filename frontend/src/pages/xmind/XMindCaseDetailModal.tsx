@@ -24,7 +24,8 @@ interface CaseDraft {
   预期结果: string;
 }
 
-const PRIORITY_OPTIONS = ['P0', 'P1', 'P2', 'P3'];
+// 审核编辑使用业务可读的中文等级，兼容历史任务的值由后端归一化。
+const PRIORITY_OPTIONS = ['高', '中', '低'];
 
 const reviewStatusMeta: Record<XMindCaseReviewStatus, { color: string; label: string }> = {
   pending: { color: 'default', label: '待审核' },
@@ -51,7 +52,7 @@ function buildDraft(caseItem: XMindGeneratedCase): CaseDraft {
     用例名称: caseItem.用例名称 ?? '',
     需求ID: caseItem.需求ID ?? '',
     前置条件: caseItem.前置条件 ?? '',
-    用例等级: caseItem.用例等级 ?? 'P2',
+    用例等级: caseItem.用例等级 ?? '中',
     归属迭代: caseItem.归属迭代 ?? '',
     用例步骤: caseItem.用例步骤 ?? '',
     预期结果: caseItem.预期结果 ?? '',

@@ -57,10 +57,9 @@ const assertionOptions: Array<{ value: UiAssertion; label: string }> = [
 ];
 
 const priorityColors: Record<Priority, string | undefined> = {
-  P0: 'error',
-  P1: 'gold',
-  P2: 'gold',
-  P3: 'gold',
+  高: 'error',
+  中: 'gold',
+  低: 'gold',
 };
 
 const createStep = (action: UiAction = 'navigate'): UiAutomationStep => ({
@@ -264,8 +263,8 @@ export function UiAutomationCaseModal({
     form.setFieldsValue({
       name: initialCase?.name,
       moduleId: initialCase?.moduleId ?? (defaultModule === 'all' ? 'auth' : defaultModule),
-      priority: initialCase?.priority ?? 'P1',
-      status: initialCase?.status ?? '维护中',
+      priority: initialCase?.priority ?? '中',
+      status: '正常',
       maintainer: initialCase?.maintainer ?? user?.name ?? '当前用户',
       description: details?.description ?? '',
       dependencyCaseId: details?.dependencyCaseId,
@@ -317,7 +316,7 @@ export function UiAutomationCaseModal({
       moduleId: values.moduleId,
       name: values.name,
       priority: values.priority,
-      status: values.status ?? '维护中',
+      status: '正常',
       uiDetails: {
         description: values.description?.trim() ?? '',
         dependencyCaseId: values.dependencyCaseId,

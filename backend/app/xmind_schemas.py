@@ -56,7 +56,8 @@ class XMindCaseUpdateRequest(BaseModel):
     用例名称: str | None = Field(default=None, max_length=200)
     需求ID: str | None = Field(default=None, max_length=200)
     前置条件: str | None = Field(default=None, max_length=2000)
-    用例等级: str | None = None
+    # 审核编辑只能提交平台支持的中文等级，历史 P 值在读取任务时先归一化。
+    用例等级: Literal["高", "中", "低"] | None = None
     归属迭代: str | None = Field(default=None, max_length=200)
     用例步骤: str | None = Field(default=None, max_length=8000)
     预期结果: str | None = Field(default=None, max_length=8000)
